@@ -1,0 +1,4 @@
+onlyBuiltDependencies:
+  - '@prisma/client'
+  - '@tailwindcss/oxide'
+  - better-sqlite3
