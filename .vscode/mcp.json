@@ -1,17 +1,17 @@
 {
+	"inputs": [],
 	"servers": {
-		"svelte": {
-			"command": "npx",
-			"args": [
-				"-y",
-				"@sveltejs/mcp"
-			],
-			"type": "stdio"
-		},
 		"Better Auth MCP": {
 			"url": "https://mcp.better-auth.com/mcp",
 			"type": "http"
+		},
+		"ESLint MCP": {
+			"type": "stdio",
+			"command": "pnpm",
+			"args": [
+				"dlx",
+				"@eslint/mcp@latest"
+			]
 		}
-	},
-	"inputs": []
+	}
 }
