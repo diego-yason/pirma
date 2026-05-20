@@ -5,7 +5,13 @@
 			"args": [
 				"-y",
 				"@sveltejs/mcp"
-			]
+			],
+			"type": "stdio"
+		},
+		"Better Auth MCP": {
+			"url": "https://mcp.better-auth.com/mcp",
+			"type": "http"
 		}
-	}
+	},
+	"inputs": []
 }
