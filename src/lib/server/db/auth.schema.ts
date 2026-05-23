@@ -1,10 +1,11 @@
 import { relations } from 'drizzle-orm';
-import { pgTable, text, timestamp, boolean, index } from 'drizzle-orm/pg-core';
+import { pgTable, text, timestamp, boolean, index, integer, uuid } from 'drizzle-orm/pg-core';
 
 export const user = pgTable('user', {
-	id: text('id').primaryKey(),
+	id: uuid('id').primaryKey().defaultRandom(),
 	name: text('name').notNull(),
-	email: text('email').notNull().unique(),
+	username: text('username').notNull().unique(),
+	email: text('email').unique(),
 	emailVerified: boolean('email_verified').default(false).notNull(),
 	image: text('image'),
 	createdAt: timestamp('created_at').defaultNow().notNull(),
@@ -26,7 +27,7 @@ export const session = pgTable(
 			.notNull(),
 		ipAddress: text('ip_address'),
 		userAgent: text('user_agent'),
-		userId: text('user_id')
+		userId: uuid('user_id')
 			.notNull()
 			.references(() => user.id, { onDelete: 'cascade' })
 	},
@@ -39,7 +40,7 @@ export const account = pgTable(
 		id: text('id').primaryKey(),
 		accountId: text('account_id').notNull(),
 		providerId: text('provider_id').notNull(),
-		userId: text('user_id')
+		userId: uuid('user_id')
 			.notNull()
 			.references(() => user.id, { onDelete: 'cascade' }),
 		accessToken: text('access_token'),
@@ -75,7 +76,8 @@ export const verification = pgTable(
 
 export const userRelations = relations(user, ({ many }) => ({
 	sessions: many(session),
-	accounts: many(account)
+	accounts: many(account),
+	passkeys: many(passkey)
 }));
 
 export const sessionRelations = relations(session, ({ one }) => ({
@@ -88,6 +90,33 @@ export const sessionRelations = relations(session, ({ one }) => ({
 export const accountRelations = relations(account, ({ one }) => ({
 	user: one(user, {
 		fields: [account.userId],
+		references: [user.id]
+	})
+}));
+
+export const passkey = pgTable(
+	'passkey',
+	{
+		id: text('id').primaryKey(),
+		name: text('name'),
+		publicKey: text('public_key').notNull(),
+		userId: uuid('user_id')
+			.notNull()
+			.references(() => user.id, { onDelete: 'cascade' }),
+		credentialID: text('credential_id').notNull(),
+		counter: integer('counter').notNull(),
+		deviceType: text('device_type').notNull(),
+		backedUp: boolean('backed_up').notNull(),
+		transports: text('transports'),
+		createdAt: timestamp('created_at').defaultNow(),
+		aaguid: text('aaguid')
+	},
+	(table) => [index('passkey_userId_idx').on(table.userId)]
+);
+
+export const passkeyRelations = relations(passkey, ({ one }) => ({
+	user: one(user, {
+		fields: [passkey.userId],
 		references: [user.id]
 	})
 }));

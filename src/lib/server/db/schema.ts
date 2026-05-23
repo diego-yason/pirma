@@ -1,28 +1,12 @@
 import { integer, pgEnum, pgTable, text, timestamp, uuid } from 'drizzle-orm/pg-core';
-
-// the specific person
-export const users = pgTable('users', {
-	id: uuid('id').primaryKey().defaultRandom(),
-	username: text('username').notNull().unique(),
-	name: text('name')
-});
-
-// email/pass, oauth, passkey
-export const accounts = pgTable('accounts', {
-	id: uuid('id').primaryKey().defaultRandom(),
-	userId: uuid('user_id')
-		.notNull()
-		.references(() => users.id),
-	provider: text('provider').notNull(),
-	providerAccountId: text('provider_account_id').notNull()
-});
+import { user } from './auth.schema';
 
 // cryptograph keys
 export const cryptoKeys = pgTable('user_keys', {
 	id: uuid('id').primaryKey().defaultRandom(),
-	user: uuid('user_id')
+	userId: uuid('user_id')
 		.notNull()
-		.references(() => users.id),
+		.references(() => user.id),
 	pubkey: text('pubkey').notNull(),
 	createdAt: timestamp('created_at').notNull().defaultNow(),
 	revokedAt: timestamp('revoked_at')
@@ -42,7 +26,7 @@ export const documents = pgTable('documents', {
 	title: text('title').notNull(),
 	owner: uuid('owner')
 		.notNull()
-		.references(() => users.id),
+		.references(() => user.id),
 	detailedViewAccess: viewAccessEnum('detailed_view_access').notNull().default('restricted'),
 	hash: text('hash').notNull(),
 	status: documentStatusEnum('status').notNull().default('draft')
@@ -67,7 +51,7 @@ export const documentSignatories = pgTable('document_signatories', {
 		.references(() => documents.id),
 	userId: uuid('user_id')
 		.notNull()
-		.references(() => users.id),
+		.references(() => user.id),
 	signerId: integer('signer_id')
 });
 
@@ -93,7 +77,7 @@ export const documentViewers = pgTable('document_viewers', {
 		.references(() => documents.id),
 	userId: uuid('user_id')
 		.notNull()
-		.references(() => users.id)
+		.references(() => user.id)
 });
 
 export * from './auth.schema';
