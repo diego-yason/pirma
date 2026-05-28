@@ -4,7 +4,7 @@ import { user } from "./auth.schema";
 // cryptograph keys
 export const cryptoKeys = pgTable("user_keys", {
     id: uuid("id").primaryKey().defaultRandom(),
-    userId: uuid("user_id")
+    userId: text("user_id")
         .notNull()
         .references(() => user.id),
     pubkey: text("pubkey").notNull(),
@@ -24,7 +24,7 @@ export const documentStatusEnum = pgEnum("document_status", ["draft", "finalized
 export const documents = pgTable("documents", {
     id: uuid("id").primaryKey().defaultRandom(),
     title: text("title").notNull(),
-    owner: uuid("owner")
+    owner: text("owner")
         .notNull()
         .references(() => user.id),
     detailedViewAccess: viewAccessEnum("detailed_view_access").notNull().default("restricted"),
@@ -49,7 +49,7 @@ export const documentSignatories = pgTable("document_signatories", {
     documentId: uuid("document_id")
         .notNull()
         .references(() => documents.id),
-    userId: uuid("user_id")
+    userId: text("user_id")
         .notNull()
         .references(() => user.id),
     signerId: integer("signer_id"),
@@ -75,7 +75,7 @@ export const documentViewers = pgTable("document_viewers", {
     documentId: uuid("document_id")
         .notNull()
         .references(() => documents.id),
-    userId: uuid("user_id")
+    userId: text("user_id")
         .notNull()
         .references(() => user.id),
 }).enableRLS();
