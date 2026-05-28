@@ -1,5 +1,5 @@
 onlyBuiltDependencies:
-  - '@prisma/client'
-  - '@tailwindcss/oxide'
-  - better-sqlite3
-  - esbuild
+    - "@prisma/client"
+    - "@tailwindcss/oxide"
+    - better-sqlite3
+    - esbuild

@@ -8,3 +8,12 @@ bun.lockb
 # Miscellaneous
 /static/
 /drizzle/
+
+# Configs / Not-to-be-touched
+.agents
+.vscode
+AGENTS.md
+skills-lock.json
+
+# auto generated
+src/stories
