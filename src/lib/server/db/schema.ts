@@ -10,7 +10,7 @@ export const cryptoKeys = pgTable('user_keys', {
 	pubkey: text('pubkey').notNull(),
 	createdAt: timestamp('created_at').notNull().defaultNow(),
 	revokedAt: timestamp('revoked_at')
-});
+}).enableRLS();
 
 // public: shows hash, actual PDF, and signatures with signer info
 // restricted: shows hash and signatures as "validated" unless logged in
@@ -30,7 +30,7 @@ export const documents = pgTable('documents', {
 	detailedViewAccess: viewAccessEnum('detailed_view_access').notNull().default('restricted'),
 	hash: text('hash').notNull(),
 	status: documentStatusEnum('status').notNull().default('draft')
-});
+}).enableRLS();
 
 // for actual signing
 // pending = signature request sent, waiting for blockchain
@@ -53,7 +53,7 @@ export const documentSignatories = pgTable('document_signatories', {
 		.notNull()
 		.references(() => user.id),
 	signerId: integer('signer_id')
-});
+}).enableRLS();
 
 export const signatures = pgTable('signatures', {
 	txId: text('tx_id').primaryKey(),
@@ -68,7 +68,7 @@ export const signatures = pgTable('signatures', {
 		.references(() => cryptoKeys.id),
 	signaturePayload: text('signature_payload').notNull(),
 	signatureAlgorithm: text('signature_algorithm').notNull()
-});
+}).enableRLS();
 
 export const documentViewers = pgTable('document_viewers', {
 	id: uuid('id').primaryKey().defaultRandom(),
@@ -78,6 +78,6 @@ export const documentViewers = pgTable('document_viewers', {
 	userId: uuid('user_id')
 		.notNull()
 		.references(() => user.id)
-});
+}).enableRLS();
 
 export * from './auth.schema';
