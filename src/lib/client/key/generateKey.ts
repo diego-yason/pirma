@@ -59,7 +59,7 @@ async function deriveEncryptionKey(password: string, salt: string): Promise<Cryp
             length: 256,
         },
         false,
-        ["encrypt", "decrypt"],
+        ["wrapKey", "unwrapKey"],
     );
 }
 

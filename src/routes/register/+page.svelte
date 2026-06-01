@@ -57,18 +57,21 @@
                 loading = false;
                 return;
             }
-
+            console.log("Registration successful:", data);
             if (data?.user?.id) {
                 // Generate cryptographic key pair and store encrypted in IndexedDB.
                 // Wrapped in an IIFE so the key handles go out of scope immediately
                 // after wrapping, minimizing in-memory exposure.
                 try {
+                    console.log("Generating key pair for user:", data.user.id);
+
                     const { publicKey, encryptedPrivateKey } = await (async () => {
                         const kp = await generateKeyPair();
                         const pub = await exportPublicKey(kp.publicKey);
                         const enc = await encryptPrivateKey(kp.privateKey, password, data.user.id);
                         return { publicKey: pub, encryptedPrivateKey: enc };
                     })();
+
 
                     const storeKeyPromise = storeKeys(data.user.id, {
                         publicKey,

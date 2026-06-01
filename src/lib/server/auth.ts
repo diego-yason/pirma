@@ -15,4 +15,9 @@ export const auth = betterAuth({
         passkey(),
         sveltekitCookies(getRequestEvent), // make sure this is the last plugin in the array
     ],
+    user: {
+        deleteUser: {
+            enabled: true,
+        },
+    },
 });
