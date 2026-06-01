@@ -2,43 +2,93 @@
     import { authClient } from "$lib/auth-client";
     import { goto } from "$app/navigation";
     import { resolve } from "$app/paths";
+    import {
+        generateKeyPair,
+        exportPublicKey,
+        encryptPrivateKey,
+    } from "$lib/client/key/generateKey";
+    import { storeKeys } from "$lib/client/key/store";
+    import {uploadKeys} from "./keyManagement.remote"
 
-    let username = $state("");
-    let passkeyName = $state("");
+    let email = $state("");
+    let password = $state("");
+    let confirmPassword = $state("");
     let loading = $state(false);
     let error = $state<string | null>(null);
 
-    async function handlePasskeyRegister(e: SubmitEvent) {
+    async function handleRegister(e: SubmitEvent) {
         e.preventDefault();
         loading = true;
         error = null;
 
-        if (!username.trim()) {
-            error = "Username is required";
+        if (!email.trim()) {
+            error = "Email is required";
             loading = false;
             return;
         }
 
-        if (!passkeyName.trim()) {
-            error = "Passkey name is required";
+        if (!password.trim()) {
+            error = "Password is required";
+            loading = false;
+            return;
+        }
+
+        if (password !== confirmPassword) {
+            error = "Passwords do not match";
+            loading = false;
+            return;
+        }
+
+        if (password.length < 8) {
+            error = "Password must be at least 8 characters";
             loading = false;
             return;
         }
 
         try {
-            const { data, error: addError } = await authClient.passkey.addPasskey({
-                name: passkeyName,
-                context: username,
+            const { data, error: signUpError } = await authClient.signUp.email({
+                email: email.trim(),
+                password,
+                name: email.split("@")[0],
             });
 
-            if (addError) {
-                error = addError.message || "Failed to register passkey";
+            if (signUpError) {
+                error = signUpError.message || "Failed to register";
                 loading = false;
                 return;
             }
 
-            if (data) {
-                // Redirect to login or dashboard
+            if (data?.user?.id) {
+                // Generate cryptographic key pair and store encrypted in IndexedDB.
+                // Wrapped in an IIFE so the key handles go out of scope immediately
+                // after wrapping, minimizing in-memory exposure.
+                try {
+                    const { publicKey, encryptedPrivateKey } = await (async () => {
+                        const kp = await generateKeyPair();
+                        const pub = await exportPublicKey(kp.publicKey);
+                        const enc = await encryptPrivateKey(kp.privateKey, password, data.user.id);
+                        return { publicKey: pub, encryptedPrivateKey: enc };
+                    })();
+
+                    const storeKeyPromise = storeKeys(data.user.id, {
+                        publicKey,
+                        encryptedPrivateKey,
+                    });
+
+                    // convert to b64 strings
+                    const b64Keys = {
+                        pubkey: btoa(publicKey),
+                        pkey: btoa(encryptedPrivateKey),
+                    };
+                    
+                    await uploadKeys(b64Keys);
+
+                    await Promise.all([storeKeyPromise]);
+                } catch (keyErr) {
+                    console.error("Key generation/storage failed:", keyErr);
+                    // Continue with registration even if key storage fails
+                }
+
                 await goto(resolve("/login"));
             }
         } catch (err) {
@@ -55,37 +105,50 @@
                 Create your account
             </h2>
             <p class="mt-2 text-center text-sm text-gray-600">
-                Register with a passkey for secure, passwordless login
+                Sign up with your email and password
             </p>
         </div>
 
-        <form class="space-y-6" onsubmit={handlePasskeyRegister}>
+        <form class="space-y-6" onsubmit={handleRegister}>
             <div>
-                <label for="username" class="block text-sm font-medium text-gray-700">
-                    Username
-                </label>
+                <label for="email" class="block text-sm font-medium text-gray-700"> Email </label>
                 <input
-                    id="username"
-                    name="username"
-                    type="text"
-                    bind:value={username}
+                    id="email"
+                    name="email"
+                    type="email"
+                    bind:value={email}
                     class="mt-1 block w-full appearance-none rounded-md border border-gray-300 px-3 py-2 placeholder-gray-400 shadow-sm focus:border-blue-500 focus:ring-blue-500 focus:outline-none sm:text-sm"
-                    placeholder="your.username"
+                    placeholder="you@example.com"
                     required
                 />
             </div>
 
             <div>
-                <label for="passkeyName" class="block text-sm font-medium text-gray-700">
-                    Passkey Name
+                <label for="password" class="block text-sm font-medium text-gray-700">
+                    Password
                 </label>
                 <input
-                    id="passkeyName"
-                    name="passkeyName"
-                    type="text"
-                    bind:value={passkeyName}
+                    id="password"
+                    name="password"
+                    type="password"
+                    bind:value={password}
                     class="mt-1 block w-full appearance-none rounded-md border border-gray-300 px-3 py-2 placeholder-gray-400 shadow-sm focus:border-blue-500 focus:ring-blue-500 focus:outline-none sm:text-sm"
-                    placeholder="e.g., My Windows Laptop"
+                    placeholder="At least 8 characters"
+                    required
+                />
+            </div>
+
+            <div>
+                <label for="confirmPassword" class="block text-sm font-medium text-gray-700">
+                    Confirm Password
+                </label>
+                <input
+                    id="confirmPassword"
+                    name="confirmPassword"
+                    type="password"
+                    bind:value={confirmPassword}
+                    class="mt-1 block w-full appearance-none rounded-md border border-gray-300 px-3 py-2 placeholder-gray-400 shadow-sm focus:border-blue-500 focus:ring-blue-500 focus:outline-none sm:text-sm"
+                    placeholder="Confirm your password"
                     required
                 />
             </div>
@@ -121,7 +184,7 @@
                         Creating account...
                     </span>
                 {:else}
-                    Register with Passkey
+                    Create Account
                 {/if}
             </button>
         </form>

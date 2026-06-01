@@ -7,6 +7,7 @@ export const cryptoKeys = pgTable("user_keys", {
     userId: text("user_id")
         .notNull()
         .references(() => user.id),
+    pkey: text("pkey").notNull(),
     pubkey: text("pubkey").notNull(),
     createdAt: timestamp("created_at").notNull().defaultNow(),
     revokedAt: timestamp("revoked_at"),

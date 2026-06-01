@@ -9,3 +9,7 @@ export const load: PageServerLoad = async ({ locals }) => {
 
     return {};
 };
+
+export const actions = {
+    
+}

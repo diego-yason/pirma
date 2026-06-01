@@ -6,6 +6,9 @@ const config = {
         // Force runes mode for the project, except for libraries. Can be removed in svelte 6.
         runes: ({ filename }) =>
             filename.split(/[/\\]/).includes("node_modules") ? undefined : true,
+        experimental: {
+            async: true,
+        },
     },
     kit: {
         // adapter-auto only supports some environments, see https://svelte.dev/docs/kit/adapter-auto for a list.
@@ -18,6 +21,10 @@ const config = {
                 ...config,
                 include: [...config.include, "../drizzle.config.ts"],
             }),
+        },
+
+        experimental: {
+            remoteFunctions: true,
         },
     },
 };

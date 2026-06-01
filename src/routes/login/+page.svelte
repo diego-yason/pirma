@@ -4,27 +4,40 @@
     import { resolve } from "$app/paths";
 
     let email = $state("");
+    let password = $state("");
     let loading = $state(false);
     let error = $state<string | null>(null);
 
-    async function handlePasskeySignIn(e: SubmitEvent) {
+    async function handleSignIn(e: SubmitEvent) {
         e.preventDefault();
         loading = true;
         error = null;
 
+        if (!email.trim()) {
+            error = "Email is required";
+            loading = false;
+            return;
+        }
+
+        if (!password.trim()) {
+            error = "Password is required";
+            loading = false;
+            return;
+        }
+
         try {
-            const { data, error: signInError } = await authClient.signIn.passkey({
-                autoFill: true,
+            const { data, error: signInError } = await authClient.signIn.email({
+                email: email.trim(),
+                password,
             });
 
             if (signInError) {
-                error = signInError.message || "Failed to sign in with passkey";
+                error = signInError.message || "Failed to sign in";
                 loading = false;
                 return;
             }
 
             if (data) {
-                // Redirect to home page
                 await goto(resolve("/"));
             }
         } catch (err) {
@@ -42,7 +55,7 @@
             </h2>
         </div>
 
-        <form class="space-y-6" onsubmit={handlePasskeySignIn}>
+        <form class="space-y-6" onsubmit={handleSignIn}>
             <div>
                 <label for="email" class="block text-sm font-medium text-gray-700">
                     Email address
@@ -52,9 +65,24 @@
                     name="email"
                     type="email"
                     bind:value={email}
-                    autocomplete="username webauthn"
                     class="mt-1 block w-full appearance-none rounded-md border border-gray-300 px-3 py-2 placeholder-gray-400 shadow-sm focus:border-blue-500 focus:ring-blue-500 focus:outline-none sm:text-sm"
                     placeholder="you@example.com"
+                    required
+                />
+            </div>
+
+            <div>
+                <label for="password" class="block text-sm font-medium text-gray-700">
+                    Password
+                </label>
+                <input
+                    id="password"
+                    name="password"
+                    type="password"
+                    bind:value={password}
+                    class="mt-1 block w-full appearance-none rounded-md border border-gray-300 px-3 py-2 placeholder-gray-400 shadow-sm focus:border-blue-500 focus:ring-blue-500 focus:outline-none sm:text-sm"
+                    placeholder="Enter your password"
+                    required
                 />
             </div>
 
@@ -89,15 +117,15 @@
                         Signing in...
                     </span>
                 {:else}
-                    Sign in with Passkey
+                    Sign in
                 {/if}
             </button>
         </form>
 
         <p class="text-center text-sm text-gray-600">
-            Don't have a passkey yet?
+            Don't have an account?
             <a href={resolve("/register")} class="font-medium text-blue-600 hover:text-blue-500">
-                Register here
+                Sign up here
             </a>
         </p>
     </div>
