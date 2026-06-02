@@ -1,7 +1,9 @@
 <script lang="ts">
     import { enhance } from "$app/forms";
     import { resolve } from "$app/paths";
+    import { redirect } from "@sveltejs/kit";
     import type { ActionData, SubmitFunction } from "./$types";
+    import { goto } from "$app/navigation";
 
     let { form } = $props<{ form: ActionData }>();
 
@@ -32,7 +34,11 @@
         e.preventDefault();
         dragOver = false;
         const droppedFile = e.dataTransfer?.files?.[0];
-        if (droppedFile) {
+        if (droppedFile && fileInput) {
+            // Populate the file input so the form submission includes the file
+            const dt = new DataTransfer();
+            dt.items.add(droppedFile);
+            fileInput.files = dt.files;
             validateAndSetFile(droppedFile);
         }
     }
@@ -81,6 +87,9 @@
         return ({ result }) => {
             if (result.type === "failure") {
                 uploading = false;
+            } else if (result.type === "success" && result.data?.documentId) {
+                const { documentId } = result.data;
+                goto(resolve(`/doc/${documentId}`));
             }
         };
     };
@@ -120,6 +129,18 @@
                 required
             />
         </div>
+
+        <!-- Hidden file input (always in DOM so form submission includes the file) -->
+        <input
+            bind:this={fileInput}
+            id="file"
+            name="file"
+            type="file"
+            accept=".pdf,application/pdf"
+            onchange={handleFileSelect}
+            class="sr-only"
+            aria-label="Upload PDF file"
+        />
 
         <!-- File Upload Zone -->
         <div>
@@ -182,7 +203,8 @@
                     ondragleave={handleDragLeave}
                     ondrop={handleDrop}
                 >
-                    <div
+                    <label
+                        for="file"
                         class="flex cursor-pointer flex-col items-center justify-center rounded-lg border-2 border-dashed px-6 py-12 transition-colors {dragOver
                             ? 'border-blue-400 bg-blue-50'
                             : 'border-gray-300 bg-white hover:border-gray-400 hover:bg-gray-50'}"
@@ -207,17 +229,7 @@
                             or drag and drop
                         </p>
                         <p class="mt-1 text-xs text-gray-500">PDF only, up to 50 MB</p>
-                    </div>
-                    <input
-                        bind:this={fileInput}
-                        id="file"
-                        name="file"
-                        type="file"
-                        accept=".pdf,application/pdf"
-                        onchange={handleFileSelect}
-                        class="absolute inset-0 cursor-pointer opacity-0"
-                        aria-label="Upload PDF file"
-                    />
+                    </label>
                 </div>
             {/if}
         </div>

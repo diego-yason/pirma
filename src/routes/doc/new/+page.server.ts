@@ -32,7 +32,6 @@ export const actions: Actions = {
         if (!title) {
             return fail(400, { error: "Document title is required" });
         }
-
         if (!ALLOWED_TYPES.includes(file.type)) {
             return fail(400, { error: "Only PDF files are allowed" });
         }
@@ -49,10 +48,10 @@ export const actions: Actions = {
             const hashHex = hashArray.map((b) => b.toString(16).padStart(2, "0")).join("");
 
             // Upload to Supabase Storage
-            const filePath = `${locals.user.id}/${crypto.randomUUID()}.pdf`;
+            const filePath = `${crypto.randomUUID()}.pdf`;
 
             const { error: uploadError } = await supabaseAdmin.storage
-                .from("documents")
+                .from("drafts")
                 .upload(filePath, buffer, {
                     contentType: "application/pdf",
                     upsert: false,
@@ -75,8 +74,9 @@ export const actions: Actions = {
                 })
                 .returning();
 
-            // Redirect to the document page
-            redirect(302, `/doc/${document.id}`);
+            return {
+                documentId: document.id,
+            };
         } catch (err) {
             console.error("Upload error:", err);
             return fail(500, {

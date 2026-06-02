@@ -8,7 +8,7 @@
         encryptPrivateKey,
     } from "$lib/client/key/generateKey";
     import { storeKeys } from "$lib/client/key/store";
-    import {uploadKeys} from "./keyManagement.remote"
+    import { uploadKeys } from "./keyManagement.remote";
 
     let email = $state("");
     let password = $state("");
@@ -72,21 +72,19 @@
                         return { publicKey: pub, encryptedPrivateKey: enc };
                     })();
 
-
-                    const storeKeyPromise = storeKeys(data.user.id, {
-                        publicKey,
-                        encryptedPrivateKey,
-                    });
-
-                    // convert to b64 strings
-                    const b64Keys = {
-                        pubkey: btoa(publicKey),
-                        pkey: btoa(encryptedPrivateKey),
-                    };
-                    
-                    await uploadKeys(b64Keys);
-
-                    await Promise.all([storeKeyPromise]);
+                    // Store locally (IndexedDB) and upload to server in parallel.
+                    // publicKey and encryptedPrivateKey are already base64-encoded
+                    // from exportPublicKey() and encryptPrivateKey() respectively.
+                    await Promise.all([
+                        storeKeys(data.user.id, {
+                            publicKey,
+                            encryptedPrivateKey,
+                        }),
+                        uploadKeys({
+                            pubkey: publicKey,
+                            pkey: encryptedPrivateKey,
+                        }),
+                    ]);
                 } catch (keyErr) {
                     console.error("Key generation/storage failed:", keyErr);
                     // Continue with registration even if key storage fails
