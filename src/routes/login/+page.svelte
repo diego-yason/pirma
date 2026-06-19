@@ -1,132 +1,103 @@
 <script lang="ts">
-    import { authClient } from "$lib/auth-client";
-    import { goto } from "$app/navigation";
+    import { enhance } from "$app/forms";
     import { resolve } from "$app/paths";
+    import type { SubmitFunction } from "@sveltejs/kit";
 
-    let email = $state("");
-    let password = $state("");
-    let loading = $state(false);
-    let error = $state<string | null>(null);
+    let { form } = $props();
 
-    async function handleSignIn(e: SubmitEvent) {
-        e.preventDefault();
-        loading = true;
-        error = null;
+    let submitting = $state(false);
 
-        if (!email.trim()) {
-            error = "Email is required";
-            loading = false;
-            return;
-        }
-
-        if (!password.trim()) {
-            error = "Password is required";
-            loading = false;
-            return;
-        }
-
-        try {
-            const { data, error: signInError } = await authClient.signIn.email({
-                email: email.trim(),
-                password,
-            });
-
-            if (signInError) {
-                error = signInError.message || "Failed to sign in";
-                loading = false;
-                return;
-            }
-
-            if (data) {
-                await goto(resolve("/"));
-            }
-        } catch (err) {
-            error = err instanceof Error ? err.message : "An unexpected error occurred";
-            loading = false;
-        }
-    }
+    const handleEnhance: SubmitFunction = () => {
+        submitting = true;
+        return async ({ result, update }) => {
+            submitting = false;
+            // Don't reset the form on error so the user keeps their input
+            await update({ reset: result.type !== "error" });
+        };
+    };
 </script>
 
-<div class="flex min-h-screen items-center justify-center bg-gray-50 px-4 py-12 sm:px-6 lg:px-8">
-    <div class="w-full max-w-md space-y-8">
-        <div>
-            <h2 class="mt-6 text-center text-3xl font-bold tracking-tight text-gray-900">
-                Sign in to your account
-            </h2>
-        </div>
-
-        <form class="space-y-6" onsubmit={handleSignIn}>
-            <div>
-                <label for="email" class="block text-sm font-medium text-gray-700">
-                    Email address
-                </label>
+<div class="flex flex-col p-10">
+    <h1 class="text-lg text-center">Sign in to your account</h1>
+    <div class="flex flex-row gap-10 p-10">
+        <form method="POST" use:enhance={handleEnhance} class="flex-1 flex flex-col gap-6">
+            <div class="flex flex-col gap-1">
+                <label for="email" class="font-bold tracking-wider"> Email address </label>
                 <input
+                    type="email"
                     id="email"
                     name="email"
-                    type="email"
-                    bind:value={email}
-                    class="mt-1 block w-full appearance-none rounded-md border border-gray-300 px-3 py-2 placeholder-gray-400 shadow-sm focus:border-blue-500 focus:ring-blue-500 focus:outline-none sm:text-sm"
-                    placeholder="you@example.com"
+                    value={form?.email ?? ""}
+                    placeholder="name@example.com"
+                    class="rounded-md"
                     required
+                    class:border-red-500={form?.emailError}
+                    aria-invalid={form?.emailError ? "true" : undefined}
+                    aria-describedby={form?.emailError ? "email-error" : undefined}
                 />
+                {#if form?.emailError}
+                    <span id="email-error" class="text-red-500 text-sm">{form.emailError}</span>
+                {/if}
             </div>
-
-            <div>
-                <label for="password" class="block text-sm font-medium text-gray-700">
-                    Password
-                </label>
+            <div class="flex flex-col gap-1">
+                <span class="flex justify-between">
+                    <label for="password" class="font-bold tracking-wider"> Password </label>
+                    <button
+                        type="button"
+                        class="font-light dark:text-secondary-200 text-secondary-800 cursor-pointer bg-transparent border-none underline"
+                    >
+                        Forgot password?
+                    </button>
+                </span>
                 <input
+                    type="password"
                     id="password"
                     name="password"
-                    type="password"
-                    bind:value={password}
-                    class="mt-1 block w-full appearance-none rounded-md border border-gray-300 px-3 py-2 placeholder-gray-400 shadow-sm focus:border-blue-500 focus:ring-blue-500 focus:outline-none sm:text-sm"
-                    placeholder="Enter your password"
+                    placeholder="Password"
+                    class="rounded-md"
                     required
+                    class:border-red-500={form?.passwordError}
+                    aria-invalid={form?.passwordError ? "true" : undefined}
+                    aria-describedby={form?.passwordError ? "password-error" : undefined}
                 />
+                {#if form?.passwordError}
+                    <span id="password-error" class="text-red-500 text-sm"
+                        >{form.passwordError}</span
+                    >
+                {/if}
             </div>
-
-            {#if error}
-                <div class="rounded-md bg-red-50 p-4">
-                    <p class="text-sm font-medium text-red-800">{error}</p>
+            {#if form?.formError}
+                <div
+                    class="text-red-500 text-sm bg-red-50 dark:bg-red-950/30 border border-red-200 dark:border-red-800 rounded-md p-3"
+                >
+                    {form.formError}
                 </div>
             {/if}
-
             <button
                 type="submit"
-                disabled={loading}
-                class="relative flex w-full justify-center rounded-md border border-transparent bg-blue-600 px-4 py-2 text-sm font-medium text-white shadow-sm hover:bg-blue-700 focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 focus:outline-none disabled:opacity-50"
+                disabled={submitting}
+                class="tracking-wider bg-secondary-200 py-3 font-bold text-primary-900 rounded-md"
             >
-                {#if loading}
-                    <span class="flex items-center">
-                        <svg class="mr-2 h-4 w-4 animate-spin" fill="none" viewBox="0 0 24 24">
-                            <circle
-                                class="opacity-25"
-                                cx="12"
-                                cy="12"
-                                r="10"
-                                stroke="currentColor"
-                                stroke-width="4"
-                            />
-                            <path
-                                class="opacity-75"
-                                fill="currentColor"
-                                d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
-                            />
-                        </svg>
-                        Signing in...
-                    </span>
-                {:else}
-                    Sign in
-                {/if}
+                {submitting ? "Signing in..." : "Sign in"}
             </button>
         </form>
-
-        <p class="text-center text-sm text-gray-600">
-            Don't have an account?
-            <a href={resolve("/register")} class="font-medium text-blue-600 hover:text-blue-500">
-                Sign up here
-            </a>
-        </p>
+        <div class="flex flex-col gap-2 justify-center">
+            <span class="h-[25%] w-px self-center bg-neutral-300/70"></span>
+            <span class="tracking-widest">OR</span>
+            <span class="h-[25%] w-px self-center bg-neutral-300/70"></span>
+        </div>
+        <div class="flex-1 flex flex-col justify-center-safe gap-5">
+            <button disabled={submitting}> Sign in with Passkey </button>
+            <div class="flex gap-2 justify-center-safe">
+                <button disabled={submitting}> G </button>
+                <button disabled={submitting}> Y </button>
+                <button disabled={submitting}> A </button>
+                <button disabled={submitting}> F </button>
+            </div>
+        </div>
     </div>
+    <a href={resolve("/register")} class="text-center">
+        Don't have an account?
+        <span class="dark:text-secondary-200 text-secondary-800"> Sign up </span>
+    </a>
 </div>
