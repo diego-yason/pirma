@@ -39,7 +39,7 @@
 {#if dev}
     <button
         type="button"
-        class="fixed right-4 top-4 z-50 rounded-full border border-neutral-300 bg-neutral-50 px-4 py-2 text-sm font-medium shadow-sm transition hover:bg-neutral-100 dark:border-neutral-700 dark:bg-neutral-900 dark:hover:bg-neutral-800"
+        class="fixed dark:opacity-20 opacity-50 right-4 top-4 z-50 rounded-full border border-neutral-300 bg-neutral-50 px-4 py-2 text-sm font-medium shadow-sm transition hover:bg-neutral-100 dark:border-neutral-700 dark:bg-neutral-900 dark:hover:bg-neutral-800"
         aria-pressed={isDarkMode}
         aria-label={isDarkMode ? "Switch to light mode" : "Switch to dark mode"}
         onclick={toggleDarkMode}
