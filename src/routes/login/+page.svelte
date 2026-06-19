@@ -29,7 +29,7 @@
                     name="email"
                     value={form?.email ?? ""}
                     placeholder="name@example.com"
-                    class="rounded-md"
+                    class="rounded-md text-primary-900"
                     required
                     class:border-red-500={form?.emailError}
                     aria-invalid={form?.emailError ? "true" : undefined}
@@ -54,7 +54,7 @@
                     id="password"
                     name="password"
                     placeholder="Password"
-                    class="rounded-md"
+                    class="rounded-md text-primary-900"
                     required
                     class:border-red-500={form?.passwordError}
                     aria-invalid={form?.passwordError ? "true" : undefined}
