@@ -11,7 +11,7 @@
     }
 
     let {
-        flags = ["important", "due-soon"],
+        flags = ["due-soon"],
         title = "Non-Disclosure Agreement (Q3 Project)",
         from = "Prima Corp Legal",
         fromEmail = "legal@example.com",
@@ -43,7 +43,7 @@
 </script>
 
 <div
-    class="flex gap-4 justify-between items-center-safe px-5 py-5 border-l-4 {leftBorder}"
+    class="flex gap-4 rounded-l-sm rounded-r-md justify-between items-center-safe px-5 py-5 border-l-4 {leftBorder}"
     class:border={sortedFlags.includes("urgent")}
 >
     <p

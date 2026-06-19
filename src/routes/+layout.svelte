@@ -14,7 +14,7 @@
 
     // Draggable state
     let buttonRight = $state(16);
-    let buttonY = $state(16);
+    let buttonY = $state(600);
     let dragging = $state(false);
     let dragOffsetRight = $state(0);
     let dragOffsetY = $state(0);
