@@ -80,10 +80,15 @@
     }
 </script>
 
-<h1>Upload and Prepare</h1>
-<p>Begin your document for signing by selecting a template or uploading a new file.</p>
+<h1 class="text-3xl ml-5 mt-16">Upload and Prepare</h1>
+<p class="text-lg ml-5">
+    Begin your document for signing by selecting a template or uploading a new file.
+</p>
 
-<div class="flex gap-6">
+<div class="mt-4 mb-10 ml-5">1 2 3 4 5</div>
+
+<!-- Upload and Template Selection -->
+<div class="flex gap-6 w-3/4 ml-5">
     <!-- Upload area -->
     <div
         class="flex-1 rounded-xl border-2 border-dashed p-8 text-center transition-colors"
@@ -124,7 +129,10 @@
     </div>
 
     <!-- Template -->
-    <div class="flex-1 rounded-xl border border-neutral-300 p-8 dark:border-neutral-700">
+    <div
+        class="flex-1 rounded-xl flex items-center flex-col border border-neutral-300 p-8 dark:border-neutral-700"
+    >
+        <p class="text-3xl mb-2">📄</p>
         <h2 class="text-lg font-semibold mb-1">Use Template</h2>
         <p class="text-sm text-neutral-500 dark:text-neutral-400 mb-4">Standardized contracts</p>
         <button
@@ -137,7 +145,7 @@
 </div>
 
 <!-- Uploaded files list -->
-<div class="mt-6">
+<div class="mt-6 border rounded-md px-8 py-5 ml-5 w-3/4">
     <h2 class="text-lg font-semibold mb-3">Uploaded Files ({files.length})</h2>
     {#if files.length > 0}
         <div class="flex flex-col gap-2">

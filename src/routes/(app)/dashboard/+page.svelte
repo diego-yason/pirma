@@ -4,7 +4,7 @@
 
 <!-- consistent R-padding is 4 -->
 
-<h2 class="text-3xl px-4 font-bold">Waiting for You</h2>
+<h2 class="text-3xl px-4 font-bold mt-16">Waiting for You</h2>
 <p class="text-lg px-4 mb-4 text-neutral-200">
     You have 1 document waiting for your review and signature and received 5 documents that are
     completely signed.
