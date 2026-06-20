@@ -11,11 +11,11 @@
     >
 {/snippet}
 
-<div class="flex min-h-screen">
-    <div class="border-r grow flex flex-col border-neutral-800 pr-2 pl-5">
-        <div class="">
+<div class="flex h-screen overflow-hidden">
+    <div class="border-r grow flex flex-col border-neutral-800 pr-2 pl-5 overflow-y-auto min-h-0">
+        <div class="mt-10">
             <p class="font-bold text-xl">Juan Dela Rosa</p>
-            <p class="text-neutral-300">juan@delarosa.com</p>
+            <p class="text-neutral-300 te">juan@delarosa.com</p>
         </div>
         <nav class="flex flex-col grow justify-between py-3">
             <div class="flex-1/6 flex flex-col gap-3">
@@ -27,12 +27,12 @@
             </div>
             <a class="font-medium text-sm tracking-wide" href={resolve("/logout")}>Logout</a>
         </nav>
-        <div class="flex flex-col gap-2">
+        <div class="flex flex-col gap-2 pb-5">
             <p>Security</p>
             <p>Support</p>
         </div>
     </div>
-    <div class="flex-5/6 pt-10 pl-2 pr-5">
+    <div class="flex-5/6 overflow-y-auto min-h-0 pl-2">
         {@render children()}
     </div>
 </div>
