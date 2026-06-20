@@ -8,6 +8,10 @@
         size: string;
         type: string;
         pageCount?: number;
+        uploading?: boolean;
+        uploaded?: boolean;
+        error?: string;
+        storagePath?: string;
     }
 
     let files = $state<UploadedFile[]>([]);
@@ -23,6 +27,8 @@
 
     async function addFiles(fileList: FileList) {
         for (const file of fileList) {
+            const id = crypto.randomUUID();
+
             let pageCount: number | undefined;
             if (file.type === "application/pdf" || file.name.endsWith(".pdf")) {
                 try {
@@ -31,14 +37,52 @@
                     // ignore read errors
                 }
             }
+
             files.push({
-                id: crypto.randomUUID(),
+                id,
                 file,
                 name: file.name,
                 size: formatSize(file.size),
                 type: file.type || (file.name.split(".").pop()?.toUpperCase() ?? "FILE"),
                 pageCount,
+                uploading: true,
             });
+
+            // Upload file → server → Supabase
+            const formData = new FormData();
+            formData.append("file", file);
+            formData.append("title", file.name);
+
+            try {
+                const res = await fetch("/doc/new", {
+                    method: "POST",
+                    body: formData,
+                    headers: { "x-sveltekit-action": "true" },
+                });
+                const result = await res.json();
+
+                files = files.map((f) =>
+                    f.id === id
+                        ? {
+                              ...f,
+                              uploading: false,
+                              uploaded: result.documentId != null,
+                              error: result.error ?? undefined,
+                              storagePath: result.documentId ?? undefined,
+                          }
+                        : f,
+                );
+            } catch (err) {
+                files = files.map((f) =>
+                    f.id === id
+                        ? {
+                              ...f,
+                              uploading: false,
+                              error: err instanceof Error ? err.message : "Upload failed",
+                          }
+                        : f,
+                );
+            }
         }
     }
 
@@ -163,7 +207,19 @@
                                 {f.size} &middot; {f.pageCount != null
                                     ? `${f.pageCount} pages`
                                     : f.type}
+                                {#if f.uploading}
+                                    &middot; Uploading…
+                                {:else if f.error}
+                                    &middot; <span class="text-red-500">{f.error}</span>
+                                {:else if f.uploaded}
+                                    &middot; <span class="text-green-500">Uploaded</span>
+                                {/if}
                             </p>
+                            {#if f.storagePath}
+                                <p class="text-xs text-neutral-500 dark:text-neutral-400 font-mono">
+                                    {f.storagePath}
+                                </p>
+                            {/if}
                         </div>
                     </div>
                     <button

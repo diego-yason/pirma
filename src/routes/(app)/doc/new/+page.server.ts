@@ -5,7 +5,19 @@ import { documents } from "$lib/server/db/schema";
 import { supabaseAdmin } from "$lib/server/supabase";
 
 const MAX_FILE_SIZE = 50 * 1024 * 1024; // 50 MB
-const ALLOWED_TYPES = ["application/pdf"];
+const ALLOWED_TYPES = [
+    "application/pdf",
+    "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+    "image/jpeg",
+    "image/png",
+];
+
+const MIME_TO_EXT: Record<string, string> = {
+    "application/pdf": "pdf",
+    "application/vnd.openxmlformats-officedocument.wordprocessingml.document": "docx",
+    "image/jpeg": "jpg",
+    "image/png": "png",
+};
 
 export const load: PageServerLoad = async ({ locals }) => {
     if (!locals.user) {
@@ -48,12 +60,13 @@ export const actions: Actions = {
             const hashHex = hashArray.map((b) => b.toString(16).padStart(2, "0")).join("");
 
             // Upload to Supabase Storage
-            const filePath = `${crypto.randomUUID()}.pdf`;
+            const ext = MIME_TO_EXT[file.type] ?? "bin";
+            const filePath = `${crypto.randomUUID()}.${ext}`;
 
             const { error: uploadError } = await supabaseAdmin.storage
                 .from("drafts")
                 .upload(filePath, buffer, {
-                    contentType: "application/pdf",
+                    contentType: file.type,
                     upsert: false,
                 });
 
