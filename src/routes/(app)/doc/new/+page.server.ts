@@ -1,8 +1,9 @@
 import type { Actions, PageServerLoad } from "./$types";
 import { redirect, fail } from "@sveltejs/kit";
 import { db } from "$lib/server/db";
-import { documents } from "$lib/server/db/schema";
+import { documents, packages, documentAssignments } from "$lib/server/db/schema";
 import { supabaseAdmin } from "$lib/server/supabase";
+import { eq } from "drizzle-orm";
 
 const MAX_FILE_SIZE = 50 * 1024 * 1024; // 50 MB
 const ALLOWED_TYPES = [
@@ -28,7 +29,7 @@ export const load: PageServerLoad = async ({ locals }) => {
 };
 
 export const actions: Actions = {
-    default: async ({ request, locals }) => {
+    uploadFile: async ({ request, locals }) => {
         if (!locals.user) {
             return fail(401, { error: "You must be signed in to upload documents" });
         }
@@ -96,5 +97,67 @@ export const actions: Actions = {
                 error: err instanceof Error ? err.message : "An unexpected error occurred",
             });
         }
+    },
+
+    createPackage: async ({ request, locals }) => {
+        if (!locals.user) {
+            return fail(401, { error: "You must be signed in to create a package" });
+        }
+
+        const formData = await request.formData();
+        const docIds = formData.getAll("docId") as string[];
+
+        if (docIds.length === 0) {
+            return fail(400, { error: "No documents selected" });
+        }
+
+        // Verify all documents belong to the current user and are not already assigned
+        const userDocs = await db
+            .select({ id: documents.id, title: documents.title })
+            .from(documents)
+            .leftJoin(documentAssignments, eq(documents.id, documentAssignments.documentId))
+            .where(eq(documents.owner, locals.user.id));
+
+        const userDocIds = new Set(userDocs.map((d) => d.id));
+        const validIds = docIds.filter((id) => userDocIds.has(id));
+
+        if (validIds.length === 0) {
+            return fail(400, { error: "None of the selected documents are available" });
+        }
+
+        // Generate package name from the first document title
+        const firstDoc = userDocs.find((d) => d.id === validIds[0]);
+        const packageName = firstDoc?.title ?? "Untitled Package";
+
+        let pkg: { id: string };
+
+        try {
+            // Create the package
+            const [created] = await db
+                .insert(packages)
+                .values({
+                    name: packageName,
+                    owner: locals.user.id,
+                })
+                .returning();
+            pkg = created;
+
+            // Assign documents to the package
+            if (validIds.length > 0) {
+                await db.insert(documentAssignments).values(
+                    validIds.map((docId) => ({
+                        documentId: docId,
+                        packageId: pkg.id,
+                    })),
+                );
+            }
+        } catch (err) {
+            console.error("Create package error:", err);
+            return fail(500, {
+                error: err instanceof Error ? err.message : "Failed to create package",
+            });
+        }
+
+        redirect(303, `/doc/new/${pkg.id}`);
     },
 };

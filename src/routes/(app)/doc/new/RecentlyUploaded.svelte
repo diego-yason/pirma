@@ -1,5 +1,6 @@
 <script lang="ts">
-    let { active = false }: { active?: boolean } = $props();
+    let { active = false, onselect }: { active?: boolean; onselect?: (doc: RecentDoc) => void } =
+        $props();
 
     interface RecentDoc {
         id: string;
@@ -52,6 +53,7 @@
             <button
                 type="button"
                 class="w-full rounded-lg border border-neutral-200 px-3 py-2 text-left text-sm transition hover:bg-neutral-50 dark:border-neutral-700 dark:hover:bg-neutral-800"
+                onclick={() => onselect?.(doc)}
             >
                 <span class="font-medium">{doc.title}</span>
             </button>

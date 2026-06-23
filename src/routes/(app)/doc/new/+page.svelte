@@ -4,10 +4,10 @@
 
     interface UploadedFile {
         id: string;
-        file: File;
+        file?: File;
         name: string;
-        size: string;
-        type: string;
+        size?: string;
+        type?: string;
         pageCount?: number;
         uploading?: boolean;
         uploaded?: boolean;
@@ -57,7 +57,7 @@
             formData.append("title", file.name);
 
             try {
-                const res = await fetch("/doc/new", {
+                const res = await fetch("/doc/new?/uploadFile", {
                     method: "POST",
                     body: formData,
                     headers: { "x-sveltekit-action": "true" },
@@ -99,6 +99,23 @@
 
     function removeFile(id: string) {
         files = files.filter((f) => f.id !== id);
+    }
+
+    function addRecentDoc(doc: { id: string; title: string }) {
+        // Prevent duplicates
+        if (files.some((f) => f.storagePath === doc.id)) return;
+
+        files.push({
+            id: crypto.randomUUID(),
+            name: doc.title,
+            type: "",
+            size: "",
+            uploaded: true,
+            uploading: false,
+            storagePath: doc.id,
+        });
+
+        showRecentPopup = false;
     }
 
     function onDragOver(e: DragEvent) {
@@ -206,7 +223,7 @@
                 >
                     <div class="flex items-center gap-3">
                         <span class="text-xl">
-                            {f.type.startsWith("image") ? "🖼️" : "📄"}
+                            {f.type?.startsWith("image") ? "🖼️" : "📄"}
                         </span>
                         <div>
                             <p class="text-sm font-medium">{f.name}</p>
@@ -239,6 +256,20 @@
                 </div>
             {/each}
         </div>
+
+        {#if files.some((f) => f.storagePath)}
+            <form method="POST" action="?/createPackage" class="mt-4">
+                {#each files.filter((f) => f.storagePath) as f (f.id)}
+                    <input type="hidden" name="docId" value={f.storagePath!} />
+                {/each}
+                <button
+                    type="submit"
+                    class="rounded-lg bg-blue-600 px-6 py-2 text-sm font-medium text-white transition hover:bg-blue-700"
+                >
+                    Next →
+                </button>
+            </form>
+        {/if}
     {:else}
         <p class="text-sm text-neutral-400 dark:text-neutral-500">No files uploaded yet.</p>
     {/if}
@@ -272,6 +303,6 @@
             ✕
         </button>
         <h2 class="mb-4 text-lg font-semibold">Recently Uploaded</h2>
-        <RecentlyUploaded active={prefetchRecent || showRecentPopup} />
+        <RecentlyUploaded active={prefetchRecent || showRecentPopup} onselect={addRecentDoc} />
     </div>
 </div>
