@@ -1,5 +1,6 @@
 <script lang="ts">
     import { PDFDocument } from "pdf-lib";
+    import RecentlyUploaded from "./RecentlyUploaded.svelte";
 
     interface UploadedFile {
         id: string;
@@ -16,6 +17,8 @@
 
     let files = $state<UploadedFile[]>([]);
     let isDragOver = $state(false);
+    let showRecentPopup = $state(false);
+    let prefetchRecent = $state(false);
 
     const ACCEPTED_TYPES = ".pdf,.docx,.jpg,.jpeg,.png";
 
@@ -124,13 +127,6 @@
     }
 </script>
 
-<h1 class="text-3xl ml-5 mt-16">Upload and Prepare</h1>
-<p class="text-lg ml-5">
-    Begin your document for signing by selecting a template or uploading a new file.
-</p>
-
-<div class="mt-4 mb-10 ml-5">1 2 3 4 5</div>
-
 <!-- Upload and Template Selection -->
 <div class="flex gap-6 w-3/4 ml-5">
     <!-- Upload area -->
@@ -141,15 +137,11 @@
         class:dark:bg-blue-950={isDragOver}
         class:border-neutral-300={!isDragOver}
         class:dark:border-neutral-700={!isDragOver}
-        role="button"
-        tabindex="0"
-        onkeydown={(e) => {
-            if (e.key === "Enter" || e.key === " ") document.getElementById("fileInput")?.click();
-        }}
+        role="region"
+        aria-label="File drop zone"
         ondragover={onDragOver}
         ondragleave={onDragLeave}
         ondrop={onDrop}
-        onclick={() => document.getElementById("fileInput")?.click()}
     >
         <p class="text-3xl mb-2">📄</p>
         <h2 class="text-lg font-semibold mb-1">Upload Files</h2>
@@ -159,8 +151,23 @@
         <button
             type="button"
             class="inline-block rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white transition hover:bg-blue-700"
+            onclick={(e) => {
+                e.stopPropagation();
+                document.getElementById("fileInput")?.click();
+            }}
         >
             Browse Files
+        </button>
+        <button
+            type="button"
+            class="mt-2 text-sm text-blue-600 underline transition hover:text-blue-700 dark:text-blue-400 dark:hover:text-blue-300"
+            onmouseenter={() => (prefetchRecent = true)}
+            onclick={(e) => {
+                e.stopPropagation();
+                showRecentPopup = true;
+            }}
+        >
+            or recently uploaded
         </button>
         <input
             id="fileInput"
@@ -235,4 +242,36 @@
     {:else}
         <p class="text-sm text-neutral-400 dark:text-neutral-500">No files uploaded yet.</p>
     {/if}
+</div>
+
+<!-- Recently Uploaded Popup -->
+<div
+    class="fixed inset-0 z-50 flex items-center justify-center bg-black/40"
+    class:hidden={!showRecentPopup}
+    onclick={() => (showRecentPopup = false)}
+    onkeydown={(e) => {
+        if (e.key === "Escape") showRecentPopup = false;
+    }}
+    role="dialog"
+    aria-modal="true"
+    aria-hidden={!showRecentPopup}
+    tabindex="-1"
+>
+    <!-- svelte-ignore a11y_no_static_element_interactions -->
+    <div
+        class="relative w-full max-w-md rounded-xl bg-white p-6 shadow-xl dark:bg-neutral-900"
+        onclick={(e) => e.stopPropagation()}
+        onkeydown={(e) => e.stopPropagation()}
+    >
+        <button
+            type="button"
+            class="absolute right-4 top-4 text-neutral-400 transition hover:text-neutral-600 dark:hover:text-neutral-300"
+            onclick={() => (showRecentPopup = false)}
+            aria-label="Close"
+        >
+            ✕
+        </button>
+        <h2 class="mb-4 text-lg font-semibold">Recently Uploaded</h2>
+        <RecentlyUploaded active={prefetchRecent || showRecentPopup} />
+    </div>
 </div>

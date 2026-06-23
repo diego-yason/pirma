@@ -64,6 +64,27 @@
       "when": 1780315748624,
       "tag": "0008_perfect_thunderbird",
       "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "7",
+      "when": 1782254668877,
+      "tag": "0009_worried_azazel",
+      "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "7",
+      "when": 1782255167852,
+      "tag": "0010_lethal_supreme_intelligence",
+      "breakpoints": true
+    },
+    {
+      "idx": 11,
+      "version": "7",
+      "when": 1782255944205,
+      "tag": "0011_slippery_master_chief",
+      "breakpoints": true
     }
   ]
 }

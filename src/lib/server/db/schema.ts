@@ -1,17 +1,32 @@
-import { integer, pgEnum, pgTable, text, timestamp, uuid } from "drizzle-orm/pg-core";
+import {
+    index,
+    integer,
+    pgEnum,
+    pgTable,
+    pgView,
+    text,
+    timestamp,
+    uuid,
+    unique,
+} from "drizzle-orm/pg-core";
+import { eq, inArray, sql } from "drizzle-orm";
 import { user } from "./auth.schema";
 
 // cryptograph keys
-export const cryptoKeys = pgTable("user_keys", {
-    id: uuid("id").primaryKey().defaultRandom(),
-    userId: text("user_id")
-        .notNull()
-        .references(() => user.id),
-    pkey: text("pkey").notNull(),
-    pubkey: text("pubkey").notNull(),
-    createdAt: timestamp("created_at").notNull().defaultNow(),
-    revokedAt: timestamp("revoked_at"),
-}).enableRLS();
+export const cryptoKeys = pgTable(
+    "user_keys",
+    {
+        id: uuid("id").primaryKey().defaultRandom(),
+        userId: text("user_id")
+            .notNull()
+            .references(() => user.id),
+        pkey: text("pkey").notNull(),
+        pubkey: text("pubkey").notNull(),
+        createdAt: timestamp("created_at").notNull().defaultNow(),
+        revokedAt: timestamp("revoked_at"),
+    },
+    (table) => [index("user_keys_user_id_idx").on(table.userId)],
+).enableRLS();
 
 // public: shows hash, actual PDF, and signatures with signer info
 // restricted: shows hash and signatures as "validated" unless logged in
@@ -22,16 +37,25 @@ export const viewAccessEnum = pgEnum("view_access", ["public", "restricted"]);
 // executed = fully signed and completed, no more changes allowed. deletion prohibited.
 export const documentStatusEnum = pgEnum("document_status", ["draft", "finalized", "executed"]);
 
-export const documents = pgTable("documents", {
-    id: uuid("id").primaryKey().defaultRandom(),
-    title: text("title").notNull(),
-    owner: text("owner")
-        .notNull()
-        .references(() => user.id),
-    detailedViewAccess: viewAccessEnum("detailed_view_access").notNull().default("restricted"),
-    hash: text("hash").notNull(),
-    status: documentStatusEnum("status").notNull().default("draft"),
-}).enableRLS();
+export const documents = pgTable(
+    "documents",
+    {
+        id: uuid("id").primaryKey().defaultRandom(),
+        title: text("title").notNull(),
+        owner: text("owner")
+            .notNull()
+            .references(() => user.id),
+        detailedViewAccess: viewAccessEnum("detailed_view_access").notNull().default("restricted"),
+        hash: text("hash").notNull(),
+        status: documentStatusEnum("status").notNull().default("draft"),
+        createdAt: timestamp("created_at").notNull().defaultNow(),
+        updatedAt: timestamp("updated_at").notNull().defaultNow(),
+    },
+    (table) => [
+        index("documents_owner_idx").on(table.owner),
+        index("documents_status_idx").on(table.status),
+    ],
+).enableRLS();
 
 // for actual signing
 // pending = signature request sent, waiting for blockchain
@@ -45,40 +69,141 @@ export const signaturesStatus = pgEnum("signature_status", [
     "rejected",
 ]);
 
-export const documentSignatories = pgTable("document_signatories", {
-    id: uuid("id").primaryKey().defaultRandom(),
-    documentId: uuid("document_id")
-        .notNull()
-        .references(() => documents.id),
-    userId: text("user_id")
-        .notNull()
-        .references(() => user.id),
-    signerId: integer("signer_id"),
-}).enableRLS();
+export const packageSignatories = pgTable(
+    "package_signatories",
+    {
+        id: uuid("id").primaryKey().defaultRandom(),
+        packageId: uuid("package_id")
+            .notNull()
+            .references(() => packages.id),
+        userId: text("user_id")
+            .notNull()
+            .references(() => user.id),
+        signerId: integer("signer_id"),
+        createdAt: timestamp("created_at").notNull().defaultNow(),
+    },
+    (table) => [
+        unique("package_signatories_unique").on(table.packageId, table.userId),
+        index("package_signatories_package_id_idx").on(table.packageId),
+        index("package_signatories_user_id_idx").on(table.userId),
+    ],
+).enableRLS();
 
-export const signatures = pgTable("signatures", {
-    txId: text("tx_id").primaryKey(),
-    documentId: uuid("document_id")
-        .notNull()
-        .references(() => documents.id),
-    documentHash: text("document_hash").notNull(),
-    status: signaturesStatus("status").notNull().default("pending"),
-    signedAt: timestamp("signed_at"),
-    cryptoKey: uuid("crypto_key")
-        .notNull()
-        .references(() => cryptoKeys.id),
-    signaturePayload: text("signature_payload").notNull(),
-    signatureAlgorithm: text("signature_algorithm").notNull(),
-}).enableRLS();
+export const signatures = pgTable(
+    "signatures",
+    {
+        txId: text("tx_id").primaryKey(),
+        documentId: uuid("document_id")
+            .notNull()
+            .references(() => documents.id),
+        documentHash: text("document_hash").notNull(),
+        status: signaturesStatus("status").notNull().default("pending"),
+        signedAt: timestamp("signed_at"),
+        cryptoKey: uuid("crypto_key")
+            .notNull()
+            .references(() => cryptoKeys.id),
+        signaturePayload: text("signature_payload").notNull(),
+        signatureAlgorithm: text("signature_algorithm").notNull(),
+    },
+    (table) => [
+        index("signatures_document_id_idx").on(table.documentId),
+        index("signatures_crypto_key_idx").on(table.cryptoKey),
+        index("signatures_status_idx").on(table.status),
+    ],
+).enableRLS();
 
-export const documentViewers = pgTable("document_viewers", {
-    id: uuid("id").primaryKey().defaultRandom(),
-    documentId: uuid("document_id")
-        .notNull()
-        .references(() => documents.id),
-    userId: text("user_id")
-        .notNull()
-        .references(() => user.id),
-}).enableRLS();
+export const packageViewers = pgTable(
+    "package_viewers",
+    {
+        id: uuid("id").primaryKey().defaultRandom(),
+        packageId: uuid("package_id")
+            .notNull()
+            .references(() => packages.id),
+        userId: text("user_id")
+            .notNull()
+            .references(() => user.id),
+        createdAt: timestamp("created_at").notNull().defaultNow(),
+    },
+    (table) => [
+        unique("package_viewers_unique").on(table.packageId, table.userId),
+        index("package_viewers_user_id_idx").on(table.userId),
+    ],
+).enableRLS();
+
+export const documentAssignments = pgTable(
+    "document_assignments",
+    {
+        id: uuid("id").primaryKey().defaultRandom(),
+        documentId: uuid("document_id")
+            .notNull()
+            .references(() => documents.id)
+            .unique(),
+        packageId: uuid("package_id")
+            .notNull()
+            .references(() => packages.id),
+        createdAt: timestamp("created_at").notNull().defaultNow(),
+    },
+    (table) => [index("document_assignments_package_id_idx").on(table.packageId)],
+).enableRLS();
+
+export const packages = pgTable(
+    "packages",
+    {
+        id: uuid("id").primaryKey().defaultRandom(),
+        name: text("name").notNull(),
+        owner: text("owner")
+            .notNull()
+            .references(() => user.id),
+        createdAt: timestamp("created_at").notNull().defaultNow(),
+        updatedAt: timestamp("updated_at").notNull().defaultNow(),
+    },
+    (table) => [index("packages_owner_idx").on(table.owner)],
+).enableRLS();
+
+// ── Views ─────────────────────────────────────────────────────────
+// pending_documents: documents in packages where the user is a
+// signatory but has NOT yet signed with any of their active keys.
+// ───────────────────────────────────────────────────────────────────
+export const pendingDocumentsView = pgView("pending_documents").as((qb) =>
+    qb
+        .select({
+            id: documents.id,
+            title: documents.title,
+            status: documents.status,
+            updatedAt: documents.updatedAt,
+            signatoryUserId: packageSignatories.userId,
+        })
+        .from(documents)
+        .innerJoin(documentAssignments, eq(documents.id, documentAssignments.documentId))
+        .innerJoin(
+            packageSignatories,
+            eq(documentAssignments.packageId, packageSignatories.packageId),
+        ).where(sql`NOT EXISTS (
+            SELECT 1 FROM ${signatures}
+            INNER JOIN ${cryptoKeys}
+                ON ${signatures.cryptoKey} = ${cryptoKeys.id}
+                AND ${cryptoKeys.userId} = ${packageSignatories.userId}
+                AND ${cryptoKeys.revokedAt} IS NULL
+            WHERE ${signatures.documentId} = ${documents.id}
+        )`),
+);
+
+// completed_documents: documents the user has signed (signed or
+// anchored status), deduplicated across multiple keys.
+// ───────────────────────────────────────────────────────────────────
+export const completedDocumentsView = pgView("completed_documents").as((qb) =>
+    qb
+        .selectDistinct({
+            id: documents.id,
+            title: documents.title,
+            status: documents.status,
+            updatedAt: documents.updatedAt,
+            signatoryUserId: cryptoKeys.userId,
+        })
+        .from(documents)
+        .innerJoin(signatures, eq(documents.id, signatures.documentId))
+        .innerJoin(cryptoKeys, eq(signatures.cryptoKey, cryptoKeys.id))
+        .where(inArray(signatures.status, ["signed", "anchored"])),
+);
 
 export * from "./auth.schema";

@@ -71,6 +71,7 @@
     "dependencies": {
         "@better-auth/passkey": "1.6.11",
         "@supabase/supabase-js": "^2.108.2",
+        "bsrp": "^1.0.9",
         "pdf-lib": "^1.17.1",
         "pdfjs-dist": "^6.0.227",
         "zod": "^4.4.3"
