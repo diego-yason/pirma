@@ -130,29 +130,33 @@
     // Track which page is in view
     $effect(() => {
         if (pageContainers.length === 0) return;
-        const HYSTERESIS = 0.35;
+        let settleTimer: ReturnType<typeof setTimeout>;
         const observer = new IntersectionObserver(
             (entries) => {
                 let best = 0;
                 let bestIdx = 0;
                 for (const entry of entries) {
                     const idx = pageContainers.indexOf(entry.target as HTMLDivElement);
-                    // Bias toward the current page to reduce jitter
-                    const ratio =
-                        entry.intersectionRatio + (idx === currentPage - 1 ? HYSTERESIS : 0);
-                    if (ratio > best) {
-                        best = ratio;
+                    if (entry.intersectionRatio > best) {
+                        best = entry.intersectionRatio;
                         bestIdx = idx;
                     }
                 }
-                if (best > 0) currentPage = bestIdx + 1;
+                if (best === 0) return;
+                clearTimeout(settleTimer);
+                settleTimer = setTimeout(() => {
+                    currentPage = bestIdx + 1;
+                }, 100);
             },
             { threshold: [0, 0.25, 0.5, 0.75, 1] },
         );
         for (const el of pageContainers) {
             observer.observe(el);
         }
-        return () => observer.disconnect();
+        return () => {
+            clearTimeout(settleTimer);
+            observer.disconnect();
+        };
     });
 
     const DESIGN_BOX_DEFAULTS = {
