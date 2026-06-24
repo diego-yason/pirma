@@ -1,8 +1,8 @@
 import type { RequestHandler } from "./$types";
 import { json } from "@sveltejs/kit";
-import { eq, and, desc } from "drizzle-orm";
+import { eq, and, desc, isNull } from "drizzle-orm";
 import { db } from "$lib/server/db";
-import { documents } from "$lib/server/db/schema";
+import { documents, documentAssignments } from "$lib/server/db/schema";
 
 const PAGE_SIZE = 10;
 
@@ -38,7 +38,8 @@ export const GET: RequestHandler = async ({ locals, url }) => {
             updatedAt: documents.updatedAt,
         })
         .from(documents)
-        .where(and(...conditions))
+        .leftJoin(documentAssignments, eq(documents.id, documentAssignments.documentId))
+        .where(and(...conditions, isNull(documentAssignments.id)))
         .orderBy(desc(documents.updatedAt))
         .limit(PAGE_SIZE)
         .offset(offset);

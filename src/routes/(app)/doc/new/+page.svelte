@@ -21,6 +21,8 @@
     let showRecentPopup = $state(false);
     let prefetchRecent = $state(false);
 
+    $inspect(files);
+
     const { setStep } = getContext<{ setStep: (n: number) => void }>("step");
     $effect(() => {
         setStep(1);
@@ -72,15 +74,18 @@
                     headers: { "x-sveltekit-action": "true" },
                 });
                 const result = await res.json();
+                const [, docId, storagePath] = JSON.parse(result.data);
+                console.log(docId, storagePath);
 
                 files = files.map((f) =>
                     f.id === id
                         ? {
                               ...f,
+                              id: docId, // Update to document ID from server
                               uploading: false,
-                              uploaded: result.documentId != null,
+                              uploaded: docId != null,
                               error: result.error ?? undefined,
-                              storagePath: result.documentId ?? undefined,
+                              storagePath: storagePath ?? undefined,
                           }
                         : f,
                 );
@@ -120,7 +125,7 @@
         if (files.some((f) => f.storagePath === doc.id)) return;
 
         files.push({
-            id: crypto.randomUUID(),
+            id: doc.id,
             name: doc.title,
             type: "",
             size: doc.fileSize != null ? formatSize(doc.fileSize) : "",
@@ -275,7 +280,7 @@
         {#if files.some((f) => f.storagePath)}
             <form method="POST" action="?/createPackage" class="mt-4">
                 {#each files.filter((f) => f.storagePath) as f (f.id)}
-                    <input type="hidden" name="docId" value={f.storagePath!} />
+                    <input type="hidden" name="docId" value={f.id} />
                 {/each}
                 <button
                     type="submit"

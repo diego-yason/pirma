@@ -3,11 +3,13 @@
     import type { PlacedRect } from "./SignatureBoxTypes";
 
     let {
+        pdfUrl = "/sample.pdf",
         elements = [],
         signedStatus = {},
         onsign,
         onremove,
     }: {
+        pdfUrl?: string;
         elements?: PlacedRect[];
         signedStatus?: Record<string, boolean>;
         onsign?: (id: string) => void;
@@ -34,7 +36,7 @@
             import.meta.url,
         ).toString();
 
-        const pdfDoc = await pdfjs.getDocument({ url: "/sample.pdf" }).promise;
+        const pdfDoc = await pdfjs.getDocument({ url: pdfUrl }).promise;
         doc = pdfDoc;
 
         const pageList: { canvasWidth: number; canvasHeight: number }[] = [];
@@ -76,8 +78,6 @@
 </script>
 
 <div class="mx-auto max-w-3xl">
-    <h1 class="mb-6 text-2xl font-bold">Document Preview</h1>
-
     {#if loading}
         <p class="text-neutral-500">Loading document&hellip;</p>
     {:else}

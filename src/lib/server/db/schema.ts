@@ -51,6 +51,7 @@ export const documents = pgTable(
         status: documentStatusEnum("status").notNull().default("draft"),
         pageCount: integer("page_count"),
         fileSize: bigint("file_size", { mode: "number" }),
+        storagePath: text("storage_path"),
         createdAt: timestamp("created_at").notNull().defaultNow(),
         updatedAt: timestamp("updated_at").notNull().defaultNow(),
     },
@@ -152,21 +153,25 @@ export const packages = pgTable(
 // pending_documents: documents in packages where the user is a
 // signatory but has NOT yet signed with any of their active keys.
 // ───────────────────────────────────────────────────────────────────
-export const pendingDocumentsView = pgView("pending_documents").as((qb) =>
-    qb
-        .select({
-            id: documents.id,
-            title: documents.title,
-            status: documents.status,
-            updatedAt: documents.updatedAt,
-            signatoryUserId: packageRecipients.userId,
-        })
-        .from(documents)
-        .innerJoin(documentAssignments, eq(documents.id, documentAssignments.documentId))
-        .innerJoin(
-            packageRecipients,
-            eq(documentAssignments.packageId, packageRecipients.packageId),
-        ).where(sql`${packageRecipients.role} = 'signer' AND NOT EXISTS (
+export const pendingDocumentsView = pgView("pending_documents")
+    .with({
+        securityInvoker: true,
+    })
+    .as((qb) =>
+        qb
+            .select({
+                id: documents.id,
+                title: documents.title,
+                status: documents.status,
+                updatedAt: documents.updatedAt,
+                signatoryUserId: packageRecipients.userId,
+            })
+            .from(documents)
+            .innerJoin(documentAssignments, eq(documents.id, documentAssignments.documentId))
+            .innerJoin(
+                packageRecipients,
+                eq(documentAssignments.packageId, packageRecipients.packageId),
+            ).where(sql`${packageRecipients.role} = 'signer' AND NOT EXISTS (
             SELECT 1 FROM ${signatures}
             INNER JOIN ${cryptoKeys}
                 ON ${signatures.cryptoKey} = ${cryptoKeys.id}
@@ -174,24 +179,28 @@ export const pendingDocumentsView = pgView("pending_documents").as((qb) =>
                 AND ${cryptoKeys.revokedAt} IS NULL
             WHERE ${signatures.documentId} = ${documents.id}
         )`),
-);
+    );
 
 // completed_documents: documents the user has signed (signed or
 // anchored status), deduplicated across multiple keys.
 // ───────────────────────────────────────────────────────────────────
-export const completedDocumentsView = pgView("completed_documents").as((qb) =>
-    qb
-        .selectDistinct({
-            id: documents.id,
-            title: documents.title,
-            status: documents.status,
-            updatedAt: documents.updatedAt,
-            signatoryUserId: cryptoKeys.userId,
-        })
-        .from(documents)
-        .innerJoin(signatures, eq(documents.id, signatures.documentId))
-        .innerJoin(cryptoKeys, eq(signatures.cryptoKey, cryptoKeys.id))
-        .where(inArray(signatures.status, ["signed", "anchored"])),
-);
+export const completedDocumentsView = pgView("completed_documents")
+    .with({
+        securityInvoker: true,
+    })
+    .as((qb) =>
+        qb
+            .selectDistinct({
+                id: documents.id,
+                title: documents.title,
+                status: documents.status,
+                updatedAt: documents.updatedAt,
+                signatoryUserId: cryptoKeys.userId,
+            })
+            .from(documents)
+            .innerJoin(signatures, eq(documents.id, signatures.documentId))
+            .innerJoin(cryptoKeys, eq(signatures.cryptoKey, cryptoKeys.id))
+            .where(inArray(signatures.status, ["signed", "anchored"])),
+    );
 
 export * from "./auth.schema";

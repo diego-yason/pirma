@@ -3,7 +3,8 @@ import { redirect, fail } from "@sveltejs/kit";
 import { db } from "$lib/server/db";
 import { documents, packages, documentAssignments } from "$lib/server/db/schema";
 import { supabaseAdmin } from "$lib/server/supabase";
-import { eq } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
+import { logger } from "$lib/server/logger";
 
 const MAX_FILE_SIZE = 50 * 1024 * 1024; // 50 MB
 const ALLOWED_TYPES = [
@@ -31,6 +32,7 @@ export const load: PageServerLoad = async ({ locals }) => {
 export const actions: Actions = {
     uploadFile: async ({ request, locals }) => {
         if (!locals.user) {
+            logger.warn("uploadFile", "Rejected: not authenticated");
             return fail(401, { error: "You must be signed in to upload documents" });
         }
 
@@ -39,17 +41,21 @@ export const actions: Actions = {
         const title = (formData.get("title") as string | null)?.trim();
 
         if (!file || file.size === 0) {
+            logger.warn("uploadFile", "Rejected: no file or empty file");
             return fail(400, { error: "Please select a file to upload" });
         }
 
         if (!title) {
+            logger.warn("uploadFile", "Rejected: missing title");
             return fail(400, { error: "Document title is required" });
         }
         if (!ALLOWED_TYPES.includes(file.type)) {
+            logger.warn("uploadFile", "Rejected: disallowed type", { type: file.type });
             return fail(400, { error: "Only PDF files are allowed" });
         }
 
         if (file.size > MAX_FILE_SIZE) {
+            logger.warn("uploadFile", "Rejected: file too large", { size: file.size });
             return fail(400, { error: "File size exceeds the 50 MB limit" });
         }
 
@@ -72,9 +78,15 @@ export const actions: Actions = {
                 });
 
             if (uploadError) {
-                console.error("Storage upload error:", uploadError);
+                logger.error("uploadFile", "Storage upload failed", uploadError);
                 return fail(500, { error: "Failed to upload file. Please try again." });
             }
+
+            logger.info("uploadFile", "File uploaded to storage", {
+                path: filePath,
+                size: file.size,
+                type: file.type,
+            });
 
             // Parse optional metadata from the client
             const pageCountRaw = formData.get("pageCount");
@@ -91,14 +103,22 @@ export const actions: Actions = {
                     detailedViewAccess: "restricted",
                     pageCount,
                     fileSize: file.size,
+                    storagePath: filePath,
                 })
                 .returning();
 
+            logger.info("uploadFile", "Document record created", {
+                documentId: document.id,
+                title,
+                hash: hashHex.slice(0, 16) + "…",
+            });
+
             return {
                 documentId: document.id,
+                storagePath: filePath,
             };
         } catch (err) {
-            console.error("Upload error:", err);
+            logger.error("uploadFile", "Unexpected error", err);
             return fail(500, {
                 error: err instanceof Error ? err.message : "An unexpected error occurred",
             });
@@ -107,6 +127,7 @@ export const actions: Actions = {
 
     createPackage: async ({ request, locals }) => {
         if (!locals.user) {
+            logger.warn("createPackage", "Rejected: not authenticated");
             return fail(401, { error: "You must be signed in to create a package" });
         }
 
@@ -114,25 +135,60 @@ export const actions: Actions = {
         const docIds = formData.getAll("docId") as string[];
 
         if (docIds.length === 0) {
+            logger.warn("createPackage", "Rejected: no docIds in form data");
             return fail(400, { error: "No documents selected" });
         }
 
-        // Verify all documents belong to the current user and are not already assigned
-        const userDocs = await db
-            .select({ id: documents.id, title: documents.title })
-            .from(documents)
-            .leftJoin(documentAssignments, eq(documents.id, documentAssignments.documentId))
-            .where(eq(documents.owner, locals.user.id));
+        const isUsers = await Promise.all(
+            docIds.map(
+                async (id) =>
+                    await db
+                        .select()
+                        .from(documents)
+                        .where(and(eq(documents.id, id), eq(documents.owner, locals.user.id)))
+                        .limit(1),
+            ),
+        );
 
-        const userDocIds = new Set(userDocs.map((d) => d.id));
-        const validIds = docIds.filter((id) => userDocIds.has(id));
+        console.log(isUsers);
 
-        if (validIds.length === 0) {
-            return fail(400, { error: "None of the selected documents are available" });
+        if (isUsers.some((res) => res.length === 0)) {
+            logger.warn("createPackage", "Rejected: some documents not owned by user", {
+                submitted: docIds,
+            });
+            return fail(403, { error: "You do not own one or more of the selected documents" });
         }
 
+        // Verify documents are not already assigned
+        const isAssigned = await Promise.all(
+            docIds.map(
+                async (id) =>
+                    await db
+                        .select()
+                        .from(documentAssignments)
+                        .where(eq(documentAssignments.documentId, id))
+                        .limit(1),
+            ),
+        );
+
+        if (isAssigned.some((res) => res.length > 0)) {
+            logger.warn("createPackage", "Rejected: some documents are already assigned", {
+                submitted: docIds,
+            });
+            return fail(400, {
+                error: "One or more selected documents are already assigned to a package",
+            });
+        }
+
+        const [userDocs] = await Promise.all(
+            docIds.map(
+                async (id) =>
+                    await db.select().from(documents).where(eq(documents.id, id)).limit(1),
+            ),
+        );
+
         // Generate package name from the first document title
-        const firstDoc = userDocs.find((d) => d.id === validIds[0]);
+        const firstDoc = userDocs.find((d) => d.id === docIds[0]);
         const packageName = firstDoc?.title ?? "Untitled Package";
 
         let pkg: { id: string };
@@ -149,16 +205,22 @@ export const actions: Actions = {
             pkg = created;
 
             // Assign documents to the package
-            if (validIds.length > 0) {
+            if (userDocs.length > 0) {
                 await db.insert(documentAssignments).values(
-                    validIds.map((docId) => ({
+                    docIds.map((docId) => ({
                         documentId: docId,
                         packageId: pkg.id,
                     })),
                 );
             }
+
+            logger.info("createPackage", "Package created with documents", {
+                packageId: pkg.id,
+                name: packageName,
+                documentCount: userDocs.length,
+            });
         } catch (err) {
-            console.error("Create package error:", err);
+            logger.error("createPackage", "Unexpected error", err);
             return fail(500, {
                 error: err instanceof Error ? err.message : "Failed to create package",
             });

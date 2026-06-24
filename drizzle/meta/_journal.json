@@ -113,6 +113,20 @@
       "when": 1782259509229,
       "tag": "0015_bored_ares",
       "breakpoints": true
+    },
+    {
+      "idx": 16,
+      "version": "7",
+      "when": 1782261130280,
+      "tag": "0016_spicy_cannonball",
+      "breakpoints": true
+    },
+    {
+      "idx": 17,
+      "version": "7",
+      "when": 1782267553064,
+      "tag": "0017_chubby_rhino",
+      "breakpoints": true
     }
   ]
 }

@@ -2,6 +2,7 @@
     import { getContext } from "svelte";
     import type { PageProps } from "./$types";
     import { PUBLIC_MAX_RECIPIENTS } from "$env/static/public";
+    import PDFViewer from "$lib/client/PDFViewer.svelte";
 
     const MAX_RECIPIENTS = Number(PUBLIC_MAX_RECIPIENTS) || 100;
 
@@ -38,6 +39,8 @@
 
     let syncTimer = $state<ReturnType<typeof setTimeout>>();
     let saving = $state(false);
+    let assignedTo = $state("");
+    let recipientsContainer = $state<HTMLDivElement>();
 
     function scheduleSync() {
         clearTimeout(syncTimer);
@@ -47,19 +50,42 @@
     }
 
     function addRecipient() {
+        const id = crypto.randomUUID();
         recipients.push({
-            id: crypto.randomUUID(),
+            id,
             name: "",
             email: "",
             personNum: nextPersonNum++,
             role: "signer",
         });
         scheduleSync();
+        return id;
+    }
+
+    function addRecipientAndScroll() {
+        addRecipient();
+        // Scroll to bottom after the DOM updates
+        requestAnimationFrame(() => {
+            recipientsContainer?.scrollTo({
+                top: recipientsContainer.scrollHeight,
+                behavior: "smooth",
+            });
+        });
     }
 
     function removeRecipient(id: string) {
         recipients = recipients.filter((r) => r.id !== id);
         scheduleSync();
+    }
+
+    function handleAssignChange() {
+        if (assignedTo === "__new__") {
+            assignedTo = addRecipient();
+        }
+    }
+
+    function recipientLabel(r: Recipient): string {
+        return r.name.trim() || `Person ${r.personNum}`;
     }
 
     function onRecipientChange() {
@@ -92,26 +118,45 @@
     }
 </script>
 
-<div class="ml-5 mt-8 flex gap-4">
-    <div class="flex-2">viewer here</div>
-    <div class="flex-1">
-        <div class="">
-            <h2 class="text-xl font-semibold uppercase tracking-widest">Field Tools</h2>
-            <div class="flex gap-2">
-                <button>Add Signature</button>
-                <button>Add Text Field</button>
+<div class="ml-5 mt-8 flex gap-4 h-[calc(100vh-16rem)] min-h-0 pr-5">
+    <div class="flex-2 overflow-y-auto">
+        {#if data.pdfUrl}
+            <PDFViewer pdfUrl={data.pdfUrl} />
+        {:else}
+            <p class="text-sm text-neutral-500 p-4">No document in this package yet.</p>
+        {/if}
+    </div>
+    <div class="flex-1 flex flex-col min-h-0">
+        <div class="shrink-0">
+            <h2 class="text-xl font-semibold uppercase tracking-widest mb-4">Field Tools</h2>
+            <div class="flex flex-col gap-2">
+                <div class="flex gap-6 px-3">
+                    <button class="flex-1 border rounded-md py-4">Add Signature</button>
+                    <button class="flex-1 border rounded-md py-4">Add Text Field</button>
+                </div>
                 <!-- dropdown -->
-                <label for=""> Assigned to: </label>
-                <select name="assignedTo" id="assignedTo">
+                <label for="assignedTo" class="text-sm">Assigned to:</label>
+                <select
+                    id="assignedTo"
+                    class="rounded border border-neutral-300 px-2 py-1 text-sm dark:border-neutral-600 dark:bg-neutral-800"
+                    bind:value={assignedTo}
+                    onchange={handleAssignChange}
+                >
+                    <option value="">--</option>
                     <option value="me">Me</option>
-                    <option value="recipient1">Recipient 1</option>
-                    <option value="recipient2">Recipient 2</option>
+                    {#each recipients as r (r.id)}
+                        <option value={r.id}>{recipientLabel(r)}</option>
+                    {/each}
+                    {#if recipients.length < MAX_RECIPIENTS}
+                        <option value="__new__">+ New Recipient</option>
+                    {/if}
                 </select>
             </div>
         </div>
-        <div class="mt-6">
-            <h2 class="text-xl font-semibold uppercase tracking-widest mb-3">Recipients</h2>
-
+        <h2 class="text-xl font-semibold uppercase tracking-widest mt-6 mb-3 shrink-0">
+            Recipients
+        </h2>
+        <div class="flex-1 min-h-0 overflow-y-auto pr-2" bind:this={recipientsContainer}>
             {#if recipients.length > 0}
                 <div class="flex flex-col gap-2 mb-3">
                     {#each recipients as r (r.id)}
@@ -176,7 +221,7 @@
                 <button
                     type="button"
                     class="rounded border border-neutral-300 px-3 py-1.5 text-sm transition hover:bg-neutral-100 dark:border-neutral-600 dark:hover:bg-neutral-700"
-                    onclick={addRecipient}
+                    onclick={addRecipientAndScroll}
                 >
                     + Add Recipient
                 </button>

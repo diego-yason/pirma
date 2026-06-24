@@ -1,10 +1,10 @@
 import type { PageServerLoad, Actions } from "./$types";
 import { redirect, fail } from "@sveltejs/kit";
 import { db } from "$lib/server/db";
-import { packageRecipients } from "$lib/server/db/schema";
+import { packageRecipients, documents, documentAssignments } from "$lib/server/db/schema";
 import { eq } from "drizzle-orm";
 import { requirePackageOwnership } from "$lib/server/package-guard";
-import { PUBLIC_MAX_RECIPIENTS } from "$env/static/public";
+import { PUBLIC_MAX_RECIPIENTS, PUBLIC_SUPABASE_URL } from "$env/static/public";
 
 const MAX_RECIPIENTS = Number(PUBLIC_MAX_RECIPIENTS) || 100;
 
@@ -18,6 +18,18 @@ export const load: PageServerLoad = async ({ params, locals }) => {
     if (!pkg) {
         redirect(302, "/doc/new");
     }
+
+    // Fetch the first document assigned to this package
+    const [firstDoc] = await db
+        .select({
+            id: documents.id,
+            title: documents.title,
+            storagePath: documents.storagePath,
+        })
+        .from(documents)
+        .innerJoin(documentAssignments, eq(documents.id, documentAssignments.documentId))
+        .where(eq(documentAssignments.packageId, params.packageId))
+        .limit(1);
 
     // Fetch existing recipients
     const rows = await db
@@ -40,9 +52,16 @@ export const load: PageServerLoad = async ({ params, locals }) => {
         role: r.role as "signer" | "viewer",
     }));
 
+    let pdfUrl: string | null = null;
+    if (firstDoc?.storagePath) {
+        pdfUrl = `${PUBLIC_SUPABASE_URL}/storage/v1/object/public/drafts/${firstDoc.storagePath}`;
+    }
+
     return {
         packageId: params.packageId,
         recipients,
+        pdfUrl,
+        firstDocTitle: firstDoc?.title ?? null,
     };
 };
 
