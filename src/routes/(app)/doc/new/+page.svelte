@@ -1,4 +1,5 @@
 <script lang="ts">
+    import { getContext } from "svelte";
     import { PDFDocument } from "pdf-lib";
     import RecentlyUploaded from "./RecentlyUploaded.svelte";
 
@@ -19,6 +20,11 @@
     let isDragOver = $state(false);
     let showRecentPopup = $state(false);
     let prefetchRecent = $state(false);
+
+    const { setStep } = getContext<{ setStep: (n: number) => void }>("step");
+    $effect(() => {
+        setStep(1);
+    });
 
     const ACCEPTED_TYPES = ".pdf,.docx,.jpg,.jpeg,.png";
 
@@ -55,6 +61,9 @@
             const formData = new FormData();
             formData.append("file", file);
             formData.append("title", file.name);
+            if (pageCount != null) {
+                formData.append("pageCount", String(pageCount));
+            }
 
             try {
                 const res = await fetch("/doc/new?/uploadFile", {
@@ -101,7 +110,12 @@
         files = files.filter((f) => f.id !== id);
     }
 
-    function addRecentDoc(doc: { id: string; title: string }) {
+    function addRecentDoc(doc: {
+        id: string;
+        title: string;
+        pageCount?: number | null;
+        fileSize?: number | null;
+    }) {
         // Prevent duplicates
         if (files.some((f) => f.storagePath === doc.id)) return;
 
@@ -109,7 +123,8 @@
             id: crypto.randomUUID(),
             name: doc.title,
             type: "",
-            size: "",
+            size: doc.fileSize != null ? formatSize(doc.fileSize) : "",
+            pageCount: doc.pageCount ?? undefined,
             uploaded: true,
             uploading: false,
             storagePath: doc.id,
@@ -229,7 +244,7 @@
                             <p class="text-sm font-medium">{f.name}</p>
                             <p class="text-xs text-neutral-500 dark:text-neutral-400">
                                 {f.size} &middot; {f.pageCount != null
-                                    ? `${f.pageCount} pages`
+                                    ? `${f.pageCount} page${f.pageCount !== 1 ? "s" : ""}`
                                     : f.type}
                                 {#if f.uploading}
                                     &middot; Uploading…

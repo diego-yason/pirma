@@ -1,9 +1,30 @@
 <script lang="ts">
     // @ts-nocheck snippets lol
 
+    import { setContext } from "svelte";
     import type { LayoutProps } from "./$types";
 
     let { children }: LayoutProps = $props();
+
+    interface StepDefinition {
+        number: number;
+        name: string;
+    }
+
+    const STEPS: StepDefinition[] = [
+        { number: 1, name: "Upload" },
+        { number: 2, name: "Recipients & Fields" },
+        // { number: 3, name: "Place Fields" },
+        { number: 3, name: "Send" },
+    ];
+
+    let currentStep = $state(1);
+
+    function setStep(n: number) {
+        currentStep = n;
+    }
+
+    setContext("step", { setStep });
 </script>
 
 <h1 class="text-3xl ml-5 mt-16">Upload and Prepare</h1>
@@ -12,7 +33,7 @@
 </p>
 
 {#snippet step(number, name, active)}
-    <span class="relative shrink-0 first:ml-2.5 mr-0.5">
+    <span class="relative shrink-0 first:ml-2.5 last:mr-0.5">
         <span
             class="border rounded-lg w-8 h-8 flex items-center justify-center text-sm"
             class:bg-secondary-500={active}
@@ -35,14 +56,13 @@
 {/snippet}
 
 <div class="mt-4 mb-10 ml-5 w-[75%]">
-    <div class="flex items-center gap-2">
-        {@render step(1, "Upload", true)}
-        {@render line()}
-        {@render step(2, "Recipients", false)}
-        {@render line()}
-        {@render step(3, "Place Fields", false)}
-        {@render line()}
-        {@render step(4, "Send", false)}
+    <div class="flex items-center gap-1">
+        {#each STEPS as s, i (s.number)}
+            {@render step(s.number, s.name, currentStep >= s.number)}
+            {#if i < STEPS.length - 1}
+                {@render line()}
+            {/if}
+        {/each}
     </div>
 </div>
 

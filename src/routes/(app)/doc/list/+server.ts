@@ -32,6 +32,8 @@ export const GET: RequestHandler = async ({ locals, url }) => {
             id: documents.id,
             title: documents.title,
             status: documents.status,
+            pageCount: documents.pageCount,
+            fileSize: documents.fileSize,
             createdAt: documents.createdAt,
             updatedAt: documents.updatedAt,
         })

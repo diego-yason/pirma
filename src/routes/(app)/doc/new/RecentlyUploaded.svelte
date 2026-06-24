@@ -5,6 +5,8 @@
     interface RecentDoc {
         id: string;
         title: string;
+        pageCount?: number | null;
+        fileSize?: number | null;
     }
 
     interface ListResponse {

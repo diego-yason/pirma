@@ -76,6 +76,10 @@ export const actions: Actions = {
                 return fail(500, { error: "Failed to upload file. Please try again." });
             }
 
+            // Parse optional metadata from the client
+            const pageCountRaw = formData.get("pageCount");
+            const pageCount = pageCountRaw != null ? Number(pageCountRaw) || undefined : undefined;
+
             // Create document record in database
             const [document] = await db
                 .insert(documents)
@@ -85,6 +89,8 @@ export const actions: Actions = {
                     hash: hashHex,
                     status: "draft",
                     detailedViewAccess: "restricted",
+                    pageCount,
+                    fileSize: file.size,
                 })
                 .returning();
 
