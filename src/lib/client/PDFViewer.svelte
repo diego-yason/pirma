@@ -125,6 +125,35 @@
 
     let totalPages = $derived(pages.length);
     let zoomPercent = $derived(Math.round(zoom * 100));
+    let currentPage = $state(1);
+
+    // Track which page is in view
+    $effect(() => {
+        if (pageContainers.length === 0) return;
+        const HYSTERESIS = 0.35;
+        const observer = new IntersectionObserver(
+            (entries) => {
+                let best = 0;
+                let bestIdx = 0;
+                for (const entry of entries) {
+                    const idx = pageContainers.indexOf(entry.target as HTMLDivElement);
+                    // Bias toward the current page to reduce jitter
+                    const ratio =
+                        entry.intersectionRatio + (idx === currentPage - 1 ? HYSTERESIS : 0);
+                    if (ratio > best) {
+                        best = ratio;
+                        bestIdx = idx;
+                    }
+                }
+                if (best > 0) currentPage = bestIdx + 1;
+            },
+            { threshold: [0, 0.25, 0.5, 0.75, 1] },
+        );
+        for (const el of pageContainers) {
+            observer.observe(el);
+        }
+        return () => observer.disconnect();
+    });
 
     const DESIGN_BOX_DEFAULTS = {
         signature: { width: 200, height: 60 },
@@ -698,7 +727,7 @@
             >
             <span class="text-neutral-300 dark:text-neutral-600 mx-2">|</span>
             <span class="text-xs text-neutral-500 tabular-nums"
-                >{totalPages} page{totalPages !== 1 ? "s" : ""}</span
+                >Page {currentPage} of {totalPages}</span
             >
         </div>
     {/if}
