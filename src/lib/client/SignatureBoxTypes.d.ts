@@ -8,4 +8,12 @@ export interface PlacedRect {
     width: number;
     height: number;
     label?: string;
+    /** recipient ID this box is assigned to, or "me" for the current user */
+    assignedTo?: string;
+}
+
+export interface RecipientInfo {
+    id: string;
+    name: string;
+    personNum: number;
 }

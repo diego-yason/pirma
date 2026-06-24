@@ -1,25 +1,76 @@
 <script lang="ts">
     import { onMount } from "svelte";
-    import type { PlacedRect } from "./SignatureBoxTypes";
+    import type { PlacedRect, RecipientInfo } from "./SignatureBoxTypes";
+
+    type Mode = "design" | "sign";
+    type Tool = "signature" | "text" | null;
 
     let {
         pdfUrl = "/sample.pdf",
         elements = [],
         signedStatus = {},
+        recipients = [] as RecipientInfo[],
+        mode = "sign" as Mode,
+        activeTool = null as Tool,
         onsign,
         onremove,
+        onadd,
+        onmove,
+        onresize,
+        onreassign,
+        ondelete,
     }: {
         pdfUrl?: string;
         elements?: PlacedRect[];
         signedStatus?: Record<string, boolean>;
+        recipients?: RecipientInfo[];
+        mode?: Mode;
+        activeTool?: Tool;
         onsign?: (id: string) => void;
         onremove?: (id: string) => void;
+        onadd?: (rect: PlacedRect) => void;
+        onmove?: (rect: PlacedRect) => void;
+        onresize?: (rect: PlacedRect) => void;
+        onreassign?: (id: string, newAssignedTo: string) => void;
+        ondelete?: (id: string) => void;
     } = $props();
 
     let pages: { canvasWidth: number; canvasHeight: number }[] = $state([]);
     let loading = $state(true);
     let doc: unknown = null;
     let placedElements = $state<PlacedRect[]>([]);
+
+    // Drag state
+    let dragging = $state<{
+        id: string;
+        startMouseX: number;
+        startMouseY: number;
+        startX: number;
+        startY: number;
+    } | null>(null);
+
+    // Resize state
+    let resizing = $state<{
+        id: string;
+        handle: string;
+        startMouseX: number;
+        startMouseY: number;
+        startX: number;
+        startY: number;
+        startWidth: number;
+        startHeight: number;
+    } | null>(null);
+
+    // Page container refs for coordinate conversion
+    let pageContainers: HTMLDivElement[] = $state([]);
+
+    // Context menu state
+    let contextMenu = $state<{ el: PlacedRect; x: number; y: number } | null>(null);
+
+    const DESIGN_BOX_DEFAULTS = {
+        signature: { width: 200, height: 60 },
+        text: { width: 200, height: 40 },
+    };
 
     function isSigned(id: string): boolean {
         return signedStatus[id] ?? false;
@@ -75,6 +126,234 @@
             });
         });
     }
+
+    function handlePageClick(e: MouseEvent | KeyboardEvent, pageIndex: number) {
+        if (mode !== "design" || !activeTool) return;
+
+        const container = pageContainers[pageIndex];
+        if (!container) return;
+
+        const page = pages[pageIndex];
+        if (!page) return;
+
+        const rect = container.getBoundingClientRect();
+        const scaleX = page.canvasWidth / rect.width;
+        const scaleY = page.canvasHeight / rect.height;
+
+        // Keyboard events don't have clientX/Y — place at page center
+        let x: number;
+        let y: number;
+        if (e instanceof MouseEvent) {
+            x = (e.clientX - rect.left) * scaleX;
+            y = (e.clientY - rect.top) * scaleY;
+        } else {
+            x = page.canvasWidth / 2;
+            y = page.canvasHeight / 2;
+        }
+
+        const defaults =
+            activeTool === "text" ? DESIGN_BOX_DEFAULTS.text : DESIGN_BOX_DEFAULTS.signature;
+
+        const newRect: PlacedRect = {
+            id: crypto.randomUUID(),
+            page: pageIndex,
+            x,
+            y,
+            width: defaults.width,
+            height: defaults.height,
+            label: activeTool === "text" ? "Text Field" : undefined,
+        };
+
+        placedElements.push(newRect);
+        onadd?.(newRect);
+    }
+
+    // --- Drag handlers ---
+    function handleDragStart(e: MouseEvent, el: PlacedRect) {
+        if (mode !== "design") return;
+        e.stopPropagation();
+        e.preventDefault();
+
+        dragging = {
+            id: el.id,
+            startMouseX: e.clientX,
+            startMouseY: e.clientY,
+            startX: el.x,
+            startY: el.y,
+        };
+
+        window.addEventListener("mousemove", handleDragMove);
+        window.addEventListener("mouseup", handleDragEnd);
+    }
+
+    function handleDragMove(e: MouseEvent) {
+        if (!dragging) return;
+
+        const el = placedElements.find((r) => r.id === dragging!.id);
+        if (!el) return;
+
+        const page = pages[el.page];
+        if (!page) return;
+
+        const container = pageContainers[el.page];
+        if (!container) return;
+
+        const containerRect = container.getBoundingClientRect();
+        const scaleX = page.canvasWidth / containerRect.width;
+        const scaleY = page.canvasHeight / containerRect.height;
+
+        const dx = (e.clientX - dragging.startMouseX) * scaleX;
+        const dy = (e.clientY - dragging.startMouseY) * scaleY;
+
+        el.x = dragging.startX + dx;
+        el.y = dragging.startY + dy;
+    }
+
+    function handleDragEnd() {
+        if (!dragging) return;
+        const el = placedElements.find((r) => r.id === dragging!.id);
+        if (el) {
+            onmove?.(el);
+        }
+        dragging = null;
+        window.removeEventListener("mousemove", handleDragMove);
+        window.removeEventListener("mouseup", handleDragEnd);
+    }
+
+    // --- Resize handlers ---
+    function handleResizeStart(e: MouseEvent, el: PlacedRect, handle: string) {
+        if (mode !== "design") return;
+        e.stopPropagation();
+        e.preventDefault();
+
+        resizing = {
+            id: el.id,
+            handle,
+            startMouseX: e.clientX,
+            startMouseY: e.clientY,
+            startX: el.x,
+            startY: el.y,
+            startWidth: el.width,
+            startHeight: el.height,
+        };
+
+        window.addEventListener("mousemove", handleResizeMove);
+        window.addEventListener("mouseup", handleResizeEnd);
+    }
+
+    function handleResizeMove(e: MouseEvent) {
+        if (!resizing) return;
+
+        const el = placedElements.find((r) => r.id === resizing!.id);
+        if (!el) return;
+
+        const page = pages[el.page];
+        if (!page) return;
+
+        const container = pageContainers[el.page];
+        if (!container) return;
+
+        const containerRect = container.getBoundingClientRect();
+        const scaleX = page.canvasWidth / containerRect.width;
+        const scaleY = page.canvasHeight / containerRect.height;
+
+        const dx = (e.clientX - resizing.startMouseX) * scaleX;
+        const dy = (e.clientY - resizing.startMouseY) * scaleY;
+
+        const MIN_SIZE = 40;
+
+        let newX = resizing.startX;
+        let newY = resizing.startY;
+        let newW = resizing.startWidth;
+        let newH = resizing.startHeight;
+
+        // Horizontal handles
+        if (resizing.handle.includes("e")) {
+            newW = Math.max(MIN_SIZE, resizing.startWidth + dx);
+        }
+        if (resizing.handle.includes("w")) {
+            const proposedW = Math.max(MIN_SIZE, resizing.startWidth - dx);
+            newX = resizing.startX + (resizing.startWidth - proposedW) / 2;
+            newW = proposedW;
+        }
+
+        // Vertical handles
+        if (resizing.handle.includes("s")) {
+            newH = Math.max(MIN_SIZE, resizing.startHeight + dy);
+        }
+        if (resizing.handle.includes("n")) {
+            const proposedH = Math.max(MIN_SIZE, resizing.startHeight - dy);
+            newY = resizing.startY + (resizing.startHeight - proposedH) / 2;
+            newH = proposedH;
+        }
+
+        el.x = newX;
+        el.y = newY;
+        el.width = newW;
+        el.height = newH;
+    }
+
+    function handleResizeEnd() {
+        if (!resizing) return;
+        const el = placedElements.find((r) => r.id === resizing!.id);
+        if (el) {
+            onresize?.(el);
+        }
+        resizing = null;
+        window.removeEventListener("mousemove", handleResizeMove);
+        window.removeEventListener("mouseup", handleResizeEnd);
+    }
+
+    function boxStyle(el: PlacedRect, page: { canvasWidth: number; canvasHeight: number }) {
+        return `
+            left: ${((el.x - el.width / 2) / page.canvasWidth) * 100}%;
+            top: ${((el.y - el.height / 2) / page.canvasHeight) * 100}%;
+            width: ${(el.width / page.canvasWidth) * 100}%;
+            height: ${(el.height / page.canvasHeight) * 100}%;
+        `;
+    }
+
+    function labelFor(el: PlacedRect): string {
+        let label = el.label ?? "Signature";
+        if (el.assignedTo) {
+            const name = recipientName(el.assignedTo);
+            if (name) label += ` · ${name}`;
+        }
+        return label;
+    }
+
+    function recipientName(id: string): string {
+        if (id === "me") return "Me";
+        const r = recipients.find((r) => r.id === id);
+        if (r?.name) return r.name;
+        return r ? `Person ${r.personNum}` : "";
+    }
+
+    function handleContextMenu(e: MouseEvent, el: PlacedRect) {
+        if (mode !== "design") return;
+        e.preventDefault();
+        e.stopPropagation();
+        contextMenu = { el, x: e.clientX, y: e.clientY };
+    }
+
+    function closeContextMenu() {
+        contextMenu = null;
+    }
+
+    function handleReassign(id: string, newAssignedTo: string) {
+        const el = placedElements.find((r) => r.id === id);
+        if (el) el.assignedTo = newAssignedTo;
+        onreassign?.(id, newAssignedTo);
+        contextMenu = null;
+    }
+
+    function handleDeleteBox(id: string) {
+        placedElements = placedElements.filter((r) => r.id !== id);
+        ondelete?.(id);
+        contextMenu = null;
+    }
+
+    let pageIsInteractive = $derived(mode === "design" && activeTool !== null);
 </script>
 
 <div class="mx-auto max-w-3xl">
@@ -83,28 +362,113 @@
     {:else}
         <div class="flex flex-col gap-4">
             {#each pages as page, i (i)}
-                <div
-                    class="relative rounded-lg border border-neutral-200 bg-white shadow-sm dark:border-neutral-700 dark:bg-neutral-900"
-                >
+                {@const pageElements = placedElements.filter((el) => el.page === i)}
+                {#snippet pageBody()}
                     <canvas
                         width={page.canvasWidth}
                         height={page.canvasHeight}
                         class="w-full h-auto"
+                        class:pointer-events-none={pageIsInteractive}
                         use:renderPageAction={i + 1}
                     ></canvas>
 
-                    <!-- Placed rectangles -->
-                    {#each placedElements.filter((el) => el.page === i) as el (el.id)}
-                        {#if isSigned(el.id)}
+                    {#each pageElements as el (el.id)}
+                        {#if mode === "design"}
+                            <!-- Design mode: always draggable, resizable -->
+                            <div
+                                class="absolute cursor-move border-2 border-blue-500 bg-blue-500/10 select-none"
+                                class:border-dashed={activeTool === null && dragging?.id !== el.id}
+                                style={boxStyle(el, page)}
+                                onmousedown={(e) => handleDragStart(e, el)}
+                                oncontextmenu={(e) => handleContextMenu(e, el)}
+                                role="button"
+                                tabindex="0"
+                                title="Drag to move · Drag handles to resize · Right-click for options"
+                            >
+                                <span
+                                    class="absolute inset-0 flex items-center justify-center text-xs font-medium text-blue-700 dark:text-blue-300 pointer-events-none"
+                                >
+                                    {labelFor(el)}
+                                </span>
+                                <!-- nw -->
+                                <div
+                                    class="absolute w-2 h-2 bg-blue-500 border border-white rounded-sm z-10"
+                                    style="top: -4px; left: -4px; cursor: nw-resize;"
+                                    role="button"
+                                    tabindex="-1"
+                                    aria-label="Resize top-left"
+                                    onmousedown={(e) => handleResizeStart(e, el, "nw")}
+                                ></div>
+                                <!-- n -->
+                                <div
+                                    class="absolute w-2 h-2 bg-blue-500 border border-white rounded-sm z-10"
+                                    style="top: -4px; left: 50%; margin-left: -4px; cursor: n-resize;"
+                                    role="button"
+                                    tabindex="-1"
+                                    aria-label="Resize top"
+                                    onmousedown={(e) => handleResizeStart(e, el, "n")}
+                                ></div>
+                                <!-- ne -->
+                                <div
+                                    class="absolute w-2 h-2 bg-blue-500 border border-white rounded-sm z-10"
+                                    style="top: -4px; right: -4px; cursor: ne-resize;"
+                                    role="button"
+                                    tabindex="-1"
+                                    aria-label="Resize top-right"
+                                    onmousedown={(e) => handleResizeStart(e, el, "ne")}
+                                ></div>
+                                <!-- e -->
+                                <div
+                                    class="absolute w-2 h-2 bg-blue-500 border border-white rounded-sm z-10"
+                                    style="top: 50%; margin-top: -4px; right: -4px; cursor: e-resize;"
+                                    role="button"
+                                    tabindex="-1"
+                                    aria-label="Resize right"
+                                    onmousedown={(e) => handleResizeStart(e, el, "e")}
+                                ></div>
+                                <!-- se -->
+                                <div
+                                    class="absolute w-2 h-2 bg-blue-500 border border-white rounded-sm z-10"
+                                    style="bottom: -4px; right: -4px; cursor: se-resize;"
+                                    role="button"
+                                    tabindex="-1"
+                                    aria-label="Resize bottom-right"
+                                    onmousedown={(e) => handleResizeStart(e, el, "se")}
+                                ></div>
+                                <!-- s -->
+                                <div
+                                    class="absolute w-2 h-2 bg-blue-500 border border-white rounded-sm z-10"
+                                    style="bottom: -4px; left: 50%; margin-left: -4px; cursor: s-resize;"
+                                    role="button"
+                                    tabindex="-1"
+                                    aria-label="Resize bottom"
+                                    onmousedown={(e) => handleResizeStart(e, el, "s")}
+                                ></div>
+                                <!-- sw -->
+                                <div
+                                    class="absolute w-2 h-2 bg-blue-500 border border-white rounded-sm z-10"
+                                    style="bottom: -4px; left: -4px; cursor: sw-resize;"
+                                    role="button"
+                                    tabindex="-1"
+                                    aria-label="Resize bottom-left"
+                                    onmousedown={(e) => handleResizeStart(e, el, "sw")}
+                                ></div>
+                                <!-- w -->
+                                <div
+                                    class="absolute w-2 h-2 bg-blue-500 border border-white rounded-sm z-10"
+                                    style="top: 50%; margin-top: -4px; left: -4px; cursor: w-resize;"
+                                    role="button"
+                                    tabindex="-1"
+                                    aria-label="Resize left"
+                                    onmousedown={(e) => handleResizeStart(e, el, "w")}
+                                ></div>
+                            </div>
+                        {:else if isSigned(el.id)}
+                            <!-- Sign mode: signed -->
                             <div
                                 role="img"
                                 class="absolute"
-                                style="
-                                    left: {((el.x - el.width / 2) / page.canvasWidth) * 100}%;
-                                    top: {((el.y - el.height / 2) / page.canvasHeight) * 100}%;
-                                    width: {(el.width / page.canvasWidth) * 100}%;
-                                    height: {(el.height / page.canvasHeight) * 100}%;
-                                "
+                                style={boxStyle(el, page)}
                                 oncontextmenu={(e) => {
                                     e.preventDefault();
                                     onremove?.(el.id);
@@ -118,15 +482,11 @@
                                 />
                             </div>
                         {:else}
+                            <!-- Sign mode: unsigned -->
                             <button
                                 type="button"
                                 class="absolute cursor-pointer border-2 border-green-500 bg-green-500/10 transition-colors hover:bg-red-500/20 hover:border-red-500"
-                                style="
-                                    left: {((el.x - el.width / 2) / page.canvasWidth) * 100}%;
-                                    top: {((el.y - el.height / 2) / page.canvasHeight) * 100}%;
-                                    width: {(el.width / page.canvasWidth) * 100}%;
-                                    height: {(el.height / page.canvasHeight) * 100}%;
-                                "
+                                style={boxStyle(el, page)}
                                 onclick={() => onsign?.(el.id)}
                                 oncontextmenu={(e) => {
                                     e.preventDefault();
@@ -143,8 +503,107 @@
                             </button>
                         {/if}
                     {/each}
-                </div>
+                {/snippet}
+
+                {#if pageIsInteractive}
+                    <div
+                        class="relative rounded-lg border border-neutral-200 bg-white shadow-sm cursor-crosshair dark:border-neutral-700 dark:bg-neutral-900"
+                        bind:this={pageContainers[i]}
+                        onclick={(e) => handlePageClick(e, i)}
+                        onkeydown={(e) => {
+                            if (e.key === "Enter" || e.key === " ") {
+                                e.preventDefault();
+                                handlePageClick(e, i);
+                            }
+                        }}
+                        role="button"
+                        tabindex="0"
+                    >
+                        {@render pageBody()}
+                    </div>
+                {:else}
+                    <div
+                        class="relative rounded-lg border border-neutral-200 bg-white shadow-sm dark:border-neutral-700 dark:bg-neutral-900"
+                        bind:this={pageContainers[i]}
+                    >
+                        {@render pageBody()}
+                    </div>
+                {/if}
             {/each}
         </div>
     {/if}
 </div>
+
+<!-- Context menu overlay -->
+{#if contextMenu}
+    <!-- svelte-ignore a11y_no_static_element_interactions -->
+    <div
+        class="fixed inset-0 z-40"
+        onmousedown={closeContextMenu}
+        oncontextmenu={(e) => {
+            e.preventDefault();
+            closeContextMenu();
+        }}
+    ></div>
+    <div
+        class="fixed z-50 min-w-50 rounded-lg border border-neutral-200 bg-white shadow-xl dark:border-neutral-700 dark:bg-neutral-900"
+        style="left: {contextMenu.x}px; top: {contextMenu.y}px;"
+        role="menu"
+        tabindex="-1"
+    >
+        <!-- Current assignee -->
+        <div class="px-3 py-2 border-b border-neutral-100 dark:border-neutral-800">
+            <span class="text-xs text-neutral-400 uppercase tracking-wider">Assigned to</span>
+            <p class="text-sm font-medium mt-0.5">
+                {#if contextMenu.el.assignedTo}
+                    {recipientName(contextMenu.el.assignedTo)}
+                {:else}
+                    <span class="text-neutral-400 italic">Unassigned</span>
+                {/if}
+            </p>
+        </div>
+
+        <!-- Reassign -->
+        <div class="px-2 py-1 border-b border-neutral-100 dark:border-neutral-800">
+            <span class="block px-1 py-0.5 text-xs text-neutral-400 uppercase tracking-wider"
+                >Reassign to</span
+            >
+            <!-- Unassign option -->
+            <button
+                type="button"
+                class="w-full text-left px-2 py-1 text-sm rounded hover:bg-neutral-100 dark:hover:bg-neutral-800 transition"
+                onclick={() => handleReassign(contextMenu!.el.id, "")}
+            >
+                <span class="text-neutral-400 italic">Unassigned</span>
+            </button>
+            <button
+                type="button"
+                class="w-full text-left px-2 py-1 text-sm rounded hover:bg-neutral-100 dark:hover:bg-neutral-800 transition"
+                onclick={() => handleReassign(contextMenu!.el.id, "me")}
+            >
+                Me
+            </button>
+            {#each recipients as r (r.id)}
+                <button
+                    type="button"
+                    class="w-full text-left px-2 py-1 text-sm rounded hover:bg-neutral-100 dark:hover:bg-neutral-800 transition"
+                    class:font-semibold={contextMenu!.el.assignedTo === r.id}
+                    onclick={() => handleReassign(contextMenu!.el.id, r.id)}
+                >
+                    {r.name || `Person ${r.personNum}`}
+                </button>
+            {/each}
+        </div>
+
+        <!-- Delete -->
+        <div class="px-2 py-1">
+            <button
+                type="button"
+                class="w-full text-left px-2 py-1 text-sm text-red-600 rounded hover:bg-red-50 dark:text-red-400 dark:hover:bg-red-950 transition"
+                onclick={() => handleDeleteBox(contextMenu!.el.id)}
+            >
+                Delete
+            </button>
+        </div>
+    </div>
+{/if}

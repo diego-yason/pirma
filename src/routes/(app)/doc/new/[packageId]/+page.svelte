@@ -1,6 +1,7 @@
 <script lang="ts">
     import { getContext } from "svelte";
     import type { PageProps } from "./$types";
+    import type { PlacedRect, RecipientInfo } from "$lib/client/SignatureBoxTypes";
     import { PUBLIC_MAX_RECIPIENTS } from "$env/static/public";
     import PDFViewer from "$lib/client/PDFViewer.svelte";
 
@@ -13,6 +14,42 @@
         setStep(2);
     });
 
+    // --- Tool & box state ---
+    type Tool = "signature" | "text" | null;
+    let activeTool = $state<Tool>(null);
+    let placedBoxes = $state<PlacedRect[]>([]);
+
+    function activateTool(tool: Tool) {
+        // Always activates — clicking the same button again gives a fresh placement
+        activeTool = tool;
+    }
+
+    function handleBoxAdd(rect: PlacedRect) {
+        // Stamp the currently selected recipient onto the box
+        rect.assignedTo = assignedTo || undefined;
+        placedBoxes.push(rect);
+        // One box per activation — deactivate after placing
+        activeTool = null;
+    }
+
+    function handleBoxMove() {
+        // Box was updated in place; trigger sync if needed
+    }
+
+    function handleBoxResize() {
+        // Box was updated in place; trigger sync if needed
+    }
+
+    function handleBoxReassign(id: string, newAssignedTo: string) {
+        const box = placedBoxes.find((b) => b.id === id);
+        if (box) box.assignedTo = newAssignedTo || undefined;
+    }
+
+    function handleBoxDelete(id: string) {
+        placedBoxes = placedBoxes.filter((b) => b.id !== id);
+    }
+
+    // --- Recipients ---
     interface Recipient {
         id: string;
         name: string;
@@ -28,8 +65,8 @@
             return { list, nextNum };
         }
         return {
-            list: [{ id: crypto.randomUUID(), name: "", email: "", personNum: 1, role: "signer" }],
-            nextNum: 2,
+            list: [],
+            nextNum: 1,
         };
     }
 
@@ -116,12 +153,26 @@
             saving = false;
         }
     }
+    let recipientInfos = $derived<RecipientInfo[]>(
+        recipients.map((r) => ({ id: r.id, name: r.name.trim(), personNum: r.personNum })),
+    );
 </script>
 
 <div class="ml-5 mt-8 flex gap-4 h-[calc(100vh-16rem)] min-h-0 pr-5">
     <div class="flex-2 overflow-y-auto">
         {#if data.pdfUrl}
-            <PDFViewer pdfUrl={data.pdfUrl} />
+            <PDFViewer
+                pdfUrl={data.pdfUrl}
+                recipients={recipientInfos}
+                mode="design"
+                {activeTool}
+                elements={placedBoxes}
+                onadd={handleBoxAdd}
+                onmove={handleBoxMove}
+                onresize={handleBoxResize}
+                onreassign={handleBoxReassign}
+                ondelete={handleBoxDelete}
+            />
         {:else}
             <p class="text-sm text-neutral-500 p-4">No document in this package yet.</p>
         {/if}
@@ -131,8 +182,24 @@
             <h2 class="text-xl font-semibold uppercase tracking-widest mb-4">Field Tools</h2>
             <div class="flex flex-col gap-2">
                 <div class="flex gap-6 px-3">
-                    <button class="flex-1 border rounded-md py-4">Add Signature</button>
-                    <button class="flex-1 border rounded-md py-4">Add Text Field</button>
+                    <button
+                        class="flex-1 border rounded-md py-4 transition"
+                        class:border-blue-500={activeTool === "signature"}
+                        class:bg-blue-50={activeTool === "signature"}
+                        class:dark:bg-blue-950={activeTool === "signature"}
+                        onclick={() => activateTool("signature")}
+                    >
+                        Add Signature
+                    </button>
+                    <button
+                        class="flex-1 border rounded-md py-4 transition"
+                        class:border-blue-500={activeTool === "text"}
+                        class:bg-blue-50={activeTool === "text"}
+                        class:dark:bg-blue-950={activeTool === "text"}
+                        onclick={() => activateTool("text")}
+                    >
+                        Add Text Field
+                    </button>
                 </div>
                 <!-- dropdown -->
                 <label for="assignedTo" class="text-sm">Assigned to:</label>

@@ -4,7 +4,9 @@ import { db } from "$lib/server/db";
 import { packageRecipients, documents, documentAssignments } from "$lib/server/db/schema";
 import { eq } from "drizzle-orm";
 import { requirePackageOwnership } from "$lib/server/package-guard";
-import { PUBLIC_MAX_RECIPIENTS, PUBLIC_SUPABASE_URL } from "$env/static/public";
+import { PUBLIC_MAX_RECIPIENTS } from "$env/static/public";
+
+import { supabaseAdmin } from "$lib/server/supabase";
 
 const MAX_RECIPIENTS = Number(PUBLIC_MAX_RECIPIENTS) || 100;
 
@@ -54,7 +56,9 @@ export const load: PageServerLoad = async ({ params, locals }) => {
 
     let pdfUrl: string | null = null;
     if (firstDoc?.storagePath) {
-        pdfUrl = `${PUBLIC_SUPABASE_URL}/storage/v1/object/public/drafts/${firstDoc.storagePath}`;
+        pdfUrl =
+            (await supabaseAdmin.storage.from("drafts").createSignedUrl(firstDoc.storagePath, 3600))
+                .data?.signedUrl ?? null; // Generate a signed URL valid for 1 hour
     }
 
     return {
