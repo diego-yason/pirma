@@ -127,6 +127,20 @@
       "when": 1782267553064,
       "tag": "0017_chubby_rhino",
       "breakpoints": true
+    },
+    {
+      "idx": 18,
+      "version": "7",
+      "when": 1782284351452,
+      "tag": "0018_hesitant_blink",
+      "breakpoints": true
+    },
+    {
+      "idx": 19,
+      "version": "7",
+      "when": 1782286317654,
+      "tag": "0019_perfect_rogue",
+      "breakpoints": true
     }
   ]
 }

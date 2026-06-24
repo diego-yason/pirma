@@ -8,6 +8,7 @@ import {
     completedDocumentsView,
     packageViewers,
     packages,
+    documentAssignments,
 } from "$lib/server/db/schema";
 
 export const load: PageServerLoad = async ({ locals }) => {
@@ -57,8 +58,10 @@ export const load: PageServerLoad = async ({ locals }) => {
             status: documents.status,
             createdAt: documents.createdAt,
             updatedAt: documents.updatedAt,
+            packageId: documentAssignments.packageId,
         })
         .from(documents)
+        .leftJoin(documentAssignments, eq(documents.id, documentAssignments.documentId))
         .where(eq(documents.owner, locals.user.id))
         .orderBy(desc(documents.updatedAt))
         .limit(10);

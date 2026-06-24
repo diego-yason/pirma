@@ -1,9 +1,11 @@
 import type { PageServerLoad, Actions } from "./$types";
+import type { PlacedRect } from "$lib/client/SignatureBoxTypes";
 import { redirect, fail } from "@sveltejs/kit";
 import { db } from "$lib/server/db";
 import { packageRecipients, documents, documentAssignments } from "$lib/server/db/schema";
 import { eq } from "drizzle-orm";
 import { requirePackageOwnership } from "$lib/server/package-guard";
+import { logger } from "$lib/server/logger";
 import { PUBLIC_MAX_RECIPIENTS } from "$env/static/public";
 
 import { supabaseAdmin } from "$lib/server/supabase";
@@ -27,6 +29,7 @@ export const load: PageServerLoad = async ({ params, locals }) => {
             id: documents.id,
             title: documents.title,
             storagePath: documents.storagePath,
+            placementFields: documents.placementFields,
         })
         .from(documents)
         .innerJoin(documentAssignments, eq(documents.id, documentAssignments.documentId))
@@ -66,6 +69,7 @@ export const load: PageServerLoad = async ({ params, locals }) => {
         recipients,
         pdfUrl,
         firstDocTitle: firstDoc?.title ?? null,
+        placementFields: (firstDoc?.placementFields as PlacedRect[]) ?? [],
     };
 };
 
@@ -122,6 +126,39 @@ export const actions: Actions = {
                 }),
             );
         }
+
+        // Save placement fields to the first document in this package
+        const rawFields = formData.get("placementFields");
+        if (rawFields && typeof rawFields === "string") {
+            try {
+                const placementFields = JSON.parse(rawFields);
+                const [docAssignment] = await db
+                    .select({ documentId: documentAssignments.documentId })
+                    .from(documentAssignments)
+                    .where(eq(documentAssignments.packageId, params.packageId))
+                    .limit(1);
+
+                if (docAssignment) {
+                    await db
+                        .update(documents)
+                        .set({ placementFields })
+                        .where(eq(documents.id, docAssignment.documentId));
+
+                    logger.info("syncRecipients", "Placement fields updated", {
+                        packageId: params.packageId,
+                        documentId: docAssignment.documentId,
+                        boxCount: Array.isArray(placementFields) ? placementFields.length : 0,
+                    });
+                }
+            } catch (err) {
+                logger.warn("syncRecipients", "Failed to parse placement fields", err);
+            }
+        }
+
+        logger.info("syncRecipients", "Sync complete", {
+            packageId: params.packageId,
+            recipientCount: recipients.length,
+        });
 
         return { success: true };
     },

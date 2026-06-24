@@ -17,36 +17,40 @@
     // --- Tool & box state ---
     type Tool = "signature" | "text" | null;
     let activeTool = $state<Tool>(null);
-    let placedBoxes = $state<PlacedRect[]>([]);
+    // svelte-ignore state_referenced_locally
+    let placedBoxes = $state<PlacedRect[]>((data.placementFields as PlacedRect[]) ?? []);
 
     function activateTool(tool: Tool) {
-        // Always activates — clicking the same button again gives a fresh placement
-        activeTool = tool;
+        // Toggle: clicking the active tool deactivates it
+        activeTool = activeTool === tool ? null : tool;
     }
 
     function handleBoxAdd(rect: PlacedRect) {
         // Stamp the currently selected recipient onto the box
         rect.assignedTo = assignedTo || undefined;
         placedBoxes.push(rect);
+        triggerSync();
         // One box per activation — deactivate after placing
         activeTool = null;
     }
 
     function handleBoxMove() {
-        // Box was updated in place; trigger sync if needed
+        triggerSync();
     }
 
     function handleBoxResize() {
-        // Box was updated in place; trigger sync if needed
+        triggerSync();
     }
 
     function handleBoxReassign(id: string, newAssignedTo: string) {
         const box = placedBoxes.find((b) => b.id === id);
         if (box) box.assignedTo = newAssignedTo || undefined;
+        triggerSync();
     }
 
     function handleBoxDelete(id: string) {
         placedBoxes = placedBoxes.filter((b) => b.id !== id);
+        triggerSync();
     }
 
     // --- Recipients ---
@@ -74,16 +78,18 @@
     let recipients = $state<Recipient[]>(seed.list);
     let nextPersonNum = $state(seed.nextNum);
 
-    let syncTimer = $state<ReturnType<typeof setTimeout>>();
     let saving = $state(false);
+    let pendingSync = $state(false);
     let assignedTo = $state("");
     let recipientsContainer = $state<HTMLDivElement>();
 
-    function scheduleSync() {
-        clearTimeout(syncTimer);
-        syncTimer = setTimeout(() => {
-            syncToServer();
-        }, 1000);
+    function triggerSync() {
+        if (saving) {
+            // A sync is already in flight — flag a resync for when it completes
+            pendingSync = true;
+            return;
+        }
+        syncToServer();
     }
 
     function addRecipient() {
@@ -95,7 +101,7 @@
             personNum: nextPersonNum++,
             role: "signer",
         });
-        scheduleSync();
+        triggerSync();
         return id;
     }
 
@@ -112,7 +118,7 @@
 
     function removeRecipient(id: string) {
         recipients = recipients.filter((r) => r.id !== id);
-        scheduleSync();
+        triggerSync();
     }
 
     function handleAssignChange() {
@@ -126,21 +132,22 @@
     }
 
     function onRecipientChange() {
-        scheduleSync();
+        triggerSync();
     }
 
     function toggleRole(r: Recipient, role: "signer" | "viewer") {
         r.role = role;
-        scheduleSync();
+        triggerSync();
     }
 
     async function syncToServer() {
-        if (saving) return;
         saving = true;
+        pendingSync = false;
 
         try {
             const body = new FormData();
             body.append("recipients", JSON.stringify(recipients));
+            body.append("placementFields", JSON.stringify(placedBoxes));
 
             await fetch(`/doc/new/${data.packageId}?/syncRecipients`, {
                 method: "POST",
@@ -151,6 +158,10 @@
             // silently retry on next change
         } finally {
             saving = false;
+            // If another change arrived while we were saving, sync again
+            if (pendingSync) {
+                syncToServer();
+            }
         }
     }
     let recipientInfos = $derived<RecipientInfo[]>(

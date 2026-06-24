@@ -340,6 +340,12 @@
         contextMenu = null;
     }
 
+    let menuClampedStyle = $derived(
+        contextMenu
+            ? `left: ${Math.min(Math.max(contextMenu.x, 8), window.innerWidth - 228)}px; top: ${Math.min(Math.max(contextMenu.y, 8), window.innerHeight - 420)}px;`
+            : "",
+    );
+
     function handleReassign(id: string, newAssignedTo: string) {
         const el = placedElements.find((r) => r.id === id);
         if (el) el.assignedTo = newAssignedTo;
@@ -546,13 +552,13 @@
         }}
     ></div>
     <div
-        class="fixed z-50 min-w-50 rounded-lg border border-neutral-200 bg-white shadow-xl dark:border-neutral-700 dark:bg-neutral-900"
-        style="left: {contextMenu.x}px; top: {contextMenu.y}px;"
+        class="fixed z-50 min-w-50 max-h-[65vh] flex flex-col rounded-lg border border-neutral-200 bg-white shadow-xl dark:border-neutral-700 dark:bg-neutral-900"
+        style={menuClampedStyle}
         role="menu"
         tabindex="-1"
     >
         <!-- Current assignee -->
-        <div class="px-3 py-2 border-b border-neutral-100 dark:border-neutral-800">
+        <div class="shrink-0 px-3 py-2 border-b border-neutral-100 dark:border-neutral-800">
             <span class="text-xs text-neutral-400 uppercase tracking-wider">Assigned to</span>
             <p class="text-sm font-medium mt-0.5">
                 {#if contextMenu.el.assignedTo}
@@ -563,22 +569,22 @@
             </p>
         </div>
 
-        <!-- Reassign -->
-        <div class="px-2 py-1 border-b border-neutral-100 dark:border-neutral-800">
-            <span class="block px-1 py-0.5 text-xs text-neutral-400 uppercase tracking-wider"
+        <!-- Reassign — scrollable -->
+        <div class="flex-1 min-h-0 flex flex-col overflow-y-auto px-2 py-1 border-b border-neutral-100 dark:border-neutral-800">
+            <span class="block shrink-0 px-1 py-0.5 text-xs text-neutral-400 uppercase tracking-wider"
                 >Reassign to</span
             >
             <!-- Unassign option -->
             <button
                 type="button"
-                class="w-full text-left px-2 py-1 text-sm rounded hover:bg-neutral-100 dark:hover:bg-neutral-800 transition"
+                class="shrink-0 w-full text-left px-2 py-1 text-sm rounded hover:bg-neutral-100 dark:hover:bg-neutral-800 transition"
                 onclick={() => handleReassign(contextMenu!.el.id, "")}
             >
                 <span class="text-neutral-400 italic">Unassigned</span>
             </button>
             <button
                 type="button"
-                class="w-full text-left px-2 py-1 text-sm rounded hover:bg-neutral-100 dark:hover:bg-neutral-800 transition"
+                class="shrink-0 w-full text-left px-2 py-1 text-sm rounded hover:bg-neutral-100 dark:hover:bg-neutral-800 transition"
                 onclick={() => handleReassign(contextMenu!.el.id, "me")}
             >
                 Me
@@ -596,7 +602,7 @@
         </div>
 
         <!-- Delete -->
-        <div class="px-2 py-1">
+        <div class="shrink-0 px-2 py-1">
             <button
                 type="button"
                 class="w-full text-left px-2 py-1 text-sm text-red-600 rounded hover:bg-red-50 dark:text-red-400 dark:hover:bg-red-950 transition"

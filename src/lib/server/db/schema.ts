@@ -2,6 +2,7 @@ import {
     bigint,
     index,
     integer,
+    jsonb,
     pgEnum,
     pgTable,
     pgView,
@@ -52,6 +53,7 @@ export const documents = pgTable(
         pageCount: integer("page_count"),
         fileSize: bigint("file_size", { mode: "number" }),
         storagePath: text("storage_path"),
+        placementFields: jsonb("placement_fields"),
         createdAt: timestamp("created_at").notNull().defaultNow(),
         updatedAt: timestamp("updated_at").notNull().defaultNow(),
     },
@@ -147,6 +149,25 @@ export const packages = pgTable(
         updatedAt: timestamp("updated_at").notNull().defaultNow(),
     },
     (table) => [index("packages_owner_idx").on(table.owner)],
+).enableRLS();
+
+export const packageViewers = pgTable(
+    "package_viewers",
+    {
+        id: uuid("id").primaryKey().defaultRandom(),
+        packageId: uuid("package_id")
+            .notNull()
+            .references(() => packages.id),
+        userId: text("user_id")
+            .notNull()
+            .references(() => user.id),
+        createdAt: timestamp("created_at").notNull().defaultNow(),
+    },
+    (table) => [
+        index("package_viewers_user_id_idx").on(table.userId),
+        index("package_viewers_package_id_idx").on(table.packageId),
+        unique("package_viewers_unique").on(table.packageId, table.userId),
+    ],
 ).enableRLS();
 
 // ── Views ─────────────────────────────────────────────────────────
