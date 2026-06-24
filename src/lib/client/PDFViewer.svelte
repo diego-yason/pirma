@@ -1,6 +1,6 @@
 <script lang="ts">
     import { onMount } from "svelte";
-    import type { PlacedRect } from "./types";
+    import type { PlacedRect } from "./SignatureBoxTypes";
 
     let {
         elements = [],

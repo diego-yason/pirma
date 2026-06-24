@@ -1,6 +1,6 @@
 <script lang="ts">
-    import type { PlacedRect } from "./types";
-    import PDFViewer from "./PDFViewer.svelte";
+    import type { PlacedRect } from "../../../../lib/client/types";
+    import PDFViewer from "$lib/client/PDFViewer.svelte";
 
     // Sample elements — coordinates in px at 2x scale (letter portrait ≈ 1224×1584)
     const signatureBlocks: PlacedRect[] = [
