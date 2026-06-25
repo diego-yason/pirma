@@ -26,9 +26,11 @@
 
 <div class="flex flex-col px-5 gap-3">
     {#each data.pendingDocuments as doc (doc.id)}
+        {@const due = data.expirationDates.get(doc.id)}
         <SignatureRequest
             title={doc.title}
-            flags={doc.status === "finalized" ? ["due-soon"] : []}
+            flags={doc.status === "finalized" && due ? ["due-soon"] : []}
+            dueDate={due ?? undefined}
         />
     {/each}
     {#if pendingCount === 0}

@@ -1,7 +1,7 @@
 import type { PageServerLoad } from "./$types";
 import { redirect } from "@sveltejs/kit";
 import { db } from "$lib/server/db";
-import { eq, desc } from "drizzle-orm";
+import { eq, desc, inArray } from "drizzle-orm";
 import {
     documents,
     pendingDocumentsView,
@@ -89,6 +89,26 @@ export const load: PageServerLoad = async ({ locals }) => {
         viewablePackages,
     ]);
 
+    // Fetch package expiration dates for pending documents
+    const pendingDocIds = pending.map((d) => d.id);
+    const expirationMap = new Map<string, string | null>();
+    if (pendingDocIds.length > 0) {
+        const expRows = await db
+            .select({
+                documentId: documentAssignments.documentId,
+                expirationDate: packages.expirationDate,
+            })
+            .from(documentAssignments)
+            .innerJoin(packages, eq(documentAssignments.packageId, packages.id))
+            .where(inArray(documentAssignments.documentId, pendingDocIds));
+        for (const row of expRows) {
+            expirationMap.set(
+                row.documentId,
+                row.expirationDate?.toISOString().split("T")[0] ?? null,
+            );
+        }
+    }
+
     logger.debug("dashboard", "Dashboard data loaded", {
         userId: locals.user.id,
         pendingCount: pending.length,
@@ -102,5 +122,6 @@ export const load: PageServerLoad = async ({ locals }) => {
         completedDocuments: completed,
         recentDocuments: recent,
         viewablePackages: viewable,
+        expirationDates: expirationMap,
     };
 };

@@ -15,7 +15,7 @@
         title = "Non-Disclosure Agreement (Q3 Project)",
         from = "Prima Corp Legal",
         fromEmail = "legal@example.com",
-        dueDate = "Today",
+        dueDate = undefined,
         pages = 12,
     }: Props = $props();
 
@@ -67,7 +67,9 @@
         </div>
         <p>From: <span class="font-medium">{from}</span> &lt;{fromEmail}&gt;</p>
         <div class="flex gap-3">
-            <p>Due {dueDate}</p>
+            {#if dueDate}
+                <p>Due {dueDate}</p>
+            {/if}
             <p>{pages} Pages</p>
         </div>
     </div>
