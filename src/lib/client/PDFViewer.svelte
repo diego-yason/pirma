@@ -667,12 +667,8 @@
                                 <!-- Sign mode: signed -->
                                 <div
                                     role="img"
-                                    class="absolute"
+                                    class="absolute group"
                                     style={boxStyle(el, page)}
-                                    oncontextmenu={(e) => {
-                                        e.preventDefault();
-                                        onremove?.(el.id);
-                                    }}
                                     title="Right-click to remove"
                                 >
                                     <img
@@ -680,6 +676,17 @@
                                         alt="Signature"
                                         class="h-full w-full object-contain"
                                     />
+                                    <button
+                                        type="button"
+                                        class="absolute -top-2 -right-2 z-10 flex h-5 w-5 items-center justify-center rounded-full bg-red-500 text-white text-xs leading-none opacity-0 transition-opacity group-hover:opacity-100 hover:bg-red-600"
+                                        onclick={(e) => {
+                                            e.stopPropagation();
+                                            onremove?.(el.id);
+                                        }}
+                                        title="Remove signature"
+                                    >
+                                        &times;
+                                    </button>
                                 </div>
                             {:else}
                                 <!-- Sign mode: unsigned -->
