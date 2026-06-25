@@ -3,11 +3,13 @@ import { json } from "@sveltejs/kit";
 import { eq, and, desc, isNull } from "drizzle-orm";
 import { db } from "$lib/server/db";
 import { documents, documentAssignments } from "$lib/server/db/schema";
+import { logger } from "$lib/server/logger";
 
 const PAGE_SIZE = 10;
 
 export const GET: RequestHandler = async ({ locals, url }) => {
     if (!locals.user) {
+        logger.warn("docList", "Unauthorized access attempt");
         return json({ error: "Unauthorized" }, { status: 401 });
     }
 
@@ -23,35 +25,54 @@ export const GET: RequestHandler = async ({ locals, url }) => {
         // Validate against enum values
         const validStatuses = ["draft", "finalized", "executed"] as const;
         if (validStatuses.includes(statusFilter as (typeof validStatuses)[number])) {
-            conditions.push(eq(documents.status, statusFilter as "draft" | "finalized" | "executed"));
+            conditions.push(
+                eq(documents.status, statusFilter as "draft" | "finalized" | "executed"),
+            );
         }
     }
 
-    const userDocuments = await db
-        .select({
-            id: documents.id,
-            title: documents.title,
-            status: documents.status,
-            pageCount: documents.pageCount,
-            fileSize: documents.fileSize,
-            createdAt: documents.createdAt,
-            updatedAt: documents.updatedAt,
-        })
-        .from(documents)
-        .leftJoin(documentAssignments, eq(documents.id, documentAssignments.documentId))
-        .where(and(...conditions, isNull(documentAssignments.id)))
-        .orderBy(desc(documents.updatedAt))
-        .limit(PAGE_SIZE)
-        .offset(offset);
+    logger.debug("docList", "Fetching documents", {
+        userId: locals.user.id,
+        page,
+        status: statusFilter ?? "any",
+    });
 
-    return json(
-        {
-            documents: userDocuments,
-            pagination: {
-                page,
-                pageSize: PAGE_SIZE,
+    try {
+        const userDocuments = await db
+            .select({
+                id: documents.id,
+                title: documents.title,
+                status: documents.status,
+                pageCount: documents.pageCount,
+                fileSize: documents.fileSize,
+                createdAt: documents.createdAt,
+                updatedAt: documents.updatedAt,
+            })
+            .from(documents)
+            .leftJoin(documentAssignments, eq(documents.id, documentAssignments.documentId))
+            .where(and(...conditions, isNull(documentAssignments.id)))
+            .orderBy(desc(documents.updatedAt))
+            .limit(PAGE_SIZE)
+            .offset(offset);
+
+        logger.info("docList", "Returning documents", {
+            userId: locals.user.id,
+            count: userDocuments.length,
+            page,
+        });
+
+        return json(
+            {
+                documents: userDocuments,
+                pagination: {
+                    page,
+                    pageSize: PAGE_SIZE,
+                },
             },
-        },
-        { status: 200 },
-    );
+            { status: 200 },
+        );
+    } catch (err) {
+        logger.error("docList", "Query failed", err);
+        return json({ error: "Failed to fetch documents" }, { status: 500 });
+    }
 };

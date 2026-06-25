@@ -4,10 +4,13 @@
     import type { PlacedRect, RecipientInfo } from "$lib/client/SignatureBoxTypes";
     import { PUBLIC_MAX_RECIPIENTS } from "$env/static/public";
     import PDFViewer from "$lib/client/PDFViewer.svelte";
+    import DocumentSelector from "$lib/client/DocumentSelector.svelte";
+    import { resolve } from "$app/paths";
 
     const MAX_RECIPIENTS = Number(PUBLIC_MAX_RECIPIENTS) || 100;
 
     let { data }: PageProps = $props();
+    let { documents, placementFields } = $derived(data);
 
     const { setStep } = getContext<{ setStep: (n: number) => void }>("step");
     $effect(() => {
@@ -17,8 +20,9 @@
     // --- Tool & box state ---
     type Tool = "signature" | "text" | null;
     let activeTool = $state<Tool>(null);
-    // svelte-ignore state_referenced_locally
-    let placedBoxes = $state<PlacedRect[]>((data.placementFields as PlacedRect[]) ?? []);
+    let selectedDocIndex = $state(0);
+    let placedBoxes = $derived<PlacedRect[]>(placementFields[selectedDocIndex] ?? []);
+    let selectedDoc: string = $derived(documents[selectedDocIndex]?.url ?? "");
 
     function activateTool(tool: Tool) {
         // Toggle: clicking the active tool deactivates it
@@ -148,12 +152,15 @@
             const body = new FormData();
             body.append("recipients", JSON.stringify(recipients));
             body.append("placementFields", JSON.stringify(placedBoxes));
+            body.append("documentId", documents[selectedDocIndex]?.id);
 
             await fetch(`/doc/new/${data.packageId}?/syncRecipients`, {
                 method: "POST",
                 body,
                 headers: { "x-sveltekit-action": "true" },
             });
+            // update local store
+            placementFields[selectedDocIndex] = placedBoxes;
         } catch {
             // silently retry on next change
         } finally {
@@ -170,10 +177,13 @@
 </script>
 
 <div class="ml-5 mt-8 flex gap-4 h-[calc(100vh-16rem)] min-h-0 pr-5">
+    <DocumentSelector {documents} bind:selected={selectedDocIndex} />
     <div class="flex-2 overflow-y-auto">
-        {#if data.pdfUrl}
+        {#if !selectedDoc}
+            <p class="text-neutral-500 text-sm px-2">No document selected.</p>
+        {:else}
             <PDFViewer
-                pdfUrl={data.pdfUrl}
+                pdfUrl={selectedDoc}
                 recipients={recipientInfos}
                 mode="design"
                 {activeTool}
@@ -184,8 +194,6 @@
                 onreassign={handleBoxReassign}
                 ondelete={handleBoxDelete}
             />
-        {:else}
-            <p class="text-sm text-neutral-500 p-4">No document in this package yet.</p>
         {/if}
     </div>
     <div class="flex-1 flex flex-col min-h-0">
@@ -306,6 +314,13 @@
             {:else}
                 <p class="text-xs text-neutral-500">Maximum {MAX_RECIPIENTS} recipients reached.</p>
             {/if}
+
+            <a
+                href={resolve(`/doc/new/${data.packageId}/confirm`)}
+                class="mt-4 block w-full rounded-md bg-blue-600 px-4 py-2.5 text-center text-sm font-medium text-white transition hover:bg-blue-700"
+            >
+                Next
+            </a>
         </div>
     </div>
 </div>

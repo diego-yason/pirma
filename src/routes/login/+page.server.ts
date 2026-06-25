@@ -1,6 +1,7 @@
 import type { PageServerLoad, Actions } from "./$types";
 import { redirect, fail } from "@sveltejs/kit";
 import { auth } from "$lib/server/auth";
+import { logger } from "$lib/server/logger";
 
 /** Map Better Auth errors to vague messages — never reveal which field is wrong. */
 function mapAuthError(err: unknown): { formError: string } {
@@ -12,7 +13,7 @@ function mapAuthError(err: unknown): { formError: string } {
     }
 
     // Log the real error server-side for debugging
-    console.error("Login error:", message);
+    logger.error("login", "Auth API error", message);
 
     // Never distinguish between "email not found" and "wrong password"
     return { formError: "Invalid email or password." };
@@ -50,11 +51,14 @@ export const actions: Actions = {
             return fail(400, { passwordError: "Password is required", email });
         }
 
+        logger.debug("login", "Login attempt", { email });
+
         try {
             await auth.api.signInEmail({
                 body: { email, password },
                 headers: request.headers,
             });
+            logger.info("login", "Login successful", { email });
         } catch (err) {
             const fieldErrors = mapAuthError(err);
             return fail(401, { ...fieldErrors, email });

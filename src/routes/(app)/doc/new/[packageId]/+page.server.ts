@@ -9,6 +9,7 @@ import { logger } from "$lib/server/logger";
 import { PUBLIC_MAX_RECIPIENTS } from "$env/static/public";
 
 import { supabaseAdmin } from "$lib/server/supabase";
+import { getSignedUrl, setSignedUrl } from "$lib/server/url-cache";
 
 const MAX_RECIPIENTS = Number(PUBLIC_MAX_RECIPIENTS) || 100;
 
@@ -17,60 +18,113 @@ export const load: PageServerLoad = async ({ params, locals }) => {
         redirect(302, "/login");
     }
 
-    // Verify the package belongs to the current user
-    const pkg = await requirePackageOwnership(params.packageId, locals.user.id);
-    if (!pkg) {
-        redirect(302, "/doc/new");
-    }
-
-    // Fetch the first document assigned to this package
-    const [firstDoc] = await db
-        .select({
-            id: documents.id,
-            title: documents.title,
-            storagePath: documents.storagePath,
-            placementFields: documents.placementFields,
-        })
-        .from(documents)
-        .innerJoin(documentAssignments, eq(documents.id, documentAssignments.documentId))
-        .where(eq(documentAssignments.packageId, params.packageId))
-        .limit(1);
-
-    // Fetch existing recipients
-    const rows = await db
-        .select({
-            id: packageRecipients.id,
-            name: packageRecipients.name,
-            email: packageRecipients.email,
-            role: packageRecipients.role,
-            recipientId: packageRecipients.recipientId,
-            userId: packageRecipients.userId,
-        })
-        .from(packageRecipients)
-        .where(eq(packageRecipients.packageId, params.packageId));
-
-    const recipients = rows.map((r) => ({
-        id: r.id,
-        name: r.name ?? "",
-        email: r.email ?? "",
-        personNum: r.recipientId ?? 0,
-        role: r.role as "signer" | "viewer",
-    }));
-
-    let pdfUrl: string | null = null;
-    if (firstDoc?.storagePath) {
-        pdfUrl =
-            (await supabaseAdmin.storage.from("drafts").createSignedUrl(firstDoc.storagePath, 3600))
-                .data?.signedUrl ?? null; // Generate a signed URL valid for 1 hour
-    }
-
-    return {
+    logger.debug("packageLoad", "Loading package page", {
         packageId: params.packageId,
-        recipients,
-        pdfUrl,
-        firstDocTitle: firstDoc?.title ?? null,
-        placementFields: (firstDoc?.placementFields as PlacedRect[]) ?? [],
-    };
+        userId: locals.user.id,
+    });
+
+    try {
+        // Verify the package belongs to the current user
+        const pkg = await requirePackageOwnership(params.packageId, locals.user.id);
+        if (!pkg) {
+            redirect(302, "/doc/new");
+        }
+
+        // Fetch all documents assigned to this package
+        const packageDocs = await db
+            .select({
+                id: documents.id,
+                title: documents.title,
+                storagePath: documents.storagePath,
+                placementFields: documents.placementFields,
+            })
+            .from(documents)
+            .innerJoin(documentAssignments, eq(documents.id, documentAssignments.documentId))
+            .where(eq(documentAssignments.packageId, params.packageId));
+
+        const firstDoc = packageDocs[0];
+
+        // Build document list for the selector (cached)
+        const docList = await Promise.all(
+            packageDocs.map(async (doc) => {
+                let url = "";
+                if (doc.storagePath) {
+                    const cached = getSignedUrl(doc.storagePath);
+                    if (cached) {
+                        url = cached;
+                    } else {
+                        const signed =
+                            (
+                                await supabaseAdmin.storage
+                                    .from("drafts")
+                                    .createSignedUrl(doc.storagePath, 3_600_000)
+                            ).data?.signedUrl ?? null;
+                        if (signed) {
+                            setSignedUrl(doc.storagePath, signed);
+                            url = signed;
+                        }
+                    }
+                }
+                return { id: doc.id, title: doc.title, url };
+            }),
+        );
+
+        let pdfUrl: string | null = null;
+        if (firstDoc?.storagePath) {
+            pdfUrl = getSignedUrl(firstDoc.storagePath);
+            if (!pdfUrl) {
+                pdfUrl =
+                    (
+                        await supabaseAdmin.storage
+                            .from("drafts")
+                            .createSignedUrl(firstDoc.storagePath, 3600)
+                    ).data?.signedUrl ?? null;
+                if (pdfUrl) setSignedUrl(firstDoc.storagePath, pdfUrl);
+            }
+        }
+
+        // Fetch existing recipients
+        const rows = await db
+            .select({
+                id: packageRecipients.id,
+                name: packageRecipients.name,
+                email: packageRecipients.email,
+                role: packageRecipients.role,
+                recipientId: packageRecipients.recipientId,
+                userId: packageRecipients.userId,
+            })
+            .from(packageRecipients)
+            .where(eq(packageRecipients.packageId, params.packageId));
+
+        const recipients = rows.map((r) => ({
+            id: r.id,
+            name: r.name ?? "",
+            email: r.email ?? "",
+            personNum: r.recipientId ?? 0,
+            role: r.role as "signer" | "viewer",
+        }));
+
+        logger.info("packageLoad", "Package data loaded", {
+            packageId: params.packageId,
+            documentCount: packageDocs.length,
+            recipientCount: recipients.length,
+        });
+
+        return {
+            packageId: params.packageId,
+            recipients,
+            documents: docList,
+            pdfUrl,
+            firstDocTitle: firstDoc?.title ?? null,
+            placementFields: packageDocs.map((doc) => doc.placementFields) as PlacedRect[][],
+        };
+    } catch (err) {
+        logger.error("packageLoad", "Failed to load package data", {
+            packageId: params.packageId,
+            error: err,
+        });
+        throw err;
+    }
 };
 
 export const actions: Actions = {
@@ -109,6 +163,7 @@ export const actions: Actions = {
             return fail(400, { error: `Maximum ${MAX_RECIPIENTS} recipients per package` });
         }
 
+        // TODO change this
         // Delete all existing recipients for this package
         await db.delete(packageRecipients).where(eq(packageRecipients.packageId, params.packageId));
 
@@ -132,21 +187,17 @@ export const actions: Actions = {
         if (rawFields && typeof rawFields === "string") {
             try {
                 const placementFields = JSON.parse(rawFields);
-                const [docAssignment] = await db
-                    .select({ documentId: documentAssignments.documentId })
-                    .from(documentAssignments)
-                    .where(eq(documentAssignments.packageId, params.packageId))
-                    .limit(1);
+                const docId = formData.get("documentId")?.toString();
 
-                if (docAssignment) {
+                if (docId) {
                     await db
                         .update(documents)
                         .set({ placementFields })
-                        .where(eq(documents.id, docAssignment.documentId));
+                        .where(eq(documents.id, docId));
 
                     logger.info("syncRecipients", "Placement fields updated", {
                         packageId: params.packageId,
-                        documentId: docAssignment.documentId,
+                        documentId: docId,
                         boxCount: Array.isArray(placementFields) ? placementFields.length : 0,
                     });
                 }

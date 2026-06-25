@@ -10,6 +10,7 @@ import {
     timestamp,
     uuid,
     unique,
+    boolean,
 } from "drizzle-orm/pg-core";
 import { eq, inArray, sql } from "drizzle-orm";
 import { user } from "./auth.schema";
@@ -89,6 +90,7 @@ export const packageRecipients = pgTable(
         email: text("email"),
         role: recipientRoleEnum("role").notNull().default("signer"),
         recipientId: integer("recipient_id"),
+        signingGroup: integer("signing_group"),
         createdAt: timestamp("created_at").notNull().defaultNow(),
     },
     (table) => [
@@ -145,6 +147,9 @@ export const packages = pgTable(
         owner: text("owner")
             .notNull()
             .references(() => user.id),
+        signingOrderEnabled: boolean("signing_order_enabled").default(false),
+        mfaRequired: boolean("mfa_required").default(false),
+        expirationDate: timestamp("expiration_date"),
         createdAt: timestamp("created_at").notNull().defaultNow(),
         updatedAt: timestamp("updated_at").notNull().defaultNow(),
     },

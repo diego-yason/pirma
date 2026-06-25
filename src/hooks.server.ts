@@ -5,6 +5,7 @@ import { svelteKitHandler } from "better-auth/svelte-kit";
 import type { Handle } from "@sveltejs/kit";
 import { getTextDirection } from "$lib/paraglide/runtime";
 import { paraglideMiddleware } from "$lib/paraglide/server";
+import { logger } from "$lib/server/logger";
 
 const handleParaglide: Handle = ({ event, resolve }) =>
     paraglideMiddleware(event.request, ({ request, locale }) => {
@@ -19,11 +20,20 @@ const handleParaglide: Handle = ({ event, resolve }) =>
     });
 
 const handleBetterAuth: Handle = async ({ event, resolve }) => {
-    const session = await auth.api.getSession({ headers: event.request.headers });
+    let session;
+    try {
+        session = await auth.api.getSession({ headers: event.request.headers });
+    } catch (err) {
+        logger.error("auth", "Session resolution failed", err);
+        return svelteKitHandler({ event, resolve, auth, building });
+    }
 
     if (session) {
         event.locals.session = session.session;
         event.locals.user = session.user;
+        logger.debug("auth", "Session resolved", { userId: session.user.id });
+    } else {
+        logger.debug("auth", "No session");
     }
 
     return svelteKitHandler({ event, resolve, auth, building });

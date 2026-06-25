@@ -1,5 +1,4 @@
 <script lang="ts">
-    import { onMount } from "svelte";
     import type { PlacedRect, RecipientInfo } from "./SignatureBoxTypes";
 
     type Mode = "design" | "sign";
@@ -38,7 +37,9 @@
     let pages: { canvasWidth: number; canvasHeight: number }[] = $state([]);
     let loading = $state(true);
     let doc: unknown = null;
-    let placedElements = $state<PlacedRect[]>([]);
+    // svelte-ignore state_referenced_locally
+    // — seed once, manage internally
+    let placedElements = $state<PlacedRect[]>([...elements]);
 
     // Drag state
     let dragging = $state<{
@@ -168,31 +169,64 @@
         return signedStatus[id] ?? false;
     }
 
-    onMount(async () => {
-        // Seed from prop
-        placedElements = [...elements];
+    let loadId = $state(0);
 
-        const pdfjs = await import("pdfjs-dist");
+    let pdfjsModule: typeof import("pdfjs-dist") | null = null;
 
-        pdfjs.GlobalWorkerOptions.workerSrc = new URL(
-            "pdfjs-dist/build/pdf.worker.mjs",
-            import.meta.url,
-        ).toString();
-
-        const pdfDoc = await pdfjs.getDocument({ url: pdfUrl }).promise;
-        doc = pdfDoc;
-
-        const pageList: { canvasWidth: number; canvasHeight: number }[] = [];
-        for (let i = 1; i <= pdfDoc.numPages; i++) {
-            const page = await pdfDoc.getPage(i);
-            const viewport = page.getViewport({ scale: 2 });
-            pageList.push({
-                canvasWidth: viewport.width,
-                canvasHeight: viewport.height,
-            });
+    async function loadPdf(url: string) {
+        if (!url) {
+            loading = false;
+            return;
         }
-        pages = pageList;
-        loading = false;
+        loading = true;
+        pages = [];
+        pageContainers = [];
+        currentPage = 1;
+        const currentLoadId = ++loadId;
+
+        try {
+            if (!pdfjsModule) {
+                pdfjsModule = await import("pdfjs-dist");
+                pdfjsModule.GlobalWorkerOptions.workerSrc = new URL(
+                    "pdfjs-dist/build/pdf.worker.mjs",
+                    import.meta.url,
+                ).toString();
+            }
+
+            const pdfDoc = await pdfjsModule.getDocument({ url }).promise;
+            if (currentLoadId !== loadId) return;
+            doc = pdfDoc;
+
+            const pageList: { canvasWidth: number; canvasHeight: number }[] = [];
+            for (let i = 1; i <= pdfDoc.numPages; i++) {
+                const page = await pdfDoc.getPage(i);
+                const viewport = page.getViewport({ scale: 2 });
+                pageList.push({
+                    canvasWidth: viewport.width,
+                    canvasHeight: viewport.height,
+                });
+            }
+            if (currentLoadId !== loadId) return;
+            pages = pageList;
+            placedElements = elements;
+        } catch {
+            pages = [];
+            doc = null;
+        } finally {
+            if (currentLoadId === loadId) {
+                loading = false;
+            }
+        }
+    }
+
+    let currentUrl: string;
+    $effect(() => {
+        if (pdfUrl !== currentUrl) {
+            loadPdf(pdfUrl);
+            currentUrl = pdfUrl;
+        } else {
+            loading = false;
+        }
     });
 
     function renderPageAction(node: HTMLCanvasElement, pageNum: number) {
@@ -709,34 +743,37 @@
         </div>
 
         <!-- Zoom controls -->
-        <div
-            class="sticky bottom-0 flex items-center justify-center gap-2 py-2 bg-white/90 dark:bg-neutral-950/90 backdrop-blur border-t border-neutral-200 dark:border-neutral-700 rounded-b-lg"
-        >
-            <button
-                type="button"
-                class="px-2 py-1 text-sm rounded hover:bg-neutral-100 dark:hover:bg-neutral-800 transition disabled:opacity-30"
-                onclick={() => changeZoom(-ZOOM_STEP)}
-                disabled={zoom <= ZOOM_MIN}
-                aria-label="Zoom out">−</button
-            >
-            <span class="text-xs text-neutral-500 tabular-nums min-w-12 text-center"
-                >{zoomPercent}%</span
-            >
-            <button
-                type="button"
-                class="px-2 py-1 text-sm rounded hover:bg-neutral-100 dark:hover:bg-neutral-800 transition disabled:opacity-30"
-                onclick={() => changeZoom(ZOOM_STEP)}
-                disabled={zoom >= ZOOM_MAX}
-                aria-label="Zoom in">+</button
-            >
-            <span class="text-neutral-300 dark:text-neutral-600 mx-2">|</span>
-            <span class="text-xs text-neutral-500 tabular-nums"
-                >Page {currentPage} of {totalPages}</span
-            >
-        </div>
+        {#if pages.length > 0}
+            <div class="sticky bottom-0 flex justify-center pb-2">
+                <div
+                    class="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-white/80 dark:bg-neutral-900/80 backdrop-blur border border-neutral-200 dark:border-neutral-700 shadow"
+                >
+                    <button
+                        type="button"
+                        class="px-2 py-1 text-sm rounded hover:bg-neutral-100 dark:hover:bg-neutral-800 transition disabled:opacity-30"
+                        onclick={() => changeZoom(-ZOOM_STEP)}
+                        disabled={zoom <= ZOOM_MIN}
+                        aria-label="Zoom out">−</button
+                    >
+                    <span class="text-xs text-neutral-500 tabular-nums min-w-12 text-center"
+                        >{zoomPercent}%</span
+                    >
+                    <button
+                        type="button"
+                        class="px-2 py-1 text-sm rounded hover:bg-neutral-100 dark:hover:bg-neutral-800 transition disabled:opacity-30"
+                        onclick={() => changeZoom(ZOOM_STEP)}
+                        disabled={zoom >= ZOOM_MAX}
+                        aria-label="Zoom in">+</button
+                    >
+                    <span class="text-neutral-300 dark:text-neutral-600 mx-2">|</span>
+                    <span class="text-xs text-neutral-500 tabular-nums"
+                        >Page {currentPage} of {totalPages}</span
+                    >
+                </div>
+            </div>
+        {/if}
     {/if}
 </div>
-
 <!-- Context menu overlay -->
 {#if contextMenu}
     <!-- svelte-ignore a11y_no_static_element_interactions -->

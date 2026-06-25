@@ -141,6 +141,13 @@
       "when": 1782286317654,
       "tag": "0019_perfect_rogue",
       "breakpoints": true
+    },
+    {
+      "idx": 20,
+      "version": "7",
+      "when": 1782359693105,
+      "tag": "0020_minor_domino",
+      "breakpoints": true
     }
   ]
 }

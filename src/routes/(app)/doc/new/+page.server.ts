@@ -150,7 +150,7 @@ export const actions: Actions = {
             ),
         );
 
-        console.log(isUsers);
+        logger.debug("createPackage", "Ownership check results", { isUsers });
 
         if (isUsers.some((res) => res.length === 0)) {
             logger.warn("createPackage", "Rejected: some documents not owned by user", {
