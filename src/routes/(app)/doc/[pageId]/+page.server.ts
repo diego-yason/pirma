@@ -1,0 +1,151 @@
+import type { PageServerLoad } from "./$types";
+import { redirect } from "@sveltejs/kit";
+import { db } from "$lib/server/db";
+import {
+    packages,
+    documents,
+    documentAssignments,
+    packageRecipients,
+    signatures,
+    cryptoKeys,
+} from "$lib/server/db/schema";
+import { eq, and, isNull } from "drizzle-orm";
+
+export const load: PageServerLoad = async ({ params, locals }) => {
+    if (!locals.user) {
+        redirect(302, "/login");
+    }
+
+    const packageId = params.pageId;
+
+    // Fetch package info
+    const [pkg] = await db
+        .select({
+            id: packages.id,
+            name: packages.name,
+            owner: packages.owner,
+            signingOrderEnabled: packages.signingOrderEnabled,
+            mfaRequired: packages.mfaRequired,
+            expirationDate: packages.expirationDate,
+        })
+        .from(packages)
+        .where(eq(packages.id, packageId));
+
+    if (!pkg) {
+        redirect(302, "/doc/list");
+    }
+
+    // Only allow access if the user is the owner, a recipient, or a viewer
+    const isOwner = pkg.owner === locals.user.id;
+
+    const [recipientRow] = await db
+        .select({ id: packageRecipients.id })
+        .from(packageRecipients)
+        .where(
+            and(
+                eq(packageRecipients.packageId, packageId),
+                eq(packageRecipients.userId, locals.user.id),
+            ),
+        )
+        .limit(1);
+
+    // TODO: also check package_viewers once that feature is wired up
+    if (!isOwner && !recipientRow) {
+        redirect(302, "/doc/list");
+    }
+
+    // Fetch documents in this package
+    const docs = await db
+        .select({
+            id: documents.id,
+            title: documents.title,
+            status: documents.status,
+            pageCount: documents.pageCount,
+            fileSize: documents.fileSize,
+        })
+        .from(documents)
+        .innerJoin(documentAssignments, eq(documents.id, documentAssignments.documentId))
+        .where(eq(documentAssignments.packageId, packageId));
+
+    // Fetch recipients with their signing status per document
+    const recipients = await db
+        .select({
+            id: packageRecipients.id,
+            name: packageRecipients.name,
+            email: packageRecipients.email,
+            role: packageRecipients.role,
+            signingGroup: packageRecipients.signingGroup,
+            userId: packageRecipients.userId,
+        })
+        .from(packageRecipients)
+        .where(eq(packageRecipients.packageId, packageId))
+        .orderBy(packageRecipients.signingGroup);
+
+    // Fetch signatures for all documents in this package
+    const sigRows = await db
+        .select({
+            documentId: signatures.documentId,
+            userId: cryptoKeys.userId,
+            status: signatures.status,
+        })
+        .from(signatures)
+        .innerJoin(cryptoKeys, eq(signatures.cryptoKey, cryptoKeys.id))
+        .where(
+            and(
+                isNull(cryptoKeys.revokedAt),
+                // Only signatures for docs in this package — filter in JS
+            ),
+        );
+
+    const docIds = new Set(docs.map((d) => d.id));
+    const sigsByDoc = new Map<string, Map<string, string>>();
+    for (const s of sigRows) {
+        if (!docIds.has(s.documentId)) continue;
+        if (!sigsByDoc.has(s.documentId)) sigsByDoc.set(s.documentId, new Map());
+        sigsByDoc.get(s.documentId)!.set(s.userId, s.status);
+    }
+
+    // Build recipient status per document
+    const recipientStatus = recipients.map((r) => {
+        const docStatuses = docs.map((d) => {
+            const sigMap = sigsByDoc.get(d.id);
+            const sig = sigMap?.get(r.userId ?? "");
+            return {
+                documentId: d.id,
+                documentTitle: d.title,
+                signed: sig === "signed" || sig === "anchored",
+                status: sig ?? "pending",
+            };
+        });
+
+        return {
+            id: r.id,
+            name: r.name ?? "—",
+            email: r.email ?? "—",
+            role: r.role as "signer" | "viewer",
+            signingGroup: r.signingGroup,
+            isMe: r.userId === locals.user.id,
+            docStatuses,
+        };
+    });
+
+    return {
+        pkg: {
+            id: pkg.id,
+            name: pkg.name,
+            signingOrderEnabled: pkg.signingOrderEnabled,
+            mfaRequired: pkg.mfaRequired,
+            expirationDate: pkg.expirationDate?.toISOString() ?? null,
+        },
+        documents: docs.map((d) => ({
+            id: d.id,
+            title: d.title,
+            status: d.status,
+            pageCount: d.pageCount ?? 0,
+            fileSize: d.fileSize ?? 0,
+        })),
+        recipients: recipientStatus,
+        isOwner,
+        isRecipient: !!recipientRow,
+    };
+};

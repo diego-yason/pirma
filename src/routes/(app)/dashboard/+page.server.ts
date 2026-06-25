@@ -10,9 +10,11 @@ import {
     packages,
     documentAssignments,
 } from "$lib/server/db/schema";
+import { logger } from "$lib/server/logger";
 
 export const load: PageServerLoad = async ({ locals }) => {
     if (!locals.user) {
+        logger.debug("dashboard", "Not authenticated, redirecting to login");
         redirect(302, "/login");
     }
 
@@ -86,6 +88,14 @@ export const load: PageServerLoad = async ({ locals }) => {
         recentDocs,
         viewablePackages,
     ]);
+
+    logger.debug("dashboard", "Dashboard data loaded", {
+        userId: locals.user.id,
+        pendingCount: pending.length,
+        completedCount: completed.length,
+        recentCount: recent.length,
+        viewableCount: viewable.length,
+    });
 
     return {
         pendingDocuments: pending,

@@ -4,14 +4,20 @@ import { db } from "$lib/server/db";
 import { packageRecipients, documents, documentAssignments, packages } from "$lib/server/db/schema";
 import { eq, inArray, and } from "drizzle-orm";
 import { requirePackageOwnership } from "$lib/server/package-guard";
+import { logger } from "$lib/server/logger";
 
 export const load: PageServerLoad = async ({ params, locals }) => {
     if (!locals.user) {
+        logger.debug("confirm", "Not authenticated, redirecting to login");
         redirect(302, "/login");
     }
 
     const pkg = await requirePackageOwnership(params.packageId, locals.user.id);
     if (!pkg) {
+        logger.warn("confirm", "Package not found or not owned", {
+            packageId: params.packageId,
+            userId: locals.user.id,
+        });
         redirect(302, "/doc/new");
     }
 
@@ -112,6 +118,12 @@ export const load: PageServerLoad = async ({ params, locals }) => {
         }
     }
 
+    logger.debug("confirm", "Confirm page data loaded", {
+        packageId: params.packageId,
+        documentCount: packageDocs.length,
+        recipientCount: recipients.length,
+    });
+
     return {
         packageId: params.packageId,
         documents: packageDocs.map((d) => ({
@@ -131,10 +143,24 @@ export const load: PageServerLoad = async ({ params, locals }) => {
 
 export const actions: Actions = {
     finalize: async ({ request, params, locals }) => {
-        if (!locals.user) return fail(401);
+        if (!locals.user) {
+            logger.warn("confirm", "Finalize rejected: not authenticated");
+            return fail(401);
+        }
 
         const pkg = await requirePackageOwnership(params.packageId, locals.user.id);
-        if (!pkg) return fail(403);
+        if (!pkg) {
+            logger.warn("confirm", "Finalize rejected: package not owned", {
+                packageId: params.packageId,
+                userId: locals.user.id,
+            });
+            return fail(403);
+        }
+
+        logger.debug("confirm", "Finalize action started", {
+            packageId: params.packageId,
+            userId: locals.user.id,
+        });
 
         const formData = await request.formData();
 
@@ -220,6 +246,50 @@ export const actions: Actions = {
                 .where(eq(packageRecipients.packageId, params.packageId));
         }
 
-        return { success: true };
+        // ── Finalize documents ──────────────────────────────────────
+        // Mark all documents in this package as finalized so they are
+        // locked for editing and no longer accessible via /doc/new.
+        const assignedDocIds = await db
+            .select({ documentId: documentAssignments.documentId })
+            .from(documentAssignments)
+            .where(eq(documentAssignments.packageId, params.packageId));
+
+        if (assignedDocIds.length > 0) {
+            await db
+                .update(documents)
+                .set({ status: "finalized", updatedAt: new Date() })
+                .where(
+                    inArray(
+                        documents.id,
+                        assignedDocIds.map((d) => d.documentId),
+                    ),
+                );
+        }
+
+        // ── Notifications (placeholder) ─────────────────────────────
+        // TODO: Send email / in-app notifications to each signer
+        // informing them a document is waiting for their signature.
+        // const signers = await db
+        //     .select({ name: packageRecipients.name, email: packageRecipients.email })
+        //     .from(packageRecipients)
+        //     .where(
+        //         and(
+        //             eq(packageRecipients.packageId, params.packageId),
+        //             eq(packageRecipients.role, "signer"),
+        //         ),
+        //     );
+        // for (const s of signers) {
+        //     // await sendNotification(s.email, s.name, params.packageId);
+        // }
+
+        logger.info("confirm", "Package finalized", {
+            packageId: params.packageId,
+            documentCount: assignedDocIds.length,
+            signingOrderEnabled,
+            mfaRequired,
+            expirationDate: expirationDate ?? "none",
+        });
+
+        redirect(302, "/dashboard");
     },
 };

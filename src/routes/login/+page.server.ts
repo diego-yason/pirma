@@ -22,9 +22,11 @@ function mapAuthError(err: unknown): { formError: string } {
 export const load: PageServerLoad = async ({ locals }) => {
     // If user is already logged in, redirect to home
     if (locals.user) {
+        logger.debug("login", "Already authenticated, redirecting to home");
         redirect(302, "/");
     }
 
+    logger.debug("login", "Serving login page");
     return {};
 };
 

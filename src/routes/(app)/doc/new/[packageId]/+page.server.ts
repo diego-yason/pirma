@@ -3,7 +3,7 @@ import type { PlacedRect } from "$lib/client/SignatureBoxTypes";
 import { redirect, fail } from "@sveltejs/kit";
 import { db } from "$lib/server/db";
 import { packageRecipients, documents, documentAssignments } from "$lib/server/db/schema";
-import { eq } from "drizzle-orm";
+import { eq, and } from "drizzle-orm";
 import { requirePackageOwnership } from "$lib/server/package-guard";
 import { logger } from "$lib/server/logger";
 import { PUBLIC_MAX_RECIPIENTS } from "$env/static/public";
@@ -28,6 +28,23 @@ export const load: PageServerLoad = async ({ params, locals }) => {
         const pkg = await requirePackageOwnership(params.packageId, locals.user.id);
         if (!pkg) {
             redirect(302, "/doc/new");
+        }
+
+        // Guard: if any document in this package is already finalized,
+        // it can no longer be edited via /doc/new.
+        const [finalized] = await db
+            .select({ id: documents.id })
+            .from(documents)
+            .innerJoin(documentAssignments, eq(documents.id, documentAssignments.documentId))
+            .where(
+                and(
+                    eq(documentAssignments.packageId, params.packageId),
+                    eq(documents.status, "finalized"),
+                ),
+            )
+            .limit(1);
+        if (finalized) {
+            redirect(302, "/doc/list");
         }
 
         // Fetch all documents assigned to this package

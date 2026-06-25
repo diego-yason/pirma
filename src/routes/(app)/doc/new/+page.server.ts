@@ -23,9 +23,11 @@ const MIME_TO_EXT: Record<string, string> = {
 
 export const load: PageServerLoad = async ({ locals }) => {
     if (!locals.user) {
+        logger.debug("docNew", "Not authenticated, redirecting to login");
         redirect(302, "/login");
     }
 
+    logger.debug("docNew", "Serving document upload page");
     return {};
 };
 

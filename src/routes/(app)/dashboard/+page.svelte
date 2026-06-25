@@ -69,6 +69,10 @@
                 <a href={resolve(`/doc/new/${doc.packageId}`)} class="text-secondary-200"
                     >View Document</a
                 >
+            {:else if doc.packageId}
+                <a href={resolve(`/doc/${doc.packageId}`)} class="text-secondary-200"
+                    >View Document</a
+                >
             {:else}
                 <span class="text-secondary-200">View Document</span>
             {/if}
