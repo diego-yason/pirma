@@ -2,7 +2,7 @@ import type { PageServerLoad, Actions } from "./$types";
 import { redirect, fail } from "@sveltejs/kit";
 import { db } from "$lib/server/db";
 import { packageRecipients, documents, documentAssignments, packages } from "$lib/server/db/schema";
-import { eq, inArray } from "drizzle-orm";
+import { eq, inArray, and } from "drizzle-orm";
 import { requirePackageOwnership } from "$lib/server/package-guard";
 
 export const load: PageServerLoad = async ({ params, locals }) => {
@@ -46,9 +46,25 @@ export const load: PageServerLoad = async ({ params, locals }) => {
             email: packageRecipients.email,
             role: packageRecipients.role,
             signingGroup: packageRecipients.signingGroup,
+            userId: packageRecipients.userId,
         })
         .from(packageRecipients)
         .where(eq(packageRecipients.packageId, params.packageId));
+
+    // Check if any document has fields assigned to "me"
+    let hasMeField = false;
+    for (const doc of packageDocs) {
+        if (Array.isArray(doc.placementFields)) {
+            if (
+                (doc.placementFields as Array<{ assignedTo?: string }>).some(
+                    (f) => f.assignedTo === "me",
+                )
+            ) {
+                hasMeField = true;
+                break;
+            }
+        }
+    }
 
     // Build groups from signing groups
     const groupMap = new Map<number, string[]>();
@@ -67,6 +83,35 @@ export const load: PageServerLoad = async ({ params, locals }) => {
             signerIds,
         }));
 
+    const recipients = rows.map((r) => ({
+        id: r.id,
+        name: r.name ?? "—",
+        email: r.email ?? "—",
+        role: r.role as "signer" | "viewer",
+        isMe: false,
+    }));
+
+    // If any field is assigned to the current user, ensure "Me" appears as a signer.
+    // If the user already has a package_recipients row, mark it; otherwise prepend a synthetic entry.
+    if (hasMeField) {
+        const meRow = rows.find((r) => r.userId === locals.user.id);
+        if (meRow) {
+            // Mark the existing row as "me" for the client
+            const idx = recipients.findIndex((r) => r.id === meRow.id);
+            if (idx !== -1) {
+                recipients[idx] = { ...recipients[idx], isMe: true, role: "signer" as const };
+            }
+        } else {
+            recipients.unshift({
+                id: "me",
+                name: locals.user.name ?? "Me",
+                email: locals.user.email ?? "",
+                role: "signer" as const,
+                isMe: true,
+            });
+        }
+    }
+
     return {
         packageId: params.packageId,
         documents: packageDocs.map((d) => ({
@@ -76,12 +121,7 @@ export const load: PageServerLoad = async ({ params, locals }) => {
             fileSize: d.fileSize ?? 0,
             fieldCount: Array.isArray(d.placementFields) ? d.placementFields.length : 0,
         })),
-        recipients: rows.map((r) => ({
-            id: r.id,
-            name: r.name ?? "—",
-            email: r.email ?? "—",
-            role: r.role as "signer" | "viewer",
-        })),
+        recipients,
         signingOrderEnabled: pkgData?.signingOrderEnabled ?? false,
         mfaRequired: pkgData?.mfaRequired ?? false,
         expirationDate: pkgData?.expirationDate ?? "",
@@ -118,6 +158,39 @@ export const actions: Actions = {
         if (signingOrderEnabled && groupsRaw) {
             try {
                 const groups: { id: string; signerIds: string[] }[] = JSON.parse(groupsRaw);
+
+                // Ensure "me" (the sender) has a package_recipients row so their
+                // signing group can be persisted.
+                let meRecipientId: string | null = null;
+                const hasMe = groups.some((g) => g.signerIds.includes("me"));
+                if (hasMe) {
+                    const existing = await db
+                        .select({ id: packageRecipients.id })
+                        .from(packageRecipients)
+                        .where(
+                            and(
+                                eq(packageRecipients.packageId, params.packageId),
+                                eq(packageRecipients.userId, locals.user!.id),
+                            ),
+                        )
+                        .limit(1);
+                    if (existing.length > 0) {
+                        meRecipientId = existing[0].id;
+                    } else {
+                        const [inserted] = await db
+                            .insert(packageRecipients)
+                            .values({
+                                packageId: params.packageId,
+                                userId: locals.user!.id,
+                                name: locals.user!.name,
+                                email: locals.user!.email,
+                                role: "signer",
+                            })
+                            .returning({ id: packageRecipients.id });
+                        meRecipientId = inserted.id;
+                    }
+                }
+
                 // Clear existing groups
                 await db
                     .update(packageRecipients)
@@ -126,13 +199,14 @@ export const actions: Actions = {
 
                 // Assign each signer to their group (1-indexed)
                 for (let i = 0; i < groups.length; i++) {
-                    if (groups[i].signerIds.length > 0) {
+                    const signerIds = groups[i].signerIds
+                        .map((sid) => (sid === "me" ? meRecipientId : sid))
+                        .filter((sid): sid is string => sid != null);
+                    if (signerIds.length > 0) {
                         await db
                             .update(packageRecipients)
                             .set({ signingGroup: i + 1 })
-                            .where(
-                                inArray(packageRecipients.id, groups[i].signerIds),
-                            );
+                            .where(inArray(packageRecipients.id, signerIds));
                     }
                 }
             } catch {

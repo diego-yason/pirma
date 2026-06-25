@@ -281,7 +281,11 @@
                                                         )}
                                                         {#if s}
                                                             <div
-                                                                class="flex items-center justify-between rounded-lg border border-neutral-200 dark:border-neutral-700 px-4 py-3 bg-white dark:bg-neutral-900 cursor-grab active:cursor-grabbing transition-shadow"
+                                                                class="flex items-center justify-between rounded-lg border px-4 py-3 bg-white dark:bg-neutral-900 cursor-grab active:cursor-grabbing transition-shadow"
+                                                                class:border-emerald-200={s.isMe}
+                                                                class:dark:border-emerald-800={s.isMe}
+                                                                class:border-neutral-200={!s.isMe}
+                                                                class:dark:border-neutral-700={!s.isMe}
                                                                 class:shadow-md={dragSignerId ===
                                                                     s.id}
                                                                 class:opacity-50={dragSignerId ===
@@ -294,6 +298,13 @@
                                                                 <div>
                                                                     <p class="font-medium">
                                                                         {s.name}
+                                                                        {#if s.isMe}
+                                                                            <span
+                                                                                class="ml-2 rounded-full bg-emerald-200 px-2 py-0.5 text-xs font-medium text-emerald-800 dark:bg-emerald-800 dark:text-emerald-200"
+                                                                            >
+                                                                                You
+                                                                            </span>
+                                                                        {/if}
                                                                     </p>
                                                                     <p
                                                                         class="text-xs text-neutral-500"
@@ -359,7 +370,11 @@
                                             <div class="flex flex-col gap-2">
                                                 {#each unassignedSigners as s (s.id)}
                                                     <div
-                                                        class="flex items-center justify-between rounded-lg border border-neutral-200 dark:border-neutral-700 px-4 py-3 bg-white dark:bg-neutral-900 cursor-grab active:cursor-grabbing"
+                                                        class="flex items-center justify-between rounded-lg border px-4 py-3 bg-white dark:bg-neutral-900 cursor-grab active:cursor-grabbing"
+                                                        class:border-emerald-200={s.isMe}
+                                                        class:dark:border-emerald-800={s.isMe}
+                                                        class:border-neutral-200={!s.isMe}
+                                                        class:dark:border-neutral-700={!s.isMe}
                                                         class:shadow-md={dragSignerId === s.id}
                                                         class:opacity-50={dragSignerId === s.id}
                                                         draggable="true"
@@ -367,7 +382,16 @@
                                                         ondragend={onDragEnd}
                                                     >
                                                         <div>
-                                                            <p class="font-medium">{s.name}</p>
+                                                            <p class="font-medium">
+                                                                {s.name}
+                                                                {#if s.isMe}
+                                                                    <span
+                                                                        class="ml-2 rounded-full bg-emerald-200 px-2 py-0.5 text-xs font-medium text-emerald-800 dark:bg-emerald-800 dark:text-emerald-200"
+                                                                    >
+                                                                        You
+                                                                    </span>
+                                                                {/if}
+                                                            </p>
                                                             <p class="text-xs text-neutral-500">
                                                                 {s.email}
                                                             </p>
@@ -406,10 +430,25 @@
                                 <div class="flex flex-col gap-2">
                                     {#each signers as r (r.id)}
                                         <div
-                                            class="flex items-center justify-between rounded-lg border border-neutral-200 dark:border-neutral-700 px-4 py-3"
+                                            class="flex items-center justify-between rounded-lg border px-4 py-3"
+                                            class:border-emerald-200={r.isMe}
+                                            class:dark:border-emerald-800={r.isMe}
+                                            class:bg-emerald-50={r.isMe}
+                                            class:dark:bg-emerald-950={r.isMe}
+                                            class:border-neutral-200={!r.isMe}
+                                            class:dark:border-neutral-700={!r.isMe}
                                         >
                                             <div>
-                                                <p class="font-medium">{r.name}</p>
+                                                <p class="font-medium">
+                                                    {r.name}
+                                                    {#if r.isMe}
+                                                        <span
+                                                            class="ml-2 rounded-full bg-emerald-200 px-2 py-0.5 text-xs font-medium text-emerald-800 dark:bg-emerald-800 dark:text-emerald-200"
+                                                        >
+                                                            You
+                                                        </span>
+                                                    {/if}
+                                                </p>
                                                 <p class="text-xs text-neutral-500">{r.email}</p>
                                             </div>
                                             <!-- <span
