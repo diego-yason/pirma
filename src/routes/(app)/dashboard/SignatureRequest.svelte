@@ -7,7 +7,7 @@
         from?: string;
         fromEmail?: string;
         dueDate?: string;
-        pages?: number;
+        docCount?: number;
     }
 
     let {
@@ -16,7 +16,7 @@
         from = "Prima Corp Legal",
         fromEmail = "legal@example.com",
         dueDate = undefined,
-        pages = 12,
+        docCount = 1,
     }: Props = $props();
 
     const flagConfig: Record<Flag, { label: string; bg: string; text: string }> = {
@@ -70,7 +70,7 @@
             {#if dueDate}
                 <p>Due {dueDate}</p>
             {/if}
-            <p>{pages} Pages</p>
+            <p>{docCount} Document{docCount !== 1 ? "s" : ""}</p>
         </div>
     </div>
     <button class="bg-secondary-600 text-primary-50 px-8 py-3 rounded-md cursor-pointer"

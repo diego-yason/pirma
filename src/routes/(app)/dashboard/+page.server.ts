@@ -1,14 +1,15 @@
 import type { PageServerLoad } from "./$types";
 import { redirect } from "@sveltejs/kit";
 import { db } from "$lib/server/db";
-import { eq, desc, inArray } from "drizzle-orm";
+import { eq, desc, inArray, and, count } from "drizzle-orm";
 import {
     documents,
-    pendingDocumentsView,
     completedDocumentsView,
     packageViewers,
     packages,
     documentAssignments,
+    packageRecipients,
+    user,
 } from "$lib/server/db/schema";
 import { logger } from "$lib/server/logger";
 
@@ -19,19 +20,33 @@ export const load: PageServerLoad = async ({ locals }) => {
     }
 
     // ── "Waiting for You" ──────────────────────────────────────────
-    // View: pending_documents
-    // Indexes: package_signatories_user_id_idx, documents PK
+    // Packages where the user is a signer and the package is finalized
+    // (i.e. waiting for their signature).
     // ─────────────────────────────────────────────────────────────────
-    const pendingDocs = db
+    const pendingPkgs = db
         .select({
-            id: pendingDocumentsView.id,
-            title: pendingDocumentsView.title,
-            status: pendingDocumentsView.status,
-            updatedAt: pendingDocumentsView.updatedAt,
+            id: packages.id,
+            name: packages.name,
+            owner: packages.owner,
+            expirationDate: packages.expirationDate,
+            updatedAt: packages.updatedAt,
+            docCount: count(documentAssignments.documentId).as("doc_count"),
         })
-        .from(pendingDocumentsView)
-        .where(eq(pendingDocumentsView.signatoryUserId, locals.user.id))
-        .orderBy(desc(pendingDocumentsView.updatedAt))
+        .from(packages)
+        .innerJoin(packageRecipients, eq(packages.id, packageRecipients.packageId))
+        .innerJoin(
+            documentAssignments,
+            eq(packages.id, documentAssignments.packageId),
+        )
+        .where(
+            and(
+                eq(packageRecipients.userId, locals.user.id),
+                eq(packageRecipients.role, "signer"),
+                eq(packages.owner, locals.user.id),
+            ),
+        )
+        .groupBy(packages.id)
+        .orderBy(desc(packages.updatedAt))
         .limit(10);
 
     // ── "Recently Completed" ───────────────────────────────────────
@@ -83,28 +98,36 @@ export const load: PageServerLoad = async ({ locals }) => {
         .limit(10);
 
     const [pending, completed, recent, viewable] = await Promise.all([
-        pendingDocs,
+        pendingPkgs,
         completedDocs,
         recentDocs,
         viewablePackages,
     ]);
 
-    // Fetch package expiration dates for pending documents
-    const pendingDocIds = pending.map((d) => d.id);
+    // Build expiration date map and owner map for pending packages
+    const pendingPkgIds = pending.map((p) => p.id);
     const expirationMap = new Map<string, string | null>();
-    if (pendingDocIds.length > 0) {
-        const expRows = await db
+    const ownerMap = new Map<string, { name: string; email: string }>();
+    if (pendingPkgIds.length > 0) {
+        // Owner info
+        const ownerRows = await db
             .select({
-                documentId: documentAssignments.documentId,
-                expirationDate: packages.expirationDate,
+                packageId: packages.id,
+                name: user.name,
+                email: user.email,
             })
-            .from(documentAssignments)
-            .innerJoin(packages, eq(documentAssignments.packageId, packages.id))
-            .where(inArray(documentAssignments.documentId, pendingDocIds));
-        for (const row of expRows) {
+            .from(packages)
+            .innerJoin(user, eq(packages.owner, user.id))
+            .where(inArray(packages.id, pendingPkgIds));
+        for (const row of ownerRows) {
+            ownerMap.set(row.packageId, { name: row.name, email: row.email });
+        }
+
+        // Expiration dates already on the pending rows
+        for (const p of pending) {
             expirationMap.set(
-                row.documentId,
-                row.expirationDate?.toISOString().split("T")[0] ?? null,
+                p.id,
+                p.expirationDate?.toISOString().split("T")[0] ?? null,
             );
         }
     }
@@ -118,10 +141,15 @@ export const load: PageServerLoad = async ({ locals }) => {
     });
 
     return {
-        pendingDocuments: pending,
+        pendingPackages: pending.map((p) => ({
+            id: p.id,
+            name: p.name,
+            docCount: Number(p.docCount),
+        })),
         completedDocuments: completed,
         recentDocuments: recent,
         viewablePackages: viewable,
         expirationDates: expirationMap,
+        ownerInfo: ownerMap,
     };
 };

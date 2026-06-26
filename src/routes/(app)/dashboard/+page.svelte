@@ -5,7 +5,7 @@
 
     let { data }: PageProps = $props();
 
-    const pendingCount = $derived(data.pendingDocuments.length);
+    const pendingCount = $derived(data.pendingPackages.length);
     const completedCount = $derived(data.completedDocuments.length);
 
     const statusLabel: Record<string, string> = {
@@ -19,18 +19,22 @@
 
 <h2 class="text-3xl px-4 font-bold mt-16">Waiting for You</h2>
 <p class="text-lg px-4 mb-4 text-neutral-200">
-    You have {pendingCount} document{pendingCount !== 1 ? "s" : ""} waiting for your review and signature
+    You have {pendingCount} package{pendingCount !== 1 ? "s" : ""} waiting for your review and signature
     and received {completedCount} document{completedCount !== 1 ? "s" : ""} that
     {completedCount === 1 ? "is" : "are"} completely signed.
 </p>
 
 <div class="flex flex-col px-5 gap-3">
-    {#each data.pendingDocuments as doc (doc.id)}
-        {@const due = data.expirationDates.get(doc.id)}
+    {#each data.pendingPackages as pkg (pkg.id)}
+        {@const due = data.expirationDates.get(pkg.id)}
+        {@const owner = data.ownerInfo.get(pkg.id)}
         <SignatureRequest
-            title={doc.title}
-            flags={doc.status === "finalized" && due ? ["due-soon"] : []}
+            title={pkg.name}
+            flags={due ? ["due-soon"] : []}
             dueDate={due ?? undefined}
+            from={owner?.name}
+            fromEmail={owner?.email}
+            docCount={pkg.docCount}
         />
     {/each}
     {#if pendingCount === 0}
