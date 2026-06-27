@@ -1,0 +1,1 @@
+ALTER TABLE "user_keys" ADD COLUMN "key_level" integer DEFAULT 1 NOT NULL;

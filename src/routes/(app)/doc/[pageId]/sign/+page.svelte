@@ -2,8 +2,14 @@
     import type { PageProps } from "./$types";
     import type { PlacedRect } from "$lib/client/SignatureBoxTypes";
     import PDFViewer from "$lib/client/PDFViewer.svelte";
+    import { registerPublicKey } from "$lib/client/crypto";
 
     let { data }: PageProps = $props();
+
+    // Ensure a signing key is available in memory and registered on the server
+    $effect(() => {
+        registerPublicKey();
+    });
 
     // Currently selected document
     // svelte-ignore state_referenced_locally

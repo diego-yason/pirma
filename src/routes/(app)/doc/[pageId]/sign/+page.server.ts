@@ -19,6 +19,25 @@ export const load: PageServerLoad = async ({ params, locals }) => {
         redirect(302, "/login");
     }
 
+    // ── Ensure the user has a registered public key ──────────────
+    // The private key is generated client-side (Web Crypto, non-extractable)
+    // and the public key is sent here for storage.
+    // If no active key exists, the client should generate one and register it
+    // via a dedicated endpoint before signing.
+    const [activeKey] = await db
+        .select({ id: cryptoKeys.id })
+        .from(cryptoKeys)
+        .where(
+            and(
+                eq(cryptoKeys.userId, locals.user.id),
+                isNull(cryptoKeys.revokedAt),
+            ),
+        )
+        .limit(1);
+
+    // TODO: if no active key, redirect or prompt to create one client-side
+    void activeKey;
+
     const packageId = params.pageId;
 
     // Verify user is a signatory of this package
