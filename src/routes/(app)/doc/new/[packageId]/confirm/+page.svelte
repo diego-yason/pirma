@@ -184,7 +184,9 @@
                 "groups",
                 JSON.stringify(groups.map((g) => ({ id: g.id, signerIds: g.signerIds }))),
             );
-            await fetch(`/doc/new/${data.packageId}/confirm?/finalize`, {
+            // Only persist workflow settings — does NOT finalize documents.
+            // Finalization happens exclusively via the "Send" button.
+            await fetch(`/doc/new/${data.packageId}/confirm?/saveSettings`, {
                 method: "POST",
                 body,
             });

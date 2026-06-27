@@ -292,4 +292,96 @@ export const actions: Actions = {
 
         redirect(302, "/dashboard");
     },
+
+    saveSettings: async ({ request, params, locals }) => {
+        if (!locals.user) {
+            return fail(401);
+        }
+
+        const pkg = await requirePackageOwnership(params.packageId, locals.user.id);
+        if (!pkg) {
+            return fail(403);
+        }
+
+        const formData = await request.formData();
+
+        const signingOrderEnabled = formData.get("signingOrderEnabled") === "true";
+        const mfaRequired = formData.get("mfaRequired") === "true";
+        const expirationDate = formData.get("expirationDate") as string | null;
+        const groupsRaw = formData.get("groups") as string | null;
+
+        // Save workflow settings to packages
+        await db
+            .update(packages)
+            .set({
+                signingOrderEnabled,
+                mfaRequired,
+                expirationDate: expirationDate ? new Date(expirationDate) : null,
+                updatedAt: new Date(),
+            })
+            .where(eq(packages.id, params.packageId));
+
+        // Save signing groups to recipients
+        if (signingOrderEnabled && groupsRaw) {
+            try {
+                const groups: { id: string; signerIds: string[] }[] = JSON.parse(groupsRaw);
+
+                let meRecipientId: string | null = null;
+                const hasMe = groups.some((g) => g.signerIds.includes("me"));
+                if (hasMe) {
+                    const existing = await db
+                        .select({ id: packageRecipients.id })
+                        .from(packageRecipients)
+                        .where(
+                            and(
+                                eq(packageRecipients.packageId, params.packageId),
+                                eq(packageRecipients.userId, locals.user.id),
+                            ),
+                        )
+                        .limit(1);
+                    if (existing.length > 0) {
+                        meRecipientId = existing[0].id;
+                    } else {
+                        const [inserted] = await db
+                            .insert(packageRecipients)
+                            .values({
+                                packageId: params.packageId,
+                                userId: locals.user.id,
+                                name: locals.user.name,
+                                email: locals.user.email,
+                                role: "signer",
+                            })
+                            .returning({ id: packageRecipients.id });
+                        meRecipientId = inserted.id;
+                    }
+                }
+
+                await db
+                    .update(packageRecipients)
+                    .set({ signingGroup: null })
+                    .where(eq(packageRecipients.packageId, params.packageId));
+
+                for (let i = 0; i < groups.length; i++) {
+                    const signerIds = groups[i].signerIds
+                        .map((sid) => (sid === "me" ? meRecipientId : sid))
+                        .filter((sid): sid is string => sid != null);
+                    if (signerIds.length > 0) {
+                        await db
+                            .update(packageRecipients)
+                            .set({ signingGroup: i + 1 })
+                            .where(inArray(packageRecipients.id, signerIds));
+                    }
+                }
+            } catch {
+                return fail(400, { error: "Invalid groups data" });
+            }
+        } else {
+            await db
+                .update(packageRecipients)
+                .set({ signingGroup: null })
+                .where(eq(packageRecipients.packageId, params.packageId));
+        }
+
+        return { success: true };
+    },
 };

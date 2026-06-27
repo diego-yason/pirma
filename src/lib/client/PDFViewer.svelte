@@ -11,6 +11,7 @@
         recipients = [] as RecipientInfo[],
         mode = "sign" as Mode,
         activeTool = null as Tool,
+        signatureUrl,
         onsign,
         onremove,
         onadd,
@@ -25,6 +26,7 @@
         recipients?: RecipientInfo[];
         mode?: Mode;
         activeTool?: Tool;
+        signatureUrl?: string;
         onsign?: (id: string) => void;
         onremove?: (id: string) => void;
         onadd?: (rect: PlacedRect) => void;
@@ -672,7 +674,7 @@
                                     title="Right-click to remove"
                                 >
                                     <img
-                                        src="/signature.png"
+                                        src={signatureUrl || "/signature.png"}
                                         alt="Signature"
                                         class="h-full w-full object-contain"
                                     />

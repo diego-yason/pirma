@@ -169,6 +169,13 @@
       "when": 1782550203220,
       "tag": "0023_common_patriot",
       "breakpoints": true
+    },
+    {
+      "idx": 24,
+      "version": "7",
+      "when": 1782594062103,
+      "tag": "0024_chunky_vivisector",
+      "breakpoints": true
     }
   ]
 }

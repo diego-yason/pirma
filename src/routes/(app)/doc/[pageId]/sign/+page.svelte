@@ -170,6 +170,7 @@
                 mode="sign"
                 onsign={handleSign}
                 onremove={handleRemove}
+                signatureUrl={data.defaultSignature ?? undefined}
             />
         {:else}
             <div class="flex items-center justify-center h-full text-neutral-500">

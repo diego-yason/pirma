@@ -23,8 +23,8 @@ export const cryptoKeys = pgTable(
         userId: text("user_id")
             .notNull()
             .references(() => user.id),
-        pkey: text("pkey").notNull(),
         pubkey: text("pubkey").notNull(),
+        keyLevel: integer("key_level").notNull().default(1),
         createdAt: timestamp("created_at").notNull().defaultNow(),
         revokedAt: timestamp("revoked_at"),
     },
@@ -228,5 +228,24 @@ export const completedDocumentsView = pgView("completed_documents")
             .innerJoin(cryptoKeys, eq(signatures.cryptoKey, cryptoKeys.id))
             .where(inArray(signatures.status, ["signed", "anchored"])),
     );
+
+// ── User Signatures (saved signature images) ─────────────────────
+export const userSignatures = pgTable(
+    "user_signatures",
+    {
+        id: uuid("id").primaryKey().defaultRandom(),
+        userId: text("user_id")
+            .notNull()
+            .references(() => user.id),
+        name: text("name").notNull().default("My Signature"),
+        storagePath: text("storage_path").notNull(),
+        mimeType: text("mime_type").notNull().default("image/png"),
+        createdAt: timestamp("created_at").notNull().defaultNow(),
+        removedAt: timestamp("removed_at"),
+    },
+    (table) => [
+        index("user_signatures_user_id_idx").on(table.userId),
+    ],
+).enableRLS();
 
 export * from "./auth.schema";

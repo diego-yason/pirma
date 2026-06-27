@@ -8,6 +8,7 @@ import {
     packageRecipients,
     signatures,
     cryptoKeys,
+    userSignatures,
 } from "$lib/server/db/schema";
 import { eq, and, isNull, inArray } from "drizzle-orm";
 import { supabaseAdmin } from "$lib/server/supabase";
@@ -185,6 +186,25 @@ export const load: PageServerLoad = async ({ params, locals }) => {
         canSign = false;
     }
 
+    // Fetch the user's first saved signature (if any) to use as default
+    let defaultSignature: string | null = null;
+    const [userSig] = await db
+        .select({ storagePath: userSignatures.storagePath })
+        .from(userSignatures)
+        .where(
+            and(
+                eq(userSignatures.userId, locals.user.id),
+                isNull(userSignatures.removedAt),
+            ),
+        )
+        .limit(1);
+    if (userSig) {
+        const { data } = await supabaseAdmin.storage
+            .from("signatures")
+            .createSignedUrl(userSig.storagePath, 3600);
+        defaultSignature = data?.signedUrl ?? null;
+    }
+
     return {
         pkg: {
             id: pkg.id,
@@ -195,6 +215,7 @@ export const load: PageServerLoad = async ({ params, locals }) => {
         documents: docList,
         userFields,
         canSign,
+        defaultSignature,
     };
 };
 

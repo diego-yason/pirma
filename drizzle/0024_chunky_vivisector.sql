@@ -1,0 +1,1 @@
+ALTER TABLE "user_signatures" ADD COLUMN "removed_at" timestamp;

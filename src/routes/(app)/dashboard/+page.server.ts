@@ -20,8 +20,8 @@ export const load: PageServerLoad = async ({ locals }) => {
     }
 
     // ── "Waiting for You" ──────────────────────────────────────────
-    // Packages where the user is a signer and the package is finalized
-    // (i.e. waiting for their signature).
+    // Packages where the user is a signer, the package has been sent
+    // (documents finalized), and signatures are pending.
     // ─────────────────────────────────────────────────────────────────
     const pendingPkgs = db
         .select({
@@ -38,11 +38,13 @@ export const load: PageServerLoad = async ({ locals }) => {
             documentAssignments,
             eq(packages.id, documentAssignments.packageId),
         )
+        .innerJoin(documents, eq(documentAssignments.documentId, documents.id))
         .where(
             and(
                 eq(packageRecipients.userId, locals.user.id),
                 eq(packageRecipients.role, "signer"),
                 eq(packages.owner, locals.user.id),
+                eq(documents.status, "finalized"),
             ),
         )
         .groupBy(packages.id)

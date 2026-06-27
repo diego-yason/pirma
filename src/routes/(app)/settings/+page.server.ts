@@ -3,7 +3,7 @@ import { fail } from "@sveltejs/kit";
 import { db } from "$lib/server/db";
 import { userSignatures } from "$lib/server/db/schema";
 import { supabaseAdmin } from "$lib/server/supabase";
-import { eq, and } from "drizzle-orm";
+import { eq, and, isNull } from "drizzle-orm";
 import { logger } from "$lib/server/logger";
 
 const MAX_FILE_SIZE = 5 * 1024 * 1024; // 5 MB
@@ -23,7 +23,12 @@ export const load: PageServerLoad = async ({ locals }) => {
             createdAt: userSignatures.createdAt,
         })
         .from(userSignatures)
-        .where(eq(userSignatures.userId, locals.user.id))
+        .where(
+            and(
+                eq(userSignatures.userId, locals.user.id),
+                isNull(userSignatures.removedAt),
+            ),
+        )
         .orderBy(userSignatures.createdAt);
 
     const signatures = await Promise.all(
@@ -113,33 +118,20 @@ export const actions: Actions = {
         }
 
         try {
-            const [sig] = await db
-                .select({ storagePath: userSignatures.storagePath })
-                .from(userSignatures)
+            await db
+                .update(userSignatures)
+                .set({ removedAt: new Date() })
                 .where(
                     and(
                         eq(userSignatures.id, signatureId),
                         eq(userSignatures.userId, locals.user.id),
                     ),
-                )
-                .limit(1);
-
-            if (sig) {
-                await supabaseAdmin.storage.from("signatures").remove([sig.storagePath]);
-                await db
-                    .delete(userSignatures)
-                    .where(
-                        and(
-                            eq(userSignatures.id, signatureId),
-                            eq(userSignatures.userId, locals.user.id),
-                        ),
-                    );
-            }
+                );
 
             return { success: true };
         } catch (err) {
-            logger.error("deleteSignature", "Delete failed", err);
-            return fail(500, { error: "Failed to delete signature" });
+            logger.error("deleteSignature", "Soft delete failed", err);
+            return fail(500, { error: "Failed to remove signature" });
         }
     },
 };

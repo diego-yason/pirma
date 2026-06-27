@@ -3,7 +3,7 @@ import type { RequestHandler } from "./$types";
 import { db } from "$lib/server/db";
 import { userSignatures } from "$lib/server/db/schema";
 import { supabaseAdmin } from "$lib/server/supabase";
-import { eq } from "drizzle-orm";
+import { eq, and, isNull } from "drizzle-orm";
 
 export const GET: RequestHandler = async ({ params }) => {
     const [sig] = await db
@@ -12,7 +12,12 @@ export const GET: RequestHandler = async ({ params }) => {
             mimeType: userSignatures.mimeType,
         })
         .from(userSignatures)
-        .where(eq(userSignatures.id, params.id))
+        .where(
+            and(
+                eq(userSignatures.id, params.id),
+                isNull(userSignatures.removedAt),
+            ),
+        )
         .limit(1);
 
     if (!sig) {
