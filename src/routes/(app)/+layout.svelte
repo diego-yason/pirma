@@ -44,7 +44,7 @@
             {#if data.isAnonymous}
                 <p class="text-neutral-400 text-xs flex items-center gap-1.5 mt-0.5">
                     <span class="inline-block size-1.5 rounded-full bg-amber-500"></span>
-                    Anonymous
+                    Guest
                 </p>
             {/if}
         </div>

@@ -1,11 +1,13 @@
 <script lang="ts">
     import { enhance } from "$app/forms";
     import type { PageProps } from "./$types";
+    import SignatureDrawPad from "$lib/client/SignatureDrawPad.svelte";
 
     let { data, form }: PageProps = $props();
 
     type Tab = "upload" | "draw" | "type";
     let activeTab: Tab = $state("upload");
+    let drawPad = $state<SignatureDrawPad>();
 
     let fileInput = $state<HTMLInputElement>();
     let previewUrl = $state<string | null>(null);
@@ -169,6 +171,20 @@
                 fileInput.files = dt.files;
             }
         }
+    }
+
+    async function saveDrawSignature() {
+        if (!drawPad) return;
+        const blob = await drawPad.getBlob();
+        if (!blob) return;
+        const file = new File([blob], "signature.png", { type: "image/png" });
+        handleFile(file);
+        if (fileInput) {
+            const dt = new DataTransfer();
+            dt.items.add(file);
+            fileInput.files = dt.files;
+        }
+        activeTab = "upload";
     }
 </script>
 
@@ -551,25 +567,24 @@
                 {/if}
             </form>
         {:else if activeTab === "draw"}
-            <div class="border border-neutral-700 rounded-xl p-12 text-center">
-                <svg
-                    xmlns="http://www.w3.org/2000/svg"
-                    viewBox="0 0 24 24"
-                    fill="none"
-                    stroke="currentColor"
-                    stroke-width="1.5"
-                    class="w-12 h-12 text-neutral-600 mx-auto mb-3"
+            <SignatureDrawPad bind:this={drawPad} />
+            <div class="flex gap-3 mt-4">
+                <button
+                    type="button"
+                    class="rounded-md border border-neutral-600 px-4 py-2.5 text-sm font-medium text-neutral-300 transition hover:bg-neutral-800"
+                    onclick={() => drawPad?.clear()}
                 >
-                    <path
-                        stroke-linecap="round"
-                        stroke-linejoin="round"
-                        d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z"
-                    />
-                </svg>
-                <p class="text-neutral-400 font-medium">Draw your signature</p>
-                <p class="text-neutral-600 text-sm mt-1">
-                    Coming soon &mdash; use your mouse or touch to create a signature
-                </p>
+                    Clear
+                </button>
+                <div class="flex-1"></div>
+                <button
+                    type="button"
+                    class="rounded-md bg-blue-600 px-4 py-2.5 text-sm font-medium text-white transition hover:bg-blue-700 disabled:opacity-50"
+                    disabled={!drawPad}
+                    onclick={saveDrawSignature}
+                >
+                    Use Signature
+                </button>
             </div>
         {:else if activeTab === "type"}
             <div class="border border-neutral-700 rounded-xl p-12 text-center">

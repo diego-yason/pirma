@@ -2,6 +2,7 @@
     import type { PageProps } from "./$types";
     import type { PlacedRect } from "$lib/client/SignatureBoxTypes";
     import PDFViewer from "$lib/client/PDFViewer.svelte";
+    import SignatureCreator from "$lib/client/SignatureCreator.svelte";
     import { registerPublicKey } from "$lib/client/crypto";
     import { authClient } from "$lib/auth-client";
     import { page } from "$app/state";
@@ -45,7 +46,11 @@
 
             if (!linkRes.ok) {
                 const errBody = await linkRes.json().catch(() => ({}));
-                console.error("Failed to link anonymous user to recipient", linkRes.status, errBody);
+                console.error(
+                    "Failed to link anonymous user to recipient",
+                    linkRes.status,
+                    errBody,
+                );
                 return; // Don't reload — let the user retry
             }
 
@@ -187,32 +192,66 @@
                 };
         }
     }
+
+    // ── Signature setup modal state ─────────────────────────────
+    let showSignatureSetup = $state(false);
+    let sigError = $state<string | null>(null);
+    let localSignatureUrl = $state<string | null>(null);
+
+    // Open the modal when the user has no saved signature
+    $effect(() => {
+        if (!data.isGuest && !data.needsAnonymousSignIn && !data.defaultSignature && !localSignatureUrl) {
+            const timer = setTimeout(() => {
+                showSignatureSetup = true;
+            }, 500);
+            return () => clearTimeout(timer);
+        }
+    });
+
+    function onSigSave(blob: Blob) {
+        if (localSignatureUrl) URL.revokeObjectURL(localSignatureUrl);
+        localSignatureUrl = URL.createObjectURL(blob);
+        showSignatureSetup = false;
+    }
+
+    function onSigError(msg: string) {
+        sigError = msg;
+    }
+
+    function onSigSkip() {
+        showSignatureSetup = false;
+    }
 </script>
 
-{#if data.isGuest || data.isAnonymous}
-    <!-- Anonymous / guest identity banner -->
+{#if showSignatureSetup}
+    <!-- svelte-ignore a11y_no_static_element_interactions -->
     <div
-        class="flex items-center gap-2 bg-amber-50 dark:bg-amber-950 border-b border-amber-200 dark:border-amber-800 px-4 py-2 text-sm text-amber-800 dark:text-amber-200"
+        class="fixed inset-0 z-50 flex items-center justify-center bg-black/50"
+        onclick={() => (showSignatureSetup = false)}
+        onkeydown={(e) => e.key === "Escape" && (showSignatureSetup = false)}
+        role="dialog"
+        tabindex="-1"
     >
-        <svg
-            class="h-4 w-4 shrink-0"
-            fill="none"
-            viewBox="0 0 24 24"
-            stroke="currentColor"
-            stroke-width="2"
+        <!-- svelte-ignore a11y_click_events_have_key_events -->
+        <div
+            class="bg-white dark:bg-neutral-900 rounded-lg shadow-xl w-full max-w-lg mx-4 p-6"
+            onclick={(e) => e.stopPropagation()}
         >
-            <path
-                stroke-linecap="round"
-                stroke-linejoin="round"
-                d="M15.75 6a3.75 3.75 0 1 1-7.5 0 3.75 3.75 0 0 1 7.5 0ZM4.501 20.118a7.5 7.5 0 0 1 14.998 0A17.933 17.933 0 0 1 12 21.75c-2.676 0-5.216-.584-7.499-1.632Z"
+            <h2 class="text-lg font-semibold mb-1">Set Up Your Signature</h2>
+            <p class="text-sm text-neutral-500 mb-4">
+                Create a signature to use when signing documents.
+            </p>
+
+            <SignatureCreator
+                onsave={onSigSave}
+                onsaveerror={onSigError}
+                onskip={onSigSkip}
             />
-        </svg>
-        <span>
-            Signing as <strong>{data.guestName ?? "Guest"}</strong>
-            {#if data.guestEmail}
-                (<span class="text-amber-600 dark:text-amber-400">{data.guestEmail}</span>)
+
+            {#if sigError}
+                <p class="mt-2 text-sm text-red-600">{sigError}</p>
             {/if}
-        </span>
+        </div>
     </div>
 {/if}
 
@@ -252,7 +291,7 @@
                 mode="sign"
                 onsign={handleSign}
                 onremove={handleRemove}
-                signatureUrl={data.defaultSignature ?? undefined}
+                signatureUrl={localSignatureUrl ?? data.defaultSignature ?? undefined}
             />
         {:else}
             <div class="flex items-center justify-center h-full text-neutral-500">
