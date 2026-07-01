@@ -1,42 +1,79 @@
 <script lang="ts">
-    import { enhance } from "$app/forms";
     import { resolve } from "$app/paths";
-    import type { SubmitFunction } from "@sveltejs/kit";
-
-    let { form } = $props();
+    import { authClient } from "$lib/auth-client.js";
+    import { redirect } from "@sveltejs/kit";
+    import type { EventHandler } from "svelte/elements";
 
     let submitting = $state(false);
+    let email = $state("");
+    let password = $state("");
 
-    const handleEnhance: SubmitFunction = () => {
+    let emailError = $state<string | null>(null);
+    let passwordError = $state<string | null>(null);
+    let formError = $state<string | null>(null);
+
+    const login: EventHandler = (e) => {
         submitting = true;
-        return async ({ result, update }) => {
+        e.preventDefault();
+
+        email = email.trim();
+        password = password.trim();
+
+        console.log("[login] Login attempt", { email });
+
+        if (!email) {
+            console.warn("[login] Missing email");
+            emailError = "Email is required";
             submitting = false;
-            // Don't reset the form on error so the user keeps their input
-            await update({ reset: result.type !== "error" });
-        };
+            return;
+        }
+
+        if (!password) {
+            console.warn("[login] Missing password");
+            passwordError = "Password is required";
+            submitting = false;
+            return;
+        }
+
+        authClient.signIn
+            .opaque({
+                email,
+                password,
+            })
+            .then(({ data, error }) => {
+                if (error) {
+                    console.error("[login] Login failed", error);
+                    emailError = null;
+                    passwordError = null;
+                    formError = error.message || "Failed to sign in";
+                } else {
+                    console.log("[login] Login successful", { userId: data?.user?.id });
+                    return redirect(303, resolve("/"));
+                }
+                submitting = false;
+            });
     };
 </script>
 
 <div class="flex flex-col p-10">
     <h1 class="text-lg text-center">Sign in to your account</h1>
     <div class="flex flex-row gap-10 p-10">
-        <form method="POST" use:enhance={handleEnhance} class="flex-1 flex flex-col gap-6">
+        <form method="POST" onsubmit={login} class="flex-1 flex flex-col gap-6">
             <div class="flex flex-col gap-1">
                 <label for="email" class="font-bold tracking-wider"> Email address </label>
                 <input
                     type="email"
                     id="email"
-                    name="email"
-                    value={form?.email ?? ""}
+                    bind:value={email}
                     placeholder="name@example.com"
                     class="rounded-md text-primary-900"
                     required
-                    class:border-red-500={form?.emailError}
-                    aria-invalid={form?.emailError ? "true" : undefined}
-                    aria-describedby={form?.emailError ? "email-error" : undefined}
+                    class:border-red-500={emailError}
+                    aria-invalid={emailError ? "true" : undefined}
+                    aria-describedby={emailError ? "email-error" : undefined}
                 />
-                {#if form?.emailError}
-                    <span id="email-error" class="text-red-500 text-sm">{form.emailError}</span>
+                {#if emailError}
+                    <span id="email-error" class="text-red-500 text-sm">{emailError}</span>
                 {/if}
             </div>
             <div class="flex flex-col gap-1">
@@ -52,25 +89,23 @@
                 <input
                     type="password"
                     id="password"
-                    name="password"
+                    bind:value={password}
                     placeholder="Password"
                     class="rounded-md text-primary-900"
                     required
-                    class:border-red-500={form?.passwordError}
-                    aria-invalid={form?.passwordError ? "true" : undefined}
-                    aria-describedby={form?.passwordError ? "password-error" : undefined}
+                    class:border-red-500={passwordError}
+                    aria-invalid={passwordError ? "true" : undefined}
+                    aria-describedby={passwordError ? "password-error" : undefined}
                 />
-                {#if form?.passwordError}
-                    <span id="password-error" class="text-red-500 text-sm"
-                        >{form.passwordError}</span
-                    >
+                {#if passwordError}
+                    <span id="password-error" class="text-red-500 text-sm">{passwordError}</span>
                 {/if}
             </div>
-            {#if form?.formError}
+            {#if formError}
                 <div
                     class="text-red-500 text-sm bg-red-50 dark:bg-red-950/30 border border-red-200 dark:border-red-800 rounded-md p-3"
                 >
-                    {form.formError}
+                    {formError}
                 </div>
             {/if}
             <button

@@ -21,50 +21,69 @@
         loading = true;
         error = null;
 
+        console.log("[register] Starting registration flow", { email: email.trim() });
+
         if (!email.trim()) {
+            console.warn("[register] Missing email");
             error = "Email is required";
             loading = false;
             return;
         }
 
         if (!password.trim()) {
+            console.warn("[register] Missing password");
             error = "Password is required";
             loading = false;
             return;
         }
 
         if (password !== confirmPassword) {
+            console.warn("[register] Passwords do not match");
             error = "Passwords do not match";
             loading = false;
             return;
         }
 
         if (password.length < 8) {
+            console.warn("[register] Password too short");
             error = "Password must be at least 8 characters";
             loading = false;
             return;
         }
 
         try {
-            const { data, error: signUpError } = await authClient.signUp.email({
+            console.log("[register] Signing up user", { email: email.trim() });
+            const { error: signUpError } = await authClient.signUp.opaque({
                 email: email.trim(),
                 password,
                 name: email.split("@")[0],
             });
 
             if (signUpError) {
+                console.error("[register] Sign up failed", signUpError);
                 error = signUpError.message || "Failed to register";
                 loading = false;
                 return;
             }
-            console.log("Registration successful:", data);
-            if (data?.user?.id) {
-                // Generate cryptographic key pair and store encrypted in IndexedDB.
-                // Wrapped in an IIFE so the key handles go out of scope immediately
-                // after wrapping, minimizing in-memory exposure.
-                try {
-                    console.log("Generating key pair for user:", data.user.id);
+            console.log("[register] Sign up successful");
 
+            console.log("[register] Signing in", { email: email.trim() });
+            const { data, error: signInError } = await authClient.signIn.opaque({
+                email: email.trim(),
+                password,
+            });
+
+            if (signInError) {
+                console.error("[register] Sign in after registration failed", signInError);
+                error = signInError.message || "Failed to sign in";
+                loading = false;
+                return;
+            }
+
+            console.log("[register] Sign in successful", { userId: data?.user?.id });
+            if (data?.user?.id) {
+                try {
+                    console.log("[register] Generating cryptographic key pair");
                     const { publicKey, encryptedPrivateKey } = await (async () => {
                         const kp = await generateKeyPair();
                         const pub = await exportPublicKey(kp.publicKey);
@@ -72,9 +91,7 @@
                         return { publicKey: pub, encryptedPrivateKey: enc };
                     })();
 
-                    // Store locally (IndexedDB) and upload to server in parallel.
-                    // publicKey and encryptedPrivateKey are already base64-encoded
-                    // from exportPublicKey() and encryptPrivateKey() respectively.
+                    console.log("[register] Storing and uploading keys");
                     await Promise.all([
                         storeKeys(data.user.id, {
                             publicKey,
@@ -85,14 +102,17 @@
                             pkey: encryptedPrivateKey,
                         }),
                     ]);
+                    console.log("[register] Keys stored and uploaded successfully");
                 } catch (keyErr) {
-                    console.error("Key generation/storage failed:", keyErr);
+                    console.error("[register] Key generation/storage failed:", keyErr);
                     // Continue with registration even if key storage fails
                 }
 
+                console.log("[register] Registration complete, redirecting to login");
                 await goto(resolve("/login"));
             }
         } catch (err) {
+            console.error("[register] Unexpected error:", err);
             error = err instanceof Error ? err.message : "An unexpected error occurred";
             loading = false;
         }

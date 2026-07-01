@@ -54,6 +54,7 @@ export const account = pgTable(
         updatedAt: timestamp("updated_at")
             .$onUpdate(() => /* @__PURE__ */ new Date())
             .notNull(),
+        registrationRecord: text("registration_record").unique(),
     },
     (table) => [index("account_userId_idx").on(table.userId)],
 ).enableRLS();

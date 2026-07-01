@@ -26,6 +26,10 @@ const config = {
         experimental: {
             remoteFunctions: true,
         },
+
+        alias: {
+            $plugins: "./plugins",
+        },
     },
 };
 

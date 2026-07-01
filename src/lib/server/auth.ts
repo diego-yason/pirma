@@ -6,6 +6,9 @@ import { anonymous } from "better-auth/plugins";
 import { env } from "$env/dynamic/private";
 import { getRequestEvent } from "$app/server";
 import { db } from "$lib/server/db";
+import { opaque } from "$plugins/better-auth-opaque/src";
+
+import { OPAQUE_SERVER_KEY } from "$env/static/private";
 
 export const auth = betterAuth({
     baseURL: env.ORIGIN,
@@ -15,6 +18,7 @@ export const auth = betterAuth({
     plugins: [
         passkey(),
         anonymous(),
+        opaque({ OPAQUE_SERVER_KEY }),
         sveltekitCookies(getRequestEvent), // make sure this is the last plugin in the array
     ],
     user: {

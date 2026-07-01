@@ -28,9 +28,15 @@ export const POST: RequestHandler = async ({ request, locals }) => {
         const deviceInfo = body.deviceInfo as Record<string, unknown> | undefined;
 
         if (!credentialId || typeof credentialId !== "string") {
+            logger.warn("keyRegister", "WebAuthn registration rejected — missing credentialId", {
+                userId: locals.user.id,
+            });
             return json({ error: "Missing credentialId" }, { status: 400 });
         }
         if (!pubkey || typeof pubkey !== "string") {
+            logger.warn("keyRegister", "WebAuthn registration rejected — missing pubkey", {
+                userId: locals.user.id,
+            });
             return json({ error: "Missing pubkey" }, { status: 400 });
         }
 
