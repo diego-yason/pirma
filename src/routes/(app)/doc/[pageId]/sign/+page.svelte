@@ -93,6 +93,11 @@
     );
 
     function handleSign(fieldId: string) {
+        // If the user hasn't created a signature yet, prompt them
+        if (!localSignatureUrl && !data.defaultSignature) {
+            showSignatureSetup = true;
+            return;
+        }
         localSignStatus = { ...localSignStatus, [fieldId]: "signed" };
     }
 
