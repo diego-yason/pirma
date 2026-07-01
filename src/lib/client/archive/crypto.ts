@@ -9,7 +9,7 @@
  * not prompt for user verification during signing.
  */
 
-import { registerWebAuthnKey } from "../webauthn";
+import { registerWebAuthnKey } from "./webauthn";
 
 let keyPair: CryptoKeyPair | null = null;
 let webauthnCredentialId: string | null = null;
@@ -81,8 +81,11 @@ export async function getOrCreateKeyPair(): Promise<CryptoKeyPair> {
 export async function sign(data: BufferSource): Promise<ArrayBuffer> {
     // Use WebAuthn if we have a credential
     if (webauthnCredentialId) {
-        const { signWithWebAuthn } = await import("../webauthn");
-        const view = data instanceof ArrayBuffer ? new Uint8Array(data) : new Uint8Array((data as ArrayBufferView).buffer);
+        const { signWithWebAuthn } = await import("./webauthn");
+        const view =
+            data instanceof ArrayBuffer
+                ? new Uint8Array(data)
+                : new Uint8Array((data as ArrayBufferView).buffer);
         const challenge = view.buffer.slice(view.byteOffset, view.byteOffset + view.byteLength);
         const result = await signWithWebAuthn(webauthnCredentialId, challenge);
         // Return the raw signature bytes as ArrayBuffer
@@ -112,4 +115,3 @@ function base64urlToBytes(b64: string): Uint8Array {
     const padded = s + "=".repeat((4 - (s.length % 4)) % 4);
     return Uint8Array.from(atob(padded), (c) => c.charCodeAt(0));
 }
-

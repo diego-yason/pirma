@@ -3,7 +3,7 @@
     import type { PlacedRect } from "$lib/client/types/SignatureBoxTypes";
     import PDFViewer from "$lib/client/PDFViewer.svelte";
     import SignatureCreator from "$lib/client/SignatureCreator.svelte";
-    import { registerPublicKey } from "$lib/client/archive/crypto";
+    // import { registerPublicKey } from "$lib/client/archive/crypto"; // archived — superseded by SW key system
     import { authClient } from "$lib/client/auth/auth-client";
     import { page } from "$app/state";
 
