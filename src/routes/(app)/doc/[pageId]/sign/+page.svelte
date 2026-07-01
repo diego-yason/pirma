@@ -88,6 +88,31 @@
         data.userFields.filter((f) => f.documentId === selectedDocId).map((f) => f.rect),
     );
 
+    // All fields (user's + others') for greyed-out display in the PDF viewer
+    let ownFieldIds = $derived(new Set(placementFields.map((f) => f.id)));
+    let allFieldsForViewer = $derived.by<PlacedRect[]>(() => {
+        const docAllFields = (selectedDoc?.allFields ?? []) as PlacedRect[];
+        const merged = [...placementFields];
+        for (const f of docAllFields) {
+            if (!ownFieldIds.has(f.id)) merged.push(f);
+        }
+        return merged;
+    });
+
+    // All signed status (user's + others') for the PDF viewer
+    let allSignedStatus = $derived<Record<string, boolean>>({
+        ...(selectedDoc?.allSignedStatus ?? {}),
+        ...Object.fromEntries(
+            data.userFields
+                .filter((f) => f.documentId === selectedDocId)
+                .map((f) => [
+                    f.fieldId,
+                    localSignStatus[f.fieldId] === "signed" ||
+                        localSignStatus[f.fieldId] === "anchored",
+                ]),
+        ),
+    });
+
     // Local signed state (starts from DB status, then mutates locally)
     // svelte-ignore state_referenced_locally
     let localSignStatus = $state<Record<string, string>>(
@@ -307,8 +332,9 @@
         {#if selectedDoc?.url}
             <PDFViewer
                 pdfUrl={selectedDoc.url}
-                elements={placementFields}
-                {signedStatus}
+                elements={allFieldsForViewer}
+                signedStatus={allSignedStatus}
+                {ownFieldIds}
                 mode="sign"
                 onsign={handleSign}
                 onremove={handleRemove}

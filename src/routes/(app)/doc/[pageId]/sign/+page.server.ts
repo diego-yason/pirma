@@ -290,7 +290,22 @@ export const load: PageServerLoad = async ({ params, locals, url }) => {
                     }
                 }
             }
-            return { id: doc.id, title: doc.title, url, pageCount: doc.pageCount ?? 0 };
+            return {
+                id: doc.id,
+                title: doc.title,
+                url,
+                pageCount: doc.pageCount ?? 0,
+                allFields: ((doc.placementFields ?? []) as PlacedRect[]).map((f) => ({
+                    id: f.id,
+                    page: f.page,
+                    x: f.x,
+                    y: f.y,
+                    width: f.width,
+                    height: f.height,
+                    label: f.label,
+                })),
+                allSignedStatus: {},
+            };
         }),
     );
 
@@ -404,6 +419,45 @@ export const load: PageServerLoad = async ({ params, locals, url }) => {
         isAnonymous,
     });
 
+    // Fetch ALL signatures across all users for these documents (for greyed-out field display)
+    const allSigRows = docIds.length > 0
+        ? await db
+              .select({
+                  txId: signatures.txId,
+                  status: signatures.status,
+              })
+              .from(signatures)
+              .innerJoin(cryptoKeys, eq(signatures.cryptoKey, cryptoKeys.id))
+              .where(
+                  and(
+                      isNull(cryptoKeys.revokedAt),
+                      inArray(signatures.documentId, docIds),
+                  ),
+              )
+        : [];
+    const allSignedFieldIds = new Set(
+        allSigRows.filter((s) => s.status === "signed" || s.status === "anchored").map((s) => s.txId),
+    );
+
+    // Build per-document allFields (for greyed-out display of others' fields)
+    const docsWithAllFields = docList.map((d) => {
+        const doc = packageDocs.find((pd) => pd.id === d.id);
+        const fields = (doc?.placementFields ?? []) as PlacedRect[];
+        return {
+            ...d,
+            allFields: fields.map((f) => ({
+                id: f.id,
+                page: f.page,
+                x: f.x,
+                y: f.y,
+                width: f.width,
+                height: f.height,
+                label: f.label,
+            })),
+            allSignedStatus: Object.fromEntries(fields.map((f) => [f.id, allSignedFieldIds.has(f.id)])),
+        };
+    });
+
     return {
         pkg: {
             id: pkg.id,
@@ -411,7 +465,7 @@ export const load: PageServerLoad = async ({ params, locals, url }) => {
             signingOrderEnabled: pkg.signingOrderEnabled,
             expirationDate: pkg.expirationDate?.toISOString() ?? null,
         },
-        documents: docList,
+        documents: docsWithAllFields,
         userFields,
         canSign,
         defaultSignature,
@@ -500,7 +554,22 @@ async function handleGuestLoad(
                     }
                 }
             }
-            return { id: doc.id, title: doc.title, url, pageCount: doc.pageCount ?? 0 };
+            return {
+                id: doc.id,
+                title: doc.title,
+                url,
+                pageCount: doc.pageCount ?? 0,
+                allFields: ((doc.placementFields ?? []) as PlacedRect[]).map((f) => ({
+                    id: f.id,
+                    page: f.page,
+                    x: f.x,
+                    y: f.y,
+                    width: f.width,
+                    height: f.height,
+                    label: f.label,
+                })),
+                allSignedStatus: {},
+            };
         }),
     );
 

@@ -1,7 +1,7 @@
 <script lang="ts">
     import type { PlacedRect, RecipientInfo } from "../types/SignatureBoxTypes";
 
-    type Mode = "design" | "sign";
+    type Mode = "design" | "sign" | "view";
     type Tool = "signature" | "text" | null;
 
     let {
@@ -12,6 +12,8 @@
         mode = "sign" as Mode,
         activeTool = null as Tool,
         signatureUrl,
+        fieldSignatureUrls,
+        ownFieldIds,
         onsign,
         onremove,
         onadd,
@@ -27,6 +29,8 @@
         mode?: Mode;
         activeTool?: Tool;
         signatureUrl?: string;
+        fieldSignatureUrls?: Record<string, string>;
+        ownFieldIds?: Set<string>;
         onsign?: (id: string) => void;
         onremove?: (id: string) => void;
         onadd?: (rect: PlacedRect) => void;
@@ -169,6 +173,11 @@
 
     function isSigned(id: string): boolean {
         return signedStatus[id] ?? false;
+    }
+
+    /** Whether the field belongs to the current user (interactive in sign mode). */
+    function isOwn(id: string): boolean {
+        return !ownFieldIds || ownFieldIds.has(id);
     }
 
     let loadId = $state(0);
@@ -666,32 +675,43 @@
                                     ></div>
                                 </div>
                             {:else if isSigned(el.id)}
-                                <!-- Sign mode: signed -->
-                                <div
-                                    role="img"
-                                    class="absolute group"
-                                    style={boxStyle(el, page)}
-                                    title="Right-click to remove"
-                                >
+                                <!-- Sign/View mode: signed -->
+                                <div role="img" class="absolute group" style={boxStyle(el, page)}>
                                     <img
-                                        src={signatureUrl || "/signature.png"}
+                                        src={(fieldSignatureUrls?.[el.id] ?? signatureUrl) ||
+                                            "/signature.png"}
                                         alt="Signature"
                                         class="h-full w-full object-contain"
                                     />
-                                    <button
-                                        type="button"
-                                        class="absolute -top-2 -right-2 z-10 flex h-5 w-5 items-center justify-center rounded-full bg-red-500 text-white text-xs leading-none opacity-0 transition-opacity group-hover:opacity-100 hover:bg-red-600"
-                                        onclick={(e) => {
-                                            e.stopPropagation();
-                                            onremove?.(el.id);
-                                        }}
-                                        title="Remove signature"
-                                    >
-                                        &times;
-                                    </button>
+                                    {#if mode !== "view"}
+                                        <button
+                                            type="button"
+                                            class="absolute -top-2 -right-2 z-10 flex h-5 w-5 items-center justify-center rounded-full bg-red-500 text-white text-xs leading-none opacity-0 transition-opacity group-hover:opacity-100 hover:bg-red-600"
+                                            onclick={(e) => {
+                                                e.stopPropagation();
+                                                onremove?.(el.id);
+                                            }}
+                                            title="Remove signature"
+                                        >
+                                            &times;
+                                        </button>
+                                    {/if}
+                                </div>
+                            {:else if mode === "view" || (mode === "sign" && !isOwn(el.id))}
+                                <!-- View mode / other user's field in sign mode: greyed-out static box -->
+                                <div
+                                    class="absolute pointer-events-none border-2 border-dashed border-neutral-400 bg-neutral-500/5"
+                                    style={boxStyle(el, page)}
+                                >
+                                    {#if el.label}
+                                        <span
+                                            class="absolute inset-0 flex items-center justify-center text-xs font-medium text-neutral-500"
+                                            >{el.label}</span
+                                        >
+                                    {/if}
                                 </div>
                             {:else}
-                                <!-- Sign mode: unsigned -->
+                                <!-- Sign mode: unsigned (own field) -->
                                 <button
                                     type="button"
                                     class="absolute cursor-pointer border-2 border-green-500 bg-green-500/10 transition-colors hover:bg-red-500/20 hover:border-red-500"
