@@ -4,6 +4,7 @@ import { db } from "$lib/server/db";
 import { user } from "$lib/server/db/auth.schema";
 import { packageRecipients, cryptoKeys } from "$lib/server/db/schema";
 import { eq, and, isNull } from "drizzle-orm";
+import { checkKeyRotation } from "$lib/server/key-rotation";
 
 export const load: LayoutServerLoad = async ({ locals, url }) => {
     if (!locals.user && !url.pathname.includes("/sign")) {
@@ -12,6 +13,7 @@ export const load: LayoutServerLoad = async ({ locals, url }) => {
 
     let isAnonymous = false;
     let hasKey = false;
+    let keyRotation: { reason: string; check: string } | null = null;
     let recipientName: string | null = null;
     let recipientEmail: string | null = null;
 
@@ -30,6 +32,14 @@ export const load: LayoutServerLoad = async ({ locals, url }) => {
             .where(and(eq(cryptoKeys.userId, locals.user.id), isNull(cryptoKeys.revokedAt)))
             .limit(1);
         hasKey = !!keyRow;
+
+        // Check if the active key needs rotation
+        if (hasKey) {
+            const rotation = await checkKeyRotation(locals.user.id);
+            if (rotation) {
+                keyRotation = { reason: rotation.reason!, check: rotation.check! };
+            }
+        }
 
         // For anonymous users, fetch the linked recipient's actual name/email
         if (isAnonymous) {
@@ -58,5 +68,6 @@ export const load: LayoutServerLoad = async ({ locals, url }) => {
         },
         isAnonymous,
         hasKey,
+        keyRotation,
     };
 };

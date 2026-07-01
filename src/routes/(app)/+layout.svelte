@@ -35,6 +35,8 @@
     let { children, data }: LayoutProps = $props();
 
     let showKeySetup = $state(false);
+    let keySetupForce = $state(false);
+    let keySetupReason = $state("");
     let keyPassword = $state("");
     let keyError = $state<string | null>(null);
     let keyLoading = $state(false);
@@ -45,11 +47,20 @@
     $effect(() => {
         if (data.user.id && !keyCheckDone) {
             keyCheckDone = true;
-            if (!data.hasKey) {
+
+            if (data.keyRotation) {
+                // Key exists but needs rotation (age, idle, usage, or algorithm)
+                console.warn("[layout] Key needs rotation", data.keyRotation);
+                keySetupForce = true;
+                keySetupReason = data.keyRotation.reason;
+                showKeySetup = true;
+            } else if (!data.hasKey) {
                 // Server reports no active (non-revoked) keys — prompt setup
                 console.warn("[layout] No active keys on server for user", {
                     userId: data.user.id,
                 });
+                keySetupForce = true;
+                keySetupReason = "";
                 showKeySetup = true;
             } else {
                 // Server has keys — verify the device still has them locally
@@ -58,6 +69,8 @@
                         console.warn("[layout] Keys exist on server but not on this device", {
                             userId: data.user.id,
                         });
+                        keySetupForce = false;
+                        keySetupReason = "";
                         showKeySetup = true;
                     }
                 });
@@ -87,8 +100,7 @@
             }
 
             // Password correct — generate device-bound keys
-            // Force regeneration if server reported no active keys (e.g. revoked)
-            const accepted = await setupDeviceKeys(data.user.id, keyPassword, !data.hasKey);
+            const accepted = await setupDeviceKeys(data.user.id, keyPassword, keySetupForce);
             keyPassword = ""; // clear immediately after SW call
             if (accepted === 0) {
                 keyError = "Key setup failed. Please try again.";
@@ -210,9 +222,15 @@
             class="bg-white dark:bg-neutral-900 rounded-lg shadow-xl w-full max-w-md mx-4 p-6"
             onclick={(e) => e.stopPropagation()}
         >
-            <h2 class="text-lg font-semibold mb-1">Set Up Device Keys</h2>
+            <h2 class="text-lg font-semibold mb-1">
+                {#if keySetupReason}Rotate Signing Keys{:else}Set Up Device Keys{/if}
+            </h2>
             <p class="text-sm text-neutral-500 mb-4">
-                This device needs signing keys. Enter your password to generate them.
+                {#if keySetupReason}
+                    {keySetupReason}. Enter your password to generate a fresh key pair.
+                {:else}
+                    This device needs signing keys. Enter your password to generate them.
+                {/if}
             </p>
 
             <label for="layout-key-pw" class="block text-sm font-medium mb-1">Password</label>

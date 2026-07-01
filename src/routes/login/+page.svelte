@@ -55,10 +55,18 @@
                 const userId = data?.user?.id;
                 console.log("[login] Login successful", { userId });
 
-                // Generate device-bound keys if this device hasn't seen this user before
+                // Proactively handle key setup while password is in memory
                 if (userId) {
                     try {
-                        const accepted = await setupDeviceKeys(userId, password);
+                        // Check if existing keys need rotation
+                        const rotRes = await fetch("/api/keys/rotation-check");
+                        const rot = await rotRes.json();
+                        const force = rot.needsRotation === true;
+                        if (force) {
+                            console.log("[login] Key rotation needed:", rot.reason);
+                        }
+
+                        const accepted = await setupDeviceKeys(userId, password, force);
                         if (accepted === 0) {
                             console.error(
                                 "[login] Both keys rejected — cannot sign documents on this device",
