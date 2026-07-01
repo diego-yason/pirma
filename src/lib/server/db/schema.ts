@@ -24,11 +24,17 @@ export const cryptoKeys = pgTable(
             .notNull()
             .references(() => user.id),
         pubkey: text("pubkey").notNull(),
+        credentialId: text("credential_id"),
         keyLevel: integer("key_level").notNull().default(1),
+        keyType: text("key_type").notNull().default("ecdsa"),
+        deviceInfo: jsonb("device_info"),
         createdAt: timestamp("created_at").notNull().defaultNow(),
         revokedAt: timestamp("revoked_at"),
     },
-    (table) => [index("user_keys_user_id_idx").on(table.userId)],
+    (table) => [
+        index("user_keys_user_id_idx").on(table.userId),
+        index("user_keys_credential_id_idx").on(table.credentialId),
+    ],
 ).enableRLS();
 
 // public: shows hash, actual PDF, and signatures with signer info

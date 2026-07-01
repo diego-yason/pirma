@@ -11,16 +11,9 @@ export const POST: RequestHandler = async ({ request, locals }) => {
         return json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    let pubkey: string;
+    let body: Record<string, unknown>;
     try {
-        const body = await request.json();
-        pubkey = body.pubkey;
-        if (!pubkey || typeof pubkey !== "string") {
-            logger.warn("keyRegister", "Key registration rejected — invalid pubkey", {
-                userId: locals.user.id,
-            });
-            return json({ error: "Missing or invalid pubkey" }, { status: 400 });
-        }
+        body = await request.json();
     } catch {
         logger.warn("keyRegister", "Key registration rejected — invalid JSON", {
             userId: locals.user.id,
@@ -28,9 +21,72 @@ export const POST: RequestHandler = async ({ request, locals }) => {
         return json({ error: "Invalid JSON body" }, { status: 400 });
     }
 
-    logger.debug("keyRegister", "Registering public key", { userId: locals.user.id });
+    // ── WebAuthn registration ──────────────────────────────────
+    if (body.keyType === "webauthn") {
+        const credentialId = body.credentialId as string | undefined;
+        const pubkey = body.pubkey as string | undefined;
+        const deviceInfo = body.deviceInfo as Record<string, unknown> | undefined;
 
-    // Check if user already has an active key
+        if (!credentialId || typeof credentialId !== "string") {
+            return json({ error: "Missing credentialId" }, { status: 400 });
+        }
+        if (!pubkey || typeof pubkey !== "string") {
+            return json({ error: "Missing pubkey" }, { status: 400 });
+        }
+
+        // Check if this credential was already registered (same device)
+        const [existing] = await db
+            .select({ id: cryptoKeys.id })
+            .from(cryptoKeys)
+            .where(
+                and(
+                    eq(cryptoKeys.userId, locals.user.id),
+                    eq(cryptoKeys.credentialId, credentialId),
+                    isNull(cryptoKeys.revokedAt),
+                ),
+            )
+            .limit(1);
+
+        if (existing) {
+            logger.debug("keyRegister", "WebAuthn credential already registered", {
+                userId: locals.user.id,
+                keyId: existing.id,
+            });
+            return json({ id: existing.id, message: "Credential already registered" });
+        }
+
+        const [inserted] = await db
+            .insert(cryptoKeys)
+            .values({
+                userId: locals.user.id,
+                pubkey,
+                credentialId,
+                keyType: "webauthn",
+                deviceInfo: deviceInfo ?? null,
+                keyLevel: 2,
+            })
+            .returning({ id: cryptoKeys.id });
+
+        logger.info("keyRegister", "WebAuthn credential registered", {
+            userId: locals.user.id,
+            keyId: inserted.id,
+            platform: deviceInfo?.platform ?? null,
+        });
+
+        return json({ id: inserted.id });
+    }
+
+    // ── Legacy ECDSA registration ──────────────────────────────
+    const pubkey = body.pubkey as string | undefined;
+    if (!pubkey || typeof pubkey !== "string") {
+        logger.warn("keyRegister", "Key registration rejected — invalid pubkey", {
+            userId: locals.user.id,
+        });
+        return json({ error: "Missing or invalid pubkey" }, { status: 400 });
+    }
+
+    logger.debug("keyRegister", "Registering ECDSA public key", { userId: locals.user.id });
+
     const [existing] = await db
         .select({ id: cryptoKeys.id })
         .from(cryptoKeys)
@@ -45,7 +101,6 @@ export const POST: RequestHandler = async ({ request, locals }) => {
         return json({ id: existing.id, message: "Active key already exists" });
     }
 
-    // Register new public key
     const [inserted] = await db
         .insert(cryptoKeys)
         .values({
@@ -55,7 +110,7 @@ export const POST: RequestHandler = async ({ request, locals }) => {
         })
         .returning({ id: cryptoKeys.id });
 
-    logger.info("keyRegister", "Public key registered successfully", {
+    logger.info("keyRegister", "ECDSA public key registered", {
         userId: locals.user.id,
         keyId: inserted.id,
     });

@@ -3,6 +3,7 @@
     import { page } from "$app/stores";
     import { resolve } from "$app/paths";
     import type { LayoutProps } from "./$types";
+    import { registerPublicKey } from "$lib/client/crypto";
 
     type NavItem = {
         label: string;
@@ -31,6 +32,14 @@
     }
 
     let { children, data }: LayoutProps = $props();
+
+    // Register a signing key (WebAuthn or fallback) silently after login.
+    // Only runs once when the user is authenticated and has no key yet.
+    $effect(() => {
+        if (data.user.name && !data.hasKey) {
+            registerPublicKey();
+        }
+    });
 </script>
 
 <div class="flex h-screen overflow-hidden">
