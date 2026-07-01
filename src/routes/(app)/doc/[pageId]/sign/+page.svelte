@@ -3,13 +3,60 @@
     import type { PlacedRect } from "$lib/client/SignatureBoxTypes";
     import PDFViewer from "$lib/client/PDFViewer.svelte";
     import { registerPublicKey } from "$lib/client/crypto";
+    import { authClient } from "$lib/auth-client";
+    import { page } from "$app/state";
 
     let { data }: PageProps = $props();
 
+    // Extract guest token from URL (if present)
+    let guestToken = $derived(data.isGuest ? (page.url.searchParams.get("token") ?? "") : "");
+
     // Ensure a signing key is available in memory and registered on the server
     $effect(() => {
-        registerPublicKey();
+        if (data.isGuest && data.needsAnonymousSignIn) {
+            setupGuestSession();
+        } else if (!data.isGuest) {
+            registerPublicKey();
+        }
     });
+
+    async function setupGuestSession() {
+        try {
+            // 1. Create an anonymous Better Auth session
+            const anonResult = await authClient.signIn.anonymous();
+            const anonUser = anonResult?.data?.user;
+            if (!anonUser?.id) {
+                console.error("Anonymous sign-in did not return a user", anonResult);
+                return;
+            }
+
+            // 2. Link the anonymous user to this package recipient
+            const token = page.url.searchParams.get("token");
+            if (!token) {
+                console.error("No guest token found in URL");
+                return;
+            }
+
+            const linkRes = await fetch("/api/guest/link", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ token }),
+            });
+
+            if (!linkRes.ok) {
+                const errBody = await linkRes.json().catch(() => ({}));
+                console.error("Failed to link anonymous user to recipient", linkRes.status, errBody);
+                return; // Don't reload — let the user retry
+            }
+
+            // 3. Reload — the server will now see the anonymous session
+            //    and match it to the linked recipient, entering the
+            //    authenticated flow (including key registration).
+            window.location.reload();
+        } catch (err) {
+            console.error("Failed to set up guest session", err);
+        }
+    }
 
     // Currently selected document
     // svelte-ignore state_referenced_locally
@@ -18,9 +65,7 @@
 
     // Build placement fields for the selected document (only user's fields)
     let placementFields = $derived<PlacedRect[]>(
-        data.userFields
-            .filter((f) => f.documentId === selectedDocId)
-            .map((f) => f.rect),
+        data.userFields.filter((f) => f.documentId === selectedDocId).map((f) => f.rect),
     );
 
     // Local signed state (starts from DB status, then mutates locally)
@@ -80,6 +125,10 @@
                         .map(([fieldId]) => fieldId),
                 ),
             );
+            // Include guest token so the server can authenticate the request
+            if (guestToken) {
+                body.append("guestToken", guestToken);
+            }
             await fetch(`/doc/${data.pkg.id}/sign?/finalize`, { method: "POST", body });
             // TODO: navigate to view page or show success message
         } finally {
@@ -93,6 +142,10 @@
         try {
             const body = new FormData();
             body.append("reason", rejectReason.trim());
+            // Include guest token so the server can authenticate the request
+            if (guestToken) {
+                body.append("guestToken", guestToken);
+            }
             await fetch(`/doc/${data.pkg.id}/sign?/reject`, { method: "POST", body });
             closeRejectModal();
             // TODO: navigate to view page or show rejection confirmation
@@ -136,6 +189,33 @@
     }
 </script>
 
+{#if data.isGuest || data.isAnonymous}
+    <!-- Anonymous / guest identity banner -->
+    <div
+        class="flex items-center gap-2 bg-amber-50 dark:bg-amber-950 border-b border-amber-200 dark:border-amber-800 px-4 py-2 text-sm text-amber-800 dark:text-amber-200"
+    >
+        <svg
+            class="h-4 w-4 shrink-0"
+            fill="none"
+            viewBox="0 0 24 24"
+            stroke="currentColor"
+            stroke-width="2"
+        >
+            <path
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                d="M15.75 6a3.75 3.75 0 1 1-7.5 0 3.75 3.75 0 0 1 7.5 0ZM4.501 20.118a7.5 7.5 0 0 1 14.998 0A17.933 17.933 0 0 1 12 21.75c-2.676 0-5.216-.584-7.499-1.632Z"
+            />
+        </svg>
+        <span>
+            Signing as <strong>{data.guestName ?? "Guest"}</strong>
+            {#if data.guestEmail}
+                (<span class="text-amber-600 dark:text-amber-400">{data.guestEmail}</span>)
+            {/if}
+        </span>
+    </div>
+{/if}
+
 <div class="flex h-full overflow-hidden">
     <!-- Left: Document List -->
     <div class="w-56 shrink-0 border-r border-neutral-200 dark:border-neutral-800 flex flex-col">
@@ -154,7 +234,9 @@
                     onclick={() => (selectedDocId = doc.id)}
                 >
                     <p class="truncate">{doc.title}</p>
-                    <p class="text-xs text-neutral-500">{doc.pageCount} page{doc.pageCount !== 1 ? "s" : ""}</p>
+                    <p class="text-xs text-neutral-500">
+                        {doc.pageCount} page{doc.pageCount !== 1 ? "s" : ""}
+                    </p>
                 </button>
             {/each}
         </div>
@@ -286,8 +368,7 @@
                 class="w-full rounded-md border border-neutral-300 dark:border-neutral-600 dark:bg-neutral-800 px-3 py-2 text-sm resize-none"
                 rows={3}
                 placeholder="Please provide a reason for rejection..."
-                bind:value={rejectReason}
-            ></textarea>
+                bind:value={rejectReason}></textarea>
 
             <label class="flex items-center gap-2 mt-4 cursor-pointer">
                 <input
@@ -320,4 +401,3 @@
         </div>
     </div>
 {/if}
-

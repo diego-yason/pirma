@@ -7,6 +7,13 @@ declare global {
         interface Locals {
             user?: User;
             session?: Session;
+            /** Set when a guest token is validated for signing. */
+            guest?: {
+                recipientId: string;
+                packageId: string;
+                name: string;
+                email: string;
+            };
         }
 
         // interface Error {}

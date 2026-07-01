@@ -1,9 +1,18 @@
 import type { PageServerLoad, Actions } from "./$types";
 import { redirect, fail } from "@sveltejs/kit";
 import { db } from "$lib/server/db";
-import { packageRecipients, documents, documentAssignments, packages } from "$lib/server/db/schema";
-import { eq, inArray, and } from "drizzle-orm";
+import {
+    guestTokens,
+    packageRecipients,
+    documents,
+    documentAssignments,
+    packages,
+    user,
+} from "$lib/server/db/schema";
+import { eq, inArray, and, isNull } from "drizzle-orm";
 import { requirePackageOwnership } from "$lib/server/package-guard";
+import { createGuestToken } from "$lib/server/guest-token";
+import { env } from "$env/dynamic/private";
 import { logger } from "$lib/server/logger";
 
 export const load: PageServerLoad = async ({ params, locals }) => {
@@ -266,21 +275,70 @@ export const actions: Actions = {
                 );
         }
 
-        // ── Notifications (placeholder) ─────────────────────────────
-        // TODO: Send email / in-app notifications to each signer
-        // informing them a document is waiting for their signature.
-        // const signers = await db
-        //     .select({ name: packageRecipients.name, email: packageRecipients.email })
-        //     .from(packageRecipients)
-        //     .where(
-        //         and(
-        //             eq(packageRecipients.packageId, params.packageId),
-        //             eq(packageRecipients.role, "signer"),
-        //         ),
-        //     );
-        // for (const s of signers) {
-        //     // await sendNotification(s.email, s.name, params.packageId);
-        // }
+        // ── Guest tokens & notifications ────────────────────────────
+        // For recipients whose email doesn't match any registered user,
+        // generate a signed guest token and persist it in the DB.
+        const signers = await db
+            .select({
+                id: packageRecipients.id,
+                name: packageRecipients.name,
+                email: packageRecipients.email,
+            })
+            .from(packageRecipients)
+            .where(
+                and(
+                    eq(packageRecipients.packageId, params.packageId),
+                    eq(packageRecipients.role, "signer"),
+                ),
+            );
+
+        // Collect known user emails for a single-query lookup
+        const knownEmails = new Set(
+            (
+                await db
+                    .select({ email: user.email })
+                    .from(user)
+                    .where(inArray(user.email, signers.map((s) => s.email).filter(Boolean)))
+            ).map((u) => u.email),
+        );
+
+        const signingBase = `${env.ORIGIN}/doc/${params.packageId}/sign`;
+
+        for (const signer of signers) {
+            const isGuest = !signer.email || !knownEmails.has(signer.email);
+
+            if (isGuest) {
+                // Generate a signed guest token
+                const token = createGuestToken(signer.id, params.packageId);
+
+                // Persist token in the guest_tokens table
+                await db.insert(guestTokens).values({
+                    recipientId: signer.id,
+                    packageId: params.packageId,
+                    token,
+                    email: signer.email,
+                    expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
+                });
+
+                const signingUrl = `${signingBase}?token=${token}`;
+                logger.info("confirm", "Guest signing link generated", {
+                    recipientId: signer.id,
+                    name: signer.name,
+                    email: signer.email,
+                    signingUrl,
+                });
+                // TODO: Send email to signer.email with the signingUrl
+            } else {
+                // Known user — they'll see it on their dashboard
+                logger.debug("confirm", "Registered signer notified", {
+                    recipientId: signer.id,
+                    name: signer.name,
+                    email: signer.email,
+                });
+                // TODO: Send in-app / email notification with link to
+                // the signing page (no token needed, they log in normally)
+            }
+        }
 
         logger.info("confirm", "Package finalized", {
             packageId: params.packageId,
@@ -288,6 +346,7 @@ export const actions: Actions = {
             signingOrderEnabled,
             mfaRequired,
             expirationDate: expirationDate ?? "none",
+            guestCount: signers.filter((s) => !s.email || !knownEmails.has(s.email)).length,
         });
 
         redirect(302, "/dashboard");

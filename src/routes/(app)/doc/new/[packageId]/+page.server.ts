@@ -180,8 +180,9 @@ export const actions: Actions = {
             return fail(400, { error: `Maximum ${MAX_RECIPIENTS} recipients per package` });
         }
 
-        // TODO change this
         // Delete all existing recipients for this package
+        // then re-insert using the client-provided UUIDs so that
+        // placementFields.assignedTo references remain valid.
         await db.delete(packageRecipients).where(eq(packageRecipients.packageId, params.packageId));
 
         if (recipients.length > 0) {
@@ -189,6 +190,7 @@ export const actions: Actions = {
                 recipients.map((r) => {
                     const email = r.email.trim();
                     return {
+                        id: r.id, // preserve client-side UUID so placementFields stay in sync
                         packageId: params.packageId,
                         name: r.name.trim() || null,
                         email: email || null, // null avoids unique-constraint conflicts on blanks

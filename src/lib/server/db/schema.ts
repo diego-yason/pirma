@@ -248,4 +248,28 @@ export const userSignatures = pgTable(
     ],
 ).enableRLS();
 
+// ── Guest Tokens (for anonymous/guest signers) ──────────────────
+export const guestTokens = pgTable(
+    "guest_tokens",
+    {
+        id: uuid("id").primaryKey().defaultRandom(),
+        recipientId: uuid("recipient_id")
+            .notNull()
+            .references(() => packageRecipients.id),
+        packageId: uuid("package_id")
+            .notNull()
+            .references(() => packages.id),
+        token: text("token").notNull(),
+        email: text("email"),
+        expiresAt: timestamp("expires_at").notNull(),
+        createdAt: timestamp("created_at").notNull().defaultNow(),
+        accessedAt: timestamp("accessed_at"),
+        revokedAt: timestamp("revoked_at"),
+    },
+    (table) => [
+        index("guest_tokens_token_idx").on(table.token),
+        index("guest_tokens_recipient_id_idx").on(table.recipientId),
+    ],
+).enableRLS();
+
 export * from "./auth.schema";

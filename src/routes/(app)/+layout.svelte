@@ -36,16 +36,51 @@
 <div class="flex h-screen overflow-hidden">
     <div class="border-r grow flex flex-col border-neutral-800 pr-2 pl-5 overflow-y-auto min-h-0">
         <div class="mt-10">
-            <p class="font-bold text-xl">{data.user.name}</p>
+            <p class="font-bold text-xl">
+                {data.user.name}
+                {#if data.isAnonymous}<span>(Guest)</span>{/if}
+            </p>
             <p class="text-neutral-300">{data.user.email}</p>
+            {#if data.isAnonymous}
+                <p class="text-neutral-400 text-xs flex items-center gap-1.5 mt-0.5">
+                    <span class="inline-block size-1.5 rounded-full bg-amber-500"></span>
+                    Anonymous
+                </p>
+            {/if}
         </div>
         <nav class="flex flex-col grow justify-between py-3">
             <div class="flex-1/6 flex flex-col gap-3">
-                {#each navConfig as item (item.label)}
-                    {@render navGroup(item)}
-                {/each}
+                {#if !data.isAnonymous}
+                    {#each navConfig as item (item.label)}
+                        {@render navGroup(item)}
+                    {/each}
+                {/if}
             </div>
-            <a class="font-medium text-sm tracking-wide" href={resolve("/logout")}>Logout</a>
+            {#if data.isAnonymous}
+                <div class="flex flex-col gap-2 border-t border-neutral-800 pt-3">
+                    <a
+                        class="flex items-center gap-2 rounded-md bg-amber-600 px-3 py-2.5 text-sm font-medium text-white transition hover:bg-amber-700"
+                        href={resolve("/register")}
+                    >
+                        <svg
+                            class="size-4 shrink-0"
+                            fill="none"
+                            viewBox="0 0 24 24"
+                            stroke="currentColor"
+                            stroke-width="2"
+                        >
+                            <path
+                                stroke-linecap="round"
+                                stroke-linejoin="round"
+                                d="M15.75 9V5.25A2.25 2.25 0 0 0 13.5 3h-6a2.25 2.25 0 0 0-2.25 2.25v13.5A2.25 2.25 0 0 0 7.5 21h6a2.25 2.25 0 0 0 2.25-2.25V15m3 0 3-3m0 0-3-3m3 3H9"
+                            />
+                        </svg>
+                        Convert to Full Account
+                    </a>
+                </div>
+            {:else}
+                <a class="font-medium text-sm tracking-wide" href={resolve("/logout")}>Logout</a>
+            {/if}
         </nav>
         <div class="flex flex-col gap-2 pb-5">
             <p>Security</p>

@@ -62,6 +62,7 @@ export const load: PageServerLoad = async ({ params, locals }) => {
             status: documents.status,
             pageCount: documents.pageCount,
             fileSize: documents.fileSize,
+            placementFields: documents.placementFields,
         })
         .from(documents)
         .innerJoin(documentAssignments, eq(documents.id, documentAssignments.documentId))
@@ -105,6 +106,36 @@ export const load: PageServerLoad = async ({ params, locals }) => {
         sigsByDoc.get(s.documentId)!.set(s.userId, s.status);
     }
 
+    // Check if any document has fields assigned to "me" (the owner)
+    let hasMeField = false;
+    for (const doc of docs) {
+        if (Array.isArray(doc.placementFields)) {
+            if (
+                (doc.placementFields as Array<{ assignedTo?: string }>).some(
+                    (f) => f.assignedTo === "me",
+                )
+            ) {
+                hasMeField = true;
+                break;
+            }
+        }
+    }
+
+    // Ensure the owner appears as a recipient if they have "me" fields
+    if (hasMeField && isOwner) {
+        const ownerInList = recipients.some((r) => r.userId === locals.user.id);
+        if (!ownerInList) {
+            recipients.unshift({
+                id: "me" as unknown as (typeof recipients)[number]["id"],
+                name: locals.user.name ?? "Me",
+                email: locals.user.email ?? "",
+                role: "signer",
+                signingGroup: null,
+                userId: locals.user.id,
+            });
+        }
+    }
+
     // Build recipient status per document
     const recipientStatus = recipients.map((r) => {
         const docStatuses = docs.map((d) => {
@@ -146,6 +177,6 @@ export const load: PageServerLoad = async ({ params, locals }) => {
         })),
         recipients: recipientStatus,
         isOwner,
-        isRecipient: !!recipientRow,
+        isRecipient: !!recipientRow || hasMeField,
     };
 };
