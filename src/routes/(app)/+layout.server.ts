@@ -1,7 +1,8 @@
 import type { LayoutServerLoad } from "./$types";
 import { redirect } from "@sveltejs/kit";
 import { db } from "$lib/server/db";
-import { user, packageRecipients, cryptoKeys } from "$lib/server/db/schema";
+import { user } from "$lib/server/db/auth.schema";
+import { packageRecipients, cryptoKeys } from "$lib/server/db/schema";
 import { eq, and, isNull } from "drizzle-orm";
 
 export const load: LayoutServerLoad = async ({ locals, url }) => {
@@ -26,12 +27,7 @@ export const load: LayoutServerLoad = async ({ locals, url }) => {
         const [keyRow] = await db
             .select({ id: cryptoKeys.id })
             .from(cryptoKeys)
-            .where(
-                and(
-                    eq(cryptoKeys.userId, locals.user.id),
-                    isNull(cryptoKeys.revokedAt),
-                ),
-            )
+            .where(and(eq(cryptoKeys.userId, locals.user.id), isNull(cryptoKeys.revokedAt)))
             .limit(1);
         hasKey = !!keyRow;
 
@@ -56,6 +52,7 @@ export const load: LayoutServerLoad = async ({ locals, url }) => {
 
     return {
         user: {
+            id: locals.user?.id,
             name: recipientName ?? locals.user?.name,
             email: recipientEmail ?? locals.user?.email,
         },

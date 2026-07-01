@@ -2,8 +2,9 @@
     // @ts-nocheck snippets mm
     import { page } from "$app/stores";
     import { resolve } from "$app/paths";
+    import { hasDeviceKeys, setupDeviceKeys } from "$lib/client/setup-device-keys";
+    import { authClient } from "$lib/auth-client";
     import type { LayoutProps } from "./$types";
-    import { registerPublicKey } from "$lib/client/crypto";
 
     type NavItem = {
         label: string;
@@ -33,13 +34,77 @@
 
     let { children, data }: LayoutProps = $props();
 
-    // Register a signing key (WebAuthn or fallback) silently after login.
-    // Only runs once when the user is authenticated and has no key yet.
+    let showKeySetup = $state(false);
+    let keyPassword = $state("");
+    let keyError = $state<string | null>(null);
+    let keyLoading = $state(false);
+    let keyCheckDone = $state(false);
+
+    // Check whether device-bound signing keys exist and are still valid on the server.
+    // Runs at most once — a one-shot flag prevents the reactivity loop when showKeySetup toggles.
     $effect(() => {
-        if (data.user.name && !data.hasKey) {
-            registerPublicKey();
+        if (data.user.id && !keyCheckDone) {
+            keyCheckDone = true;
+            if (!data.hasKey) {
+                // Server reports no active (non-revoked) keys — prompt setup
+                console.warn("[layout] No active keys on server for user", {
+                    userId: data.user.id,
+                });
+                showKeySetup = true;
+            } else {
+                // Server has keys — verify the device still has them locally
+                hasDeviceKeys(data.user.id).then((exists) => {
+                    if (!exists) {
+                        console.warn("[layout] Keys exist on server but not on this device", {
+                            userId: data.user.id,
+                        });
+                        showKeySetup = true;
+                    }
+                });
+            }
         }
     });
+
+    async function handleKeySetup() {
+        if (!keyPassword.trim()) {
+            keyError = "Password is required";
+            return;
+        }
+        keyLoading = true;
+        keyError = null;
+
+        try {
+            // Verify password by attempting sign-in (local API call, reuses existing session)
+            const { error: signInError } = await authClient.signIn.opaque({
+                email: data.user.email,
+                password: keyPassword,
+            });
+            if (signInError) {
+                keyError = "Incorrect password";
+                keyPassword = "";
+                keyLoading = false;
+                return;
+            }
+
+            // Password correct — generate device-bound keys
+            // Force regeneration if server reported no active keys (e.g. revoked)
+            const accepted = await setupDeviceKeys(data.user.id, keyPassword, !data.hasKey);
+            keyPassword = ""; // clear immediately after SW call
+            if (accepted === 0) {
+                keyError = "Key setup failed. Please try again.";
+                keyLoading = false;
+                return;
+            }
+
+            showKeySetup = false;
+        } catch (err) {
+            console.error("[layout] Key setup error:", err);
+            keyPassword = "";
+            keyError = "Something went wrong. Please try again.";
+        } finally {
+            keyLoading = false;
+        }
+    }
 </script>
 
 <div class="flex h-screen overflow-hidden">
@@ -131,3 +196,57 @@
         {/if}
     </div>
 {/snippet}
+
+{#if showKeySetup}
+    <!-- svelte-ignore a11y_no_static_element_interactions -->
+    <div
+        class="fixed inset-0 z-50 flex items-center justify-center bg-black/50"
+        onkeydown={(e) => e.key === "Escape" && !keyLoading && (showKeySetup = false)}
+        role="dialog"
+        tabindex="-1"
+    >
+        <!-- svelte-ignore a11y_click_events_have_key_events -->
+        <div
+            class="bg-white dark:bg-neutral-900 rounded-lg shadow-xl w-full max-w-md mx-4 p-6"
+            onclick={(e) => e.stopPropagation()}
+        >
+            <h2 class="text-lg font-semibold mb-1">Set Up Device Keys</h2>
+            <p class="text-sm text-neutral-500 mb-4">
+                This device needs signing keys. Enter your password to generate them.
+            </p>
+
+            <label for="layout-key-pw" class="block text-sm font-medium mb-1">Password</label>
+            <input
+                id="layout-key-pw"
+                type="password"
+                bind:value={keyPassword}
+                class="w-full rounded-md border border-neutral-300 dark:border-neutral-600 dark:bg-neutral-800 px-3 py-2.5 text-sm"
+                placeholder="Enter your password"
+                onkeydown={(e) => e.key === "Enter" && handleKeySetup()}
+            />
+
+            {#if keyError}
+                <p class="mt-2 text-sm text-red-600">{keyError}</p>
+            {/if}
+
+            <div class="flex gap-3 mt-4">
+                <div class="flex-1"></div>
+                <button
+                    type="button"
+                    class="rounded-md border border-neutral-300 dark:border-neutral-600 px-4 py-2.5 text-sm font-medium text-neutral-700 dark:text-neutral-300 transition hover:bg-neutral-100 dark:hover:bg-neutral-800"
+                    onclick={() => (showKeySetup = false)}
+                >
+                    Skip
+                </button>
+                <button
+                    type="button"
+                    class="rounded-md bg-blue-600 px-4 py-2.5 text-sm font-medium text-white transition hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
+                    disabled={keyLoading || !keyPassword.trim()}
+                    onclick={handleKeySetup}
+                >
+                    {keyLoading ? "Setting up..." : "Set Up Keys"}
+                </button>
+            </div>
+        </div>
+    </div>
+{/if}

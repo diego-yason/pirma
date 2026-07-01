@@ -20,44 +20,85 @@ let msgCounter = 0;
 // ── IndexedDB helpers (inside SW) ───────────────────────────────
 
 function openDB(): Promise<IDBDatabase> {
+    console.log("[SW] openDB called");
     return new Promise((resolve, reject) => {
-        const req = indexedDB.open(DB_NAME, 2);
+        const req = indexedDB.open(DB_NAME, 3);
         req.onupgradeneeded = () => {
             const db = req.result;
+            console.log("[SW] openDB upgrade needed");
             if (!db.objectStoreNames.contains(STORE_NAME)) {
                 const store = db.createObjectStore(STORE_NAME, { keyPath: "kid" });
                 store.createIndex("userId", "userId", { unique: false });
+                console.log("[SW] Created object store and userId index");
+            } else {
+                // Migrate from v1/v2 — ensure userId index exists
+                const store = req.transaction!.objectStore(STORE_NAME);
+                if (!store.indexNames.contains("userId")) {
+                    store.createIndex("userId", "userId", { unique: false });
+                    console.log("[SW] Added userId index to existing store");
+                } else {
+                    console.log("[SW] userId index already exists");
+                }
             }
         };
-        req.onsuccess = () => resolve(req.result);
-        req.onerror = () => reject(req.error);
+        req.onsuccess = () => {
+            console.log("[SW] openDB success", req.result);
+            resolve(req.result);
+        };
+        req.onerror = () => {
+            console.error("[SW] openDB failed", { error: req.error?.message });
+            reject(req.error);
+        };
     });
 }
 
 async function storeEncryptedKey(kid: string, userId: string, encryptedPrivateKey: string) {
+    console.log("[SW] storeEncryptedKey", { kid, userId, keyLength: encryptedPrivateKey.length });
     const db = await openDB();
     return new Promise<void>((resolve, reject) => {
         const tx = db.transaction(STORE_NAME, "readwrite");
         tx.objectStore(STORE_NAME).put({ kid, userId, encryptedPrivateKey });
         tx.oncomplete = () => {
+            console.log("[SW] Key stored in IndexedDB", { kid, userId });
             db.close();
             resolve();
         };
-        tx.onerror = () => reject(tx.error);
+        tx.onerror = () => {
+            console.error("[SW] Failed to store key in IndexedDB", { kid, userId, error: tx.error?.message });
+            reject(tx.error);
+        };
     });
 }
 
 async function hasKeysForUser(userId: string): Promise<boolean> {
     const db = await openDB();
     return new Promise((resolve, reject) => {
+        if (!db.objectStoreNames.contains(STORE_NAME)) {
+            console.log("[SW hasKeysForUser] No encrypted-keys store yet", { userId });
+            db.close();
+            resolve(false);
+            return;
+        }
         const tx = db.transaction(STORE_NAME, "readonly");
-        const index = tx.objectStore(STORE_NAME).index("userId");
+        const store = tx.objectStore(STORE_NAME);
+        if (!store.indexNames.contains("userId")) {
+            console.warn("[SW hasKeysForUser] userId index not found", { userId });
+            db.close();
+            resolve(false);
+            return;
+        }
+        const index = store.index("userId");
         const req = index.count(userId);
         req.onsuccess = () => {
+            const count = req.result;
+            console.log(`[SW hasKeysForUser] Found ${count} keys for user`, { userId });
             db.close();
-            resolve(req.result > 0);
+            resolve(count > 0);
         };
-        req.onerror = () => reject(req.error);
+        req.onerror = () => {
+            console.error("[SW hasKeysForUser] Query failed", { userId, error: req.error?.message });
+            reject(req.error);
+        };
     });
 }
 
@@ -70,9 +111,11 @@ async function hasKeysForUser(userId: string): Promise<boolean> {
  * Both private keys stay in the SW; only public keys are returned.
  */
 async function handleGenerateKeyPair(userId: string, password: string) {
+    console.log("[SW] Starting key generation", { userId });
     const algorithm = { name: "ECDSA", namedCurve: "P-256" } as const;
 
     // ── Key A: encrypted with userId only ──────────────────────
+    console.log("[SW] Generating key A (userId-encrypted)");
     const kpA = await crypto.subtle.generateKey(algorithm, true, ["sign", "verify"]);
     const spkiA = await crypto.subtle.exportKey("spki", kpA.publicKey);
     const aesA = await deriveKey(userId, userId); // password = userId, salt = userId
@@ -84,8 +127,10 @@ async function handleGenerateKeyPair(userId: string, password: string) {
     const kidA = crypto.randomUUID();
     keyStore.set(kidA, kpA.privateKey);
     await storeEncryptedKey(kidA, userId, ivAndCiphertext(ivA, new Uint8Array(wrappedA)));
+    console.log("[SW] Key A ready", { kid: kidA });
 
     // ── Key B: encrypted with password + userId salt ───────────
+    console.log("[SW] Generating key B (password-encrypted)");
     const kpB = await crypto.subtle.generateKey(algorithm, true, ["sign", "verify"]);
     const spkiB = await crypto.subtle.exportKey("spki", kpB.publicKey);
     const aesB = await deriveKey(password, userId);
@@ -97,7 +142,9 @@ async function handleGenerateKeyPair(userId: string, password: string) {
     const kidB = crypto.randomUUID();
     keyStore.set(kidB, kpB.privateKey);
     await storeEncryptedKey(kidB, userId, ivAndCiphertext(ivB, new Uint8Array(wrappedB)));
+    console.log("[SW] Key B ready", { kid: kidB });
 
+    console.log("[SW] Key generation complete", { kidA, kidB, userId });
     return {
         kid: kidA,
         publicKey: spkiToPem(new Uint8Array(spkiA)),
@@ -175,17 +222,25 @@ sw.addEventListener("message", (event: ExtendableMessageEvent) => {
 
     switch (msg.type) {
         case "hasKeys": {
+            console.log("[SW] Received hasKeys message");
             const { userId } = (msg.payload ?? {}) as { userId?: string };
             if (!userId) {
                 respond({ success: false, error: "userId is required" });
                 break;
             }
             hasKeysForUser(userId)
-                .then((has) => respond({ success: true, data: { has } }))
-                .catch((err: Error) => respond({ success: false, error: err.message }));
+                .then((has) => {
+                    console.log("[SW] hasKeys response", { userId, has });
+                    respond({ success: true, data: { has } });
+                })
+                .catch((err: Error) => {
+                    console.error("[SW] hasKeys error", { userId, error: err.message });
+                    respond({ success: false, error: err.message });
+                });
             break;
         }
         case "generateKeyPair": {
+            console.log("[SW] Received generateKeyPair message");
             const { userId, password } = (msg.payload ?? {}) as {
                 userId?: string;
                 password?: string;
@@ -195,10 +250,14 @@ sw.addEventListener("message", (event: ExtendableMessageEvent) => {
                 break;
             }
             handleGenerateKeyPair(userId, password)
-                .then((data) => respond({ success: true, data }))
-                .catch((err: Error) =>
-                    respond({ success: false, error: err.message ?? "Key generation failed" }),
-                );
+                .then((data) => {
+                    console.log("[SW] generateKeyPair success", { userId, kid: data.kid, kidPw: data.kidPw });
+                    respond({ success: true, data });
+                })
+                .catch((err: Error) => {
+                    console.error("[SW] generateKeyPair failed", { userId, error: err.message });
+                    respond({ success: false, error: err.message ?? "Key generation failed" });
+                });
             break;
         }
         case "sign": {
@@ -221,14 +280,21 @@ sw.addEventListener("message", (event: ExtendableMessageEvent) => {
             break;
         }
         default:
+            console.warn("[SW] Unknown message type", { type: msg.type });
             respond({ success: false, error: `Unknown message type: ${msg.type}` });
     }
 });
 
 // ── Lifecycle ───────────────────────────────────────────────────
 
-sw.addEventListener("install", () => sw.skipWaiting());
-sw.addEventListener("activate", (event) => event.waitUntil(sw.clients.claim()));
+sw.addEventListener("install", () => {
+    console.log("[SW] Installing — skipWaiting");
+    sw.skipWaiting();
+});
+sw.addEventListener("activate", (event) => {
+    console.log("[SW] Activating — claim clients");
+    event.waitUntil(sw.clients.claim());
+});
 
 // ── Helpers ─────────────────────────────────────────────────────
 

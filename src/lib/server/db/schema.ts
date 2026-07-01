@@ -27,8 +27,10 @@ export const cryptoKeys = pgTable(
         credentialId: text("credential_id"),
         keyLevel: integer("key_level").notNull().default(1),
         keyType: text("key_type").notNull().default("ecdsa"),
+        algorithm: text("algorithm").notNull().default("ECDSA-P256"),
         deviceInfo: jsonb("device_info"),
         createdAt: timestamp("created_at").notNull().defaultNow(),
+        lastUsedAt: timestamp("last_used_at"),
         revokedAt: timestamp("revoked_at"),
     },
     (table) => [
