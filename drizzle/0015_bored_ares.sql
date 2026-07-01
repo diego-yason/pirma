@@ -1,1 +1,0 @@
-ALTER TABLE "package_recipients" RENAME COLUMN "signer_id" TO "recipient_id";

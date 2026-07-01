@@ -1,1 +1,0 @@
-ALTER TABLE "documents" ADD COLUMN "placement_fields" jsonb;

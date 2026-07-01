@@ -1,1 +1,0 @@
-ALTER TABLE "documents" ALTER COLUMN "owner" SET DATA TYPE text;
