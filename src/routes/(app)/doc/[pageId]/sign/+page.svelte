@@ -9,6 +9,7 @@
     import { sign, loadKeys } from "$lib/client/crypto/sw-key";
     import { buildSigningPayload } from "$lib/shared/signing-payload";
     import { page } from "$app/state";
+    import { SvelteMap } from "svelte/reactivity";
 
     let { data }: PageProps = $props();
 
@@ -209,8 +210,11 @@
                 fieldIds,
             });
 
-            // 3. Sign each field's payload with the SW key
+            // 3. Sign ONCE per document (not per field)
+            //    Group fields by document, then sign one payload per doc
             const signatures: Record<string, string> = {};
+            const docGroups = new SvelteMap<string, { docHash: string; fieldIds: string[] }>();
+
             for (const fieldId of fieldIds) {
                 const userField = data.userFields.find((f) => f.fieldId === fieldId);
                 const doc = data.documents.find((d) => d.id === userField?.documentId);
@@ -221,10 +225,26 @@
                     });
                     continue;
                 }
+                let group = docGroups.get(doc.id);
+                if (!group) {
+                    group = { docHash: doc.hash, fieldIds: [] };
+                    docGroups.set(doc.id, group);
+                }
+                group.fieldIds.push(fieldId);
+            }
 
-                const payload = buildSigningPayload(doc.hash, fieldIds.length);
+            for (const [, group] of docGroups) {
+                const payload = buildSigningPayload(group.docHash, group.fieldIds.length);
                 const sig = await sign(kid, payload, 1);
-                signatures[fieldId] = sig;
+                // All fields in this document share the same signature
+                for (const fieldId of group.fieldIds) {
+                    signatures[fieldId] = sig;
+                }
+                console.log("[sign] Signed document", {
+                    docHash: group.docHash.slice(0, 12) + "…",
+                    fieldCount: group.fieldIds.length,
+                    sigPreview: sig.slice(0, 16) + "…",
+                });
             }
 
             // 4. POST to the server

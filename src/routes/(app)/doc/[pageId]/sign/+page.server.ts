@@ -822,10 +822,8 @@ export const actions: Actions = {
             }
         }
 
-        // Verify each signature
-        const now = new Date();
-        const sigInserts: Array<typeof signatures.$inferInsert> = [];
-
+        // Group signed fields by document for per-document verification
+        const docGroups = new Map<string, { docHash: string; fieldIds: string[] }>();
         for (const fieldId of signedFieldIds) {
             const sigB64 = sigMap[fieldId];
             if (!sigB64) {
@@ -839,29 +837,53 @@ export const actions: Actions = {
                 return fail(400, { error: `Field ${fieldId} not found in documents` });
             }
 
+            let group = docGroups.get(docId);
+            if (!group) {
+                const doc = docMap.get(docId)!;
+                group = { docHash: doc.hash, fieldIds: [] };
+                docGroups.set(docId, group);
+            }
+            group.fieldIds.push(fieldId);
+        }
+
+        // Verify ONE signature per document, then reuse for all fields in that doc
+        const now = new Date();
+        const sigInserts: Array<typeof signatures.$inferInsert> = [];
+
+        for (const [docId, group] of docGroups) {
             const doc = docMap.get(docId)!;
-            const payload = buildSigningPayload(doc.hash, signedFieldIds.length);
+            const sigB64 = sigMap[group.fieldIds[0]]!; // all fields share same sig
+
+            const payload = buildSigningPayload(doc.hash, group.fieldIds.length);
 
             if (!verifyEcdsaSignature(activeKey.pubkey, payload, sigB64)) {
                 logger.warn("sign", "Finalize — signature verification failed", {
-                    fieldCount: signedFieldIds.length,
+                    fieldCount: group.fieldIds.length,
                     docHash: doc.hash,
                     pubkey: activeKey.pubkey,
                     signature: sigB64,
                 });
-                return fail(400, { error: `Signature verification failed for field ${fieldId}` });
+                return fail(400, { error: `Signature verification failed for document ${docId}` });
             }
 
-            sigInserts.push({
-                txId: fieldId,
+            logger.info("sign", "Finalize — document signature verified", {
                 documentId: docId,
-                documentHash: doc.hash,
-                status: "signed",
-                signedAt: now,
-                cryptoKey: activeKey.id,
-                signaturePayload: sigB64,
-                signatureAlgorithm: "ECDSA-P256-SHA256",
+                fieldCount: group.fieldIds.length,
             });
+
+            // All fields in this doc get the same signaturePayload
+            for (const fieldId of group.fieldIds) {
+                sigInserts.push({
+                    txId: fieldId,
+                    documentId: docId,
+                    documentHash: doc.hash,
+                    status: "signed",
+                    signedAt: now,
+                    cryptoKey: activeKey.id,
+                    signaturePayload: sigB64,
+                    signatureAlgorithm: "ECDSA-P256-SHA256",
+                });
+            }
         }
 
         // All signatures verified — batch insert

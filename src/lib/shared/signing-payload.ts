@@ -1,19 +1,16 @@
 /**
  * Build the deterministic signing payload for a signature.
  *
- * Format: "${documentHash}:${totalFields}"
+ * There is ONE signature per document, NOT per field. All signed fields
+ * within the same document share the same payload and the same ECDSA
+ * signature. The server verifies the signature once per document and
+ * reuses it for every field record in that document.
  *
- * Includes the document hash (binds to a specific document version) and the
- * total field count (binds to the exact batch size, preventing fields from
- * being silently added or removed after signing). The field ID is not included
- * since each signature is stored in its own row keyed by txId (the field ID).
- *
- * Both client (sign page) and server (finalize action) use this function so
- * the payload is guaranteed to be identical on both ends.
+ * Format: "${documentHash}:${fieldCount}"
  *
  * @param documentHash — the document's content hash (from documents.hash)
- * @param totalFields  — total number of fields being finalized in this batch
+ * @param fieldCount   — number of signed fields being finalized in THIS document
  */
-export function buildSigningPayload(documentHash: string, totalFields: number): string {
-    return `${documentHash}:${totalFields}`;
+export function buildSigningPayload(documentHash: string, fieldCount: number): string {
+    return `${documentHash}:${fieldCount}`;
 }
