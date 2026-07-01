@@ -6,7 +6,7 @@ import { logger } from "$lib/server/logger";
 import { createVerify } from "node:crypto";
 import { consumeChallenge } from "$lib/server/key-challenge";
 
-export const POST: RequestHandler = async ({ request, locals }) => {
+export const POST: RequestHandler = async ({ request, locals, getClientAddress }) => {
     if (!locals.user) {
         logger.warn("keyUpload", "Unauthorized attempt — no session");
         return json({ error: "Unauthorized" }, { status: 401 });
@@ -22,6 +22,23 @@ export const POST: RequestHandler = async ({ request, locals }) => {
     const pubkey = body.pubkey as string | undefined;
     const keyLevel = typeof body.keyLevel === "number" ? body.keyLevel : 1;
     const algorithm = (body.algorithm as string) ?? "ECDSA-P256";
+
+    // Merge client-side device info with server-side IP
+    let clientIp: string;
+    try {
+        clientIp = getClientAddress();
+    } catch {
+        clientIp =
+            request.headers.get("cf-connecting-ip") ??
+            request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ??
+            request.headers.get("x-real-ip") ??
+            "unknown";
+    }
+    const deviceInfo: Record<string, unknown> = {
+        ...(body.deviceInfo as Record<string, unknown> | undefined),
+        ip: clientIp,
+    };
+
     const nonce = body.nonce as string | undefined;
     const kid = body.kid as string | undefined;
     const signature = body.signature as string | undefined;
@@ -87,6 +104,7 @@ export const POST: RequestHandler = async ({ request, locals }) => {
                 pubkey,
                 keyLevel,
                 algorithm,
+                deviceInfo,
                 lastUsedAt: new Date(),
             })
             .returning();

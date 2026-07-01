@@ -1,3 +1,6 @@
+import { getDeviceFingerprint } from "$lib/client/device-fingerprint";
+import type { DeviceFingerprint } from "$lib/client/device-fingerprint";
+
 /**
  * Unified device-bound key setup flow.
  *
@@ -69,6 +72,7 @@ async function uploadKey(
     algorithm: string,
     kid: string,
     label: string,
+    deviceInfo?: DeviceFingerprint,
 ): Promise<boolean> {
     for (let attempt = 1; attempt <= 2; attempt++) {
         try {
@@ -88,6 +92,7 @@ async function uploadKey(
                     nonce: challenge.nonce,
                     kid,
                     signature: sig,
+                    ...(deviceInfo ? { deviceInfo } : {}),
                 }),
             });
             if (!res.ok) {
@@ -151,12 +156,24 @@ export async function setupDeviceKeys(
     const { kid, publicKey, kidPw, publicKeyPw, keyLevel, keyLevelPw, algorithm } =
         await swGenerateKeyPair(userId, password);
 
-    // 3. Upload both keys sequentially (each needs its own one-time challenge)
+    // 3. Compute device fingerprint (non-invasive, hash-based)
+    let fp: DeviceFingerprint | undefined;
+    try {
+        fp = await getDeviceFingerprint();
+        console.log("[deviceKeys] Device fingerprint computed", {
+            label: fp.label,
+            hash: fp.hash.slice(0, 8) + "…",
+        });
+    } catch (err) {
+        console.warn("[deviceKeys] Device fingerprint failed, skipping", err);
+    }
+
+    // 4. Upload both keys sequentially (each needs its own one-time challenge)
     console.log("[deviceKeys] Uploading key A (userId-encrypted)");
-    const okA = await uploadKey(publicKey, keyLevel, algorithm, kid, "keyA");
+    const okA = await uploadKey(publicKey, keyLevel, algorithm, kid, "keyA", fp);
 
     console.log("[deviceKeys] Uploading key B (password-encrypted)");
-    const okB = await uploadKey(publicKeyPw, keyLevelPw, algorithm, kidPw, "keyB");
+    const okB = await uploadKey(publicKeyPw, keyLevelPw, algorithm, kidPw, "keyB", fp);
 
     const accepted = [okA, okB].filter(Boolean).length;
     console.log(`[deviceKeys] ${accepted}/2 keys accepted`);
