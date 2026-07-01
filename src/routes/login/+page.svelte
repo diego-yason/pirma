@@ -1,9 +1,9 @@
 <script lang="ts">
     import { resolve } from "$app/paths";
     import { goto } from "$app/navigation";
-    import { authClient } from "$lib/auth-client.js";
+    import { authClient } from "$lib/client/auth/auth-client.js";
     import type { EventHandler } from "svelte/elements";
-    import { setupDeviceKeys } from "$lib/client/setup-device-keys";
+    import { setupDeviceKeys } from "$lib/client/crypto/setup-device-keys";
 
     let submitting = $state(false);
     let email = $state("");

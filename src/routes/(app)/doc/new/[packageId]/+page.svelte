@@ -1,10 +1,10 @@
 <script lang="ts">
     import { getContext } from "svelte";
     import type { PageProps } from "./$types";
-    import type { PlacedRect, RecipientInfo } from "$lib/client/SignatureBoxTypes";
+    import type { PlacedRect, RecipientInfo } from "$lib/client/types/SignatureBoxTypes";
     import { PUBLIC_MAX_RECIPIENTS } from "$env/static/public";
     import PDFViewer from "$lib/client/PDFViewer.svelte";
-    import DocumentSelector from "$lib/client/DocumentSelector.svelte";
+    import DocumentSelector from "$lib/client/ui/DocumentSelector.svelte";
     import { resolve } from "$app/paths";
 
     const MAX_RECIPIENTS = Number(PUBLIC_MAX_RECIPIENTS) || 100;

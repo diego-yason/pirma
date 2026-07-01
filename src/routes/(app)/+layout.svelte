@@ -2,8 +2,8 @@
     // @ts-nocheck snippets mm
     import { page } from "$app/stores";
     import { resolve } from "$app/paths";
-    import { hasDeviceKeys, setupDeviceKeys } from "$lib/client/setup-device-keys";
-    import { authClient } from "$lib/auth-client";
+    import { hasDeviceKeys, setupDeviceKeys } from "$lib/client/crypto/setup-device-keys";
+    import { authClient } from "$lib/client/auth/auth-client";
     import type { LayoutProps } from "./$types";
 
     type NavItem = {

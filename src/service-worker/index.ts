@@ -279,6 +279,12 @@ sw.addEventListener("message", (event: ExtendableMessageEvent) => {
                 });
             break;
         }
+        case "clearKeys": {
+            console.log("[SW] Received clearKeys — clearing in-memory key store");
+            keyStore.clear();
+            respond({ success: true, data: {} });
+            break;
+        }
         default:
             console.warn("[SW] Unknown message type", { type: msg.type });
             respond({ success: false, error: `Unknown message type: ${msg.type}` });

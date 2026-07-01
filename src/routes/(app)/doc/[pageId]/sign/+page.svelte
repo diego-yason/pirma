@@ -1,10 +1,10 @@
 <script lang="ts">
     import type { PageProps } from "./$types";
-    import type { PlacedRect } from "$lib/client/SignatureBoxTypes";
+    import type { PlacedRect } from "$lib/client/types/SignatureBoxTypes";
     import PDFViewer from "$lib/client/PDFViewer.svelte";
     import SignatureCreator from "$lib/client/SignatureCreator.svelte";
-    import { registerPublicKey } from "$lib/client/crypto";
-    import { authClient } from "$lib/auth-client";
+    import { registerPublicKey } from "$lib/client/archive/crypto";
+    import { authClient } from "$lib/client/auth/auth-client";
     import { page } from "$app/state";
 
     let { data }: PageProps = $props();

@@ -71,3 +71,9 @@ export async function sign(kid: string, data: string): Promise<string> {
     const result = await send<{ signature: string }>("sign", { kid, data });
     return result.signature;
 }
+
+/** Clear all in-memory private keys from the service worker (e.g. on logout). */
+export async function clearKeys(): Promise<void> {
+    ensureListener();
+    await send("clearKeys");
+}

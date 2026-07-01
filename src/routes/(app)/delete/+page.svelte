@@ -1,7 +1,7 @@
 <script lang="ts">
     import { resolve } from "$app/paths";
     import { goto } from "$app/navigation";
-    import { authClient } from "$lib/auth-client";
+    import { authClient } from "$lib/client/auth/auth-client";
 
     let deleting = $state(false);
     let error = $state<string | null>(null);

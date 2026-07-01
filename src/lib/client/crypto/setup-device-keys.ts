@@ -1,5 +1,5 @@
-import { getDeviceFingerprint } from "$lib/client/device-fingerprint";
-import type { DeviceFingerprint } from "$lib/client/device-fingerprint";
+import { getDeviceFingerprint } from "$lib/client/crypto/device-fingerprint";
+import type { DeviceFingerprint } from "$lib/client/crypto/device-fingerprint";
 
 /**
  * Unified device-bound key setup flow.

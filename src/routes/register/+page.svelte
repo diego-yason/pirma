@@ -1,8 +1,8 @@
 <script lang="ts">
-    import { authClient } from "$lib/auth-client";
+    import { authClient } from "$lib/client/auth/auth-client";
     import { goto } from "$app/navigation";
     import { resolve } from "$app/paths";
-    import { setupDeviceKeys } from "$lib/client/setup-device-keys";
+    import { setupDeviceKeys } from "$lib/client/crypto/setup-device-keys";
 
     let email = $state("");
     let password = $state("");
