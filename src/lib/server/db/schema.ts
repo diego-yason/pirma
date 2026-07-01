@@ -112,10 +112,14 @@ export const packageRecipients = pgTable(
 export const signatures = pgTable(
     "signatures",
     {
-        txId: text("tx_id").primaryKey(),
+        id: uuid("id").primaryKey().defaultRandom(),
         documentId: uuid("document_id")
             .notNull()
             .references(() => documents.id),
+        signerUserId: text("signer_user_id")
+            .notNull()
+            .references(() => user.id),
+        signedFields: jsonb("signed_fields").notNull().default([]),
         documentHash: text("document_hash").notNull(),
         status: signaturesStatus("status").notNull().default("pending"),
         signedAt: timestamp("signed_at"),
@@ -127,8 +131,10 @@ export const signatures = pgTable(
     },
     (table) => [
         index("signatures_document_id_idx").on(table.documentId),
+        index("signatures_signer_user_id_idx").on(table.signerUserId),
         index("signatures_crypto_key_idx").on(table.cryptoKey),
         index("signatures_status_idx").on(table.status),
+        unique("signatures_doc_signer_unique").on(table.documentId, table.signerUserId),
     ],
 ).enableRLS();
 
@@ -208,11 +214,9 @@ export const pendingDocumentsView = pgView("pending_documents")
                 eq(documentAssignments.packageId, packageRecipients.packageId),
             ).where(sql`${packageRecipients.role} = 'signer' AND NOT EXISTS (
             SELECT 1 FROM ${signatures}
-            INNER JOIN ${cryptoKeys}
-                ON ${signatures.cryptoKey} = ${cryptoKeys.id}
-                AND ${cryptoKeys.userId} = ${packageRecipients.userId}
-                AND ${cryptoKeys.revokedAt} IS NULL
             WHERE ${signatures.documentId} = ${documents.id}
+            AND ${signatures.signerUserId} = ${packageRecipients.userId}
+            AND ${signatures.status} IN ('signed', 'anchored')
         )`),
     );
 
@@ -230,11 +234,10 @@ export const completedDocumentsView = pgView("completed_documents")
                 title: documents.title,
                 status: documents.status,
                 updatedAt: documents.updatedAt,
-                signatoryUserId: cryptoKeys.userId,
+                signatoryUserId: signatures.signerUserId,
             })
             .from(documents)
             .innerJoin(signatures, eq(documents.id, signatures.documentId))
-            .innerJoin(cryptoKeys, eq(signatures.cryptoKey, cryptoKeys.id))
             .where(inArray(signatures.status, ["signed", "anchored"])),
     );
 

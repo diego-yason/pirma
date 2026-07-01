@@ -9,7 +9,7 @@ import {
     signatures,
     cryptoKeys,
 } from "$lib/server/db/schema";
-import { eq, and, isNull } from "drizzle-orm";
+import { eq, and, isNull, inArray } from "drizzle-orm";
 
 export const load: PageServerLoad = async ({ params, locals }) => {
     if (!locals.user) {
@@ -86,17 +86,11 @@ export const load: PageServerLoad = async ({ params, locals }) => {
     const sigRows = await db
         .select({
             documentId: signatures.documentId,
-            userId: cryptoKeys.userId,
+            userId: signatures.signerUserId,
             status: signatures.status,
         })
         .from(signatures)
-        .innerJoin(cryptoKeys, eq(signatures.cryptoKey, cryptoKeys.id))
-        .where(
-            and(
-                isNull(cryptoKeys.revokedAt),
-                // Only signatures for docs in this package — filter in JS
-            ),
-        );
+        .where(inArray(signatures.status, ["signed", "anchored"]));
 
     const docIds = new Set(docs.map((d) => d.id));
     const sigsByDoc = new Map<string, Map<string, string>>();

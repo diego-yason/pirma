@@ -109,20 +109,19 @@ export const load: PageServerLoad = async ({ params, locals }) => {
         docIds.length > 0
             ? await db
                   .select({
-                      txId: signatures.txId,
+                      id: signatures.id,
                       documentId: signatures.documentId,
+                      signedFields: signatures.signedFields,
                       status: signatures.status,
                       signedAt: signatures.signedAt,
-                      signerUserId: cryptoKeys.userId,
+                      signerUserId: signatures.signerUserId,
                       signerName: user.name,
                   })
                   .from(signatures)
-                  .innerJoin(cryptoKeys, eq(signatures.cryptoKey, cryptoKeys.id))
-                  .innerJoin(user, eq(cryptoKeys.userId, user.id))
+                  .innerJoin(user, eq(signatures.signerUserId, user.id))
                   .where(
                       and(
                           inArray(signatures.documentId, docIds),
-                          isNull(cryptoKeys.revokedAt),
                           inArray(signatures.status, ["signed", "anchored"]),
                       ),
                   )
@@ -159,39 +158,72 @@ export const load: PageServerLoad = async ({ params, locals }) => {
         }
     }
 
-    // Build field-level status: fieldId → { status, signerName, signatureImageUrl }
-    const fieldStatus = new Map<
-        string,
-        { status: string; signerName: string | null; signatureImageUrl: string | null }
-    >();
-    for (const s of sigRows) {
-        fieldStatus.set(s.txId, {
-            status: s.status,
-            signerName: s.signerName,
-            signatureImageUrl: sigImageUrls.get(s.signerUserId) ?? null,
-        });
-    }
-
-    // Fetch recipients for display
+    // Fetch recipients for name lookups
     const recipients = await db
         .select({
             id: packageRecipients.id,
             name: packageRecipients.name,
             email: packageRecipients.email,
             role: packageRecipients.role,
+            userId: packageRecipients.userId,
         })
         .from(packageRecipients)
         .where(eq(packageRecipients.packageId, packageId));
+
+    // Build lookup: assignedTo value → display name
+    const assigneeNames = new Map<string, string>();
+    for (const r of recipients) {
+        if (r.id) assigneeNames.set(r.id, r.name ?? "—");
+        if (r.userId) assigneeNames.set(r.userId, r.name ?? "—");
+    }
+    // Owner "me" fields — use the owner's name
+    if (locals.user) {
+        assigneeNames.set("me", locals.user.name ?? "Me");
+    }
+
+    // Build field-level status from signatures: fieldId → { status, signerName, signatureImageUrl }
+    const fieldStatus = new Map<
+        string,
+        { status: string; signerName: string | null; signatureImageUrl: string | null }
+    >();
+    for (const s of sigRows) {
+        const fields = s.signedFields as string[];
+        for (const fieldId of fields) {
+            fieldStatus.set(fieldId, {
+                status: s.status,
+                signerName: s.signerName,
+                signatureImageUrl: sigImageUrls.get(s.signerUserId) ?? null,
+            });
+        }
+    }
+
+    // Collect signed field IDs BEFORE seeding pending fields below
+    const signedFieldIds = new Set(fieldStatus.keys());
+
+    // Seed all placement fields so unsigned fields appear as "pending"
+    // with the assigned recipient's name
+    for (const doc of packageDocs) {
+        const fields = (doc.placementFields ?? []) as Array<{ id: string; assignedTo?: string }>;
+        for (const f of fields) {
+            if (!fieldStatus.has(f.id)) {
+                const name = f.assignedTo ? (assigneeNames.get(f.assignedTo) ?? null) : null;
+                fieldStatus.set(f.id, {
+                    status: "pending",
+                    signerName: name,
+                    signatureImageUrl: null,
+                });
+            }
+        }
+    }
 
     logger.info("docView", "View page loaded", {
         packageId,
         userId: locals.user.id,
         documentCount: docList.length,
-        signedFieldCount: fieldStatus.size,
+        signedFieldCount: sigRows.length,
+        signerCount: signerIds.length,
+        signersWithSignatureImage: sigImageUrls.size,
     });
-
-    // Collect all signed field IDs for quick lookup
-    const signedFieldIds = new Set(fieldStatus.keys());
 
     return {
         pkg: {

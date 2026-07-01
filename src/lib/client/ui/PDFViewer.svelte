@@ -678,12 +678,15 @@
                                 <!-- Sign/View mode: signed -->
                                 <div role="img" class="absolute group" style={boxStyle(el, page)}>
                                     <img
-                                        src={(fieldSignatureUrls?.[el.id] ?? signatureUrl) ||
-                                            "/signature.png"}
+                                        src={mode === "view"
+                                            ? (fieldSignatureUrls?.[el.id] ?? "")
+                                            : (fieldSignatureUrls?.[el.id] ??
+                                                  (isOwn(el.id) ? signatureUrl : undefined)) ||
+                                              "/signature.png"}
                                         alt="Signature"
                                         class="h-full w-full object-contain"
                                     />
-                                    {#if mode !== "view"}
+                                    {#if mode !== "view" && isOwn(el.id)}
                                         <button
                                             type="button"
                                             class="absolute -top-2 -right-2 z-10 flex h-5 w-5 items-center justify-center rounded-full bg-red-500 text-white text-xs leading-none opacity-0 transition-opacity group-hover:opacity-100 hover:bg-red-600"

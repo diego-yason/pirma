@@ -11,6 +11,28 @@
     let selectedFields = $derived<PlacedRect[]>((selectedDoc?.fields as PlacedRect[]) ?? []);
     let selectedSignedStatus = $derived<Record<string, boolean>>(selectedDoc?.signedStatus ?? {});
     let selectedFieldUrls = $derived<Record<string, string>>(selectedDoc?.fieldSignatureUrls ?? {});
+    let selectedSignerNames = $derived.by<Record<string, string>>(() => {
+        const names: Record<string, string> = {};
+        for (const [fieldId, st] of Object.entries(data.fieldStatus)) {
+            if (st.signerName) names[fieldId] = st.signerName;
+        }
+        return names;
+    });
+
+    // Debug: log signature URLs for the selected document
+    $effect(() => {
+        if (selectedDoc) {
+            const signedCount = Object.keys(selectedDoc.fieldSignatureUrls ?? {}).length;
+            const names = Object.entries(selectedDoc.fieldSignatureUrls ?? {})
+                .map(([fid]) => `${fid} → ${selectedSignerNames[fid] ?? "?"}`)
+                .join(", ");
+            console.log("[view] doc loaded", {
+                docId: selectedDoc.id,
+                signedCount,
+                signers: names || "none",
+            });
+        }
+    });
 
     // All signed field entries across all documents (for the status sidebar)
     let allFieldEntries = $derived(
@@ -133,9 +155,9 @@
                         >
                             <div class="min-w-0 flex-1 mr-2">
                                 <p class="truncate font-medium">{entry.fieldId}</p>
-                                {#if entry.signerName && (entry.status === "signed" || entry.status === "anchored")}
+                                {#if entry.signerName}
                                     <p class="text-xs text-neutral-500 truncate">
-                                        by {entry.signerName}
+                                        {entry.signerName}
                                     </p>
                                 {/if}
                             </div>

@@ -320,27 +320,28 @@ export const load: PageServerLoad = async ({ params, locals, url }) => {
             ? await db
                   .select({
                       documentId: signatures.documentId,
-                      txId: signatures.txId,
+                      signedFields: signatures.signedFields,
                       status: signatures.status,
                   })
                   .from(signatures)
-                  .innerJoin(cryptoKeys, eq(signatures.cryptoKey, cryptoKeys.id))
                   .where(
                       and(
-                          eq(cryptoKeys.userId, locals.user.id),
-                          isNull(cryptoKeys.revokedAt),
+                          eq(signatures.signerUserId, locals.user.id),
                           inArray(signatures.documentId, docIds),
                       ),
                   )
             : [];
 
-    // Build signature status per field ID (txId = fieldId)
+    // Build signature status per field ID from document-level signatures
     const sigStatusByDoc = new Map<string, Map<string, string>>();
     for (const s of sigRows) {
         if (!sigStatusByDoc.has(s.documentId)) {
             sigStatusByDoc.set(s.documentId, new Map());
         }
-        sigStatusByDoc.get(s.documentId)!.set(s.txId, s.status);
+        const fields = s.signedFields as string[];
+        for (const fieldId of fields) {
+            sigStatusByDoc.get(s.documentId)!.set(fieldId, s.status);
+        }
     }
 
     // Collect all signature fields assigned to this user
@@ -428,18 +429,24 @@ export const load: PageServerLoad = async ({ params, locals, url }) => {
         docIds.length > 0
             ? await db
                   .select({
-                      txId: signatures.txId,
+                      signedFields: signatures.signedFields,
                       status: signatures.status,
                   })
                   .from(signatures)
-                  .innerJoin(cryptoKeys, eq(signatures.cryptoKey, cryptoKeys.id))
-                  .where(and(isNull(cryptoKeys.revokedAt), inArray(signatures.documentId, docIds)))
+                  .where(
+                      and(
+                          inArray(signatures.status, ["signed", "anchored"]),
+                          inArray(signatures.documentId, docIds),
+                      ),
+                  )
             : [];
-    const allSignedFieldIds = new Set(
-        allSigRows
-            .filter((s) => s.status === "signed" || s.status === "anchored")
-            .map((s) => s.txId),
-    );
+    const allSignedFieldIds = new Set<string>();
+    for (const s of allSigRows) {
+        const fields = s.signedFields as string[];
+        for (const fieldId of fields) {
+            allSignedFieldIds.add(fieldId);
+        }
+    }
 
     // Build per-document allFields (for greyed-out display of others' fields)
     const docsWithAllFields = docList.map((d) => {
@@ -846,7 +853,7 @@ export const actions: Actions = {
             group.fieldIds.push(fieldId);
         }
 
-        // Verify ONE signature per document, then reuse for all fields in that doc
+        // Verify ONE signature per document, then store one row per doc
         const now = new Date();
         const sigInserts: Array<typeof signatures.$inferInsert> = [];
 
@@ -871,24 +878,38 @@ export const actions: Actions = {
                 fieldCount: group.fieldIds.length,
             });
 
-            // All fields in this doc get the same signaturePayload
-            for (const fieldId of group.fieldIds) {
-                sigInserts.push({
-                    txId: fieldId,
-                    documentId: docId,
-                    documentHash: doc.hash,
-                    status: "signed",
-                    signedAt: now,
-                    cryptoKey: activeKey.id,
-                    signaturePayload: sigB64,
-                    signatureAlgorithm: "ECDSA-P256-SHA256",
-                });
-            }
+            // One row per document — signedFields lists which field IDs were signed
+            sigInserts.push({
+                documentId: docId,
+                signerUserId: party.userId,
+                signedFields: group.fieldIds,
+                documentHash: doc.hash,
+                status: "signed",
+                signedAt: now,
+                cryptoKey: activeKey.id,
+                signaturePayload: sigB64,
+                signatureAlgorithm: "ECDSA-P256-SHA256",
+            });
         }
 
-        // All signatures verified — batch insert
+        // All signatures verified — upsert one row per document
         if (sigInserts.length > 0) {
-            await db.insert(signatures).values(sigInserts);
+            for (const sig of sigInserts) {
+                await db
+                    .insert(signatures)
+                    .values(sig)
+                    .onConflictDoUpdate({
+                        target: [signatures.documentId, signatures.signerUserId],
+                        set: {
+                            signedFields: sig.signedFields,
+                            status: sig.status,
+                            signedAt: sig.signedAt,
+                            cryptoKey: sig.cryptoKey,
+                            signaturePayload: sig.signaturePayload,
+                            signatureAlgorithm: sig.signatureAlgorithm,
+                        },
+                    });
+            }
 
             // Update lastUsedAt on the key
             await db
