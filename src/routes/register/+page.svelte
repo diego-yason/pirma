@@ -2,12 +2,7 @@
     import { authClient } from "$lib/auth-client";
     import { goto } from "$app/navigation";
     import { resolve } from "$app/paths";
-    import {
-        generateKeyPair,
-        exportPublicKey,
-        encryptPrivateKey,
-    } from "$lib/client/key/generateKey";
-    import { storeKeys } from "$lib/client/key/store";
+    import { generateKeyPair, sign } from "$lib/client/sw-key";
     import { uploadKeys } from "./keyManagement.remote";
 
     let email = $state("");
@@ -83,29 +78,91 @@
             console.log("[register] Sign in successful", { userId: data?.user?.id });
             if (data?.user?.id) {
                 try {
-                    console.log("[register] Generating cryptographic key pair");
-                    const { publicKey, encryptedPrivateKey } = await (async () => {
-                        const kp = await generateKeyPair();
-                        const pub = await exportPublicKey(kp.publicKey);
-                        const enc = await encryptPrivateKey(kp.privateKey, password, data.user.id);
-                        return { publicKey: pub, encryptedPrivateKey: enc };
-                    })();
+                    console.log("[register] Generating cryptographic key pair in service worker", {
+                        userId: data.user.id,
+                    });
+                    const { publicKey, kid, publicKeyPw, kidPw, keyLevel, keyLevelPw, algorithm } =
+                        await generateKeyPair({
+                            userId: data.user.id,
+                            password,
+                        });
+                    console.log("[register] Key pairs generated", {
+                        kid,
+                        kidPw,
+                        keyLevel,
+                        keyLevelPw,
+                        algorithm,
+                    });
 
-                    console.log("[register] Storing and uploading keys");
-                    await Promise.all([
-                        storeKeys(data.user.id, {
-                            publicKey,
-                            encryptedPrivateKey,
-                        }),
-                        uploadKeys({
-                            pubkey: publicKey,
-                            pkey: encryptedPrivateKey,
-                        }),
+                    // Request a challenge from the server to prove key ownership
+                    console.log("[register] Requesting challenge");
+                    const chalRes = await fetch("/api/keys/challenge");
+                    if (!chalRes.ok) throw new Error("Failed to get challenge");
+                    const challenge = await chalRes.json();
+                    const challengeStr = JSON.stringify(challenge);
+                    console.log("[register] Challenge received", { nonce: challenge.nonce });
+
+                    // Sign the challenge with both keys
+                    console.log("[register] Signing challenge with both keys");
+                    const [sigA, sigB] = await Promise.all([
+                        sign(kid, challengeStr),
+                        sign(kidPw, challengeStr),
                     ]);
-                    console.log("[register] Keys stored and uploaded successfully");
+
+                    console.log("[register] Uploading signed public keys to server");
+
+                    /** Upload a single key with challenge-response, retrying once on failure. */
+                    async function uploadWithRetry(opts: {
+                        pubkey: string;
+                        keyLevel: number;
+                        nonce: string;
+                        kid: string;
+                        signature: string;
+                        label: string;
+                    }): Promise<boolean> {
+                        for (let attempt = 1; attempt <= 2; attempt++) {
+                            try {
+                                // On retry, get a fresh challenge and re-sign
+                                let c = challenge;
+                                let sig = opts.signature;
+                                if (attempt > 1) {
+                                    console.log(`[register] Retry ${opts.label} — fetching new challenge`);
+                                    const r = await fetch("/api/keys/challenge");
+                                    if (!r.ok) continue;
+                                    c = await r.json();
+                                    sig = await sign(opts.kid, JSON.stringify(c));
+                                }
+                                await uploadKeys({
+                                    pubkey: opts.pubkey,
+                                    keyLevel: opts.keyLevel,
+                                    nonce: c.nonce,
+                                    kid: opts.kid,
+                                    signature: sig,
+                                });
+                                console.log(`[register] ${opts.label} accepted`);
+                                return true;
+                            } catch (e) {
+                                console.warn(`[register] ${opts.label} attempt ${attempt} failed`, e);
+                            }
+                        }
+                        return false;
+                    }
+
+                    const results = await Promise.all([
+                        uploadWithRetry({ pubkey: publicKey, keyLevel, nonce: challenge.nonce, kid, signature: sigA, label: "keyA (userId)" }),
+                        uploadWithRetry({ pubkey: publicKeyPw, keyLevel: keyLevelPw, nonce: challenge.nonce, kid: kidPw, signature: sigB, label: "keyB (password)" }),
+                    ]);
+
+                    const accepted = results.filter(Boolean).length;
+                    if (accepted === 0) {
+                        throw new Error("Both keys rejected by server — cannot proceed");
+                    }
+                    console.log(`[register] ${accepted}/2 keys accepted by server`);
                 } catch (keyErr) {
                     console.error("[register] Key generation/storage failed:", keyErr);
-                    // Continue with registration even if key storage fails
+                    error = "Failed to set up signing keys. Please try again.";
+                    loading = false;
+                    return;
                 }
 
                 console.log("[register] Registration complete, redirecting to login");

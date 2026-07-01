@@ -1,8 +1,10 @@
 <script lang="ts">
     import { resolve } from "$app/paths";
+    import { goto } from "$app/navigation";
     import { authClient } from "$lib/auth-client.js";
-    import { redirect } from "@sveltejs/kit";
     import type { EventHandler } from "svelte/elements";
+    import { generateKeyPair, hasKeys, sign } from "$lib/client/sw-key";
+    import { uploadKeys } from "../register/keyManagement.remote";
 
     let submitting = $state(false);
     let email = $state("");
@@ -40,17 +42,91 @@
                 email,
                 password,
             })
-            .then(({ data, error }) => {
+            .then(async ({ data, error }) => {
                 if (error) {
                     console.error("[login] Login failed", error);
                     emailError = null;
                     passwordError = null;
                     formError = error.message || "Failed to sign in";
-                } else {
-                    console.log("[login] Login successful", { userId: data?.user?.id });
-                    return redirect(303, resolve("/"));
+                    submitting = false;
+                    return;
                 }
-                submitting = false;
+
+                const userId = data?.user?.id;
+                console.log("[login] Login successful", { userId });
+
+                // Generate device-bound keys if this device hasn't seen this user before
+                if (userId) {
+                    try {
+                        const existing = await hasKeys(userId);
+                        if (!existing) {
+                            console.log("[login] No keys on this device — generating new device-bound keys");
+                            const { publicKey, kid, publicKeyPw, kidPw, keyLevel, keyLevelPw } = await generateKeyPair({
+                                userId,
+                                password,
+                            });
+
+                            // Challenge-response to prove key ownership
+                            const chalRes = await fetch("/api/keys/challenge");
+                            if (!chalRes.ok) throw new Error("Failed to get challenge");
+                            const challenge = await chalRes.json();
+                            const challengeStr = JSON.stringify(challenge);
+                            console.log("[login] Challenge received", { nonce: challenge.nonce });
+
+                            const [sigA, sigB] = await Promise.all([
+                                sign(kid, challengeStr),
+                                sign(kidPw, challengeStr),
+                            ]);
+
+                            /** Upload a single key with challenge-response, retrying once. */
+                            async function uploadWithRetry(opts: {
+                                pubkey: string; keyLevel: number; nonce: string;
+                                kid: string; signature: string; label: string;
+                            }): Promise<boolean> {
+                                for (let attempt = 1; attempt <= 2; attempt++) {
+                                    try {
+                                        let c = challenge;
+                                        let sig = opts.signature;
+                                        if (attempt > 1) {
+                                            console.log(`[login] Retry ${opts.label}`);
+                                            const r = await fetch("/api/keys/challenge");
+                                            if (!r.ok) continue;
+                                            c = await r.json();
+                                            sig = await sign(opts.kid, JSON.stringify(c));
+                                        }
+                                        await uploadKeys({
+                                            pubkey: opts.pubkey, keyLevel: opts.keyLevel,
+                                            nonce: c.nonce, kid: opts.kid, signature: sig,
+                                        });
+                                        console.log(`[login] ${opts.label} accepted`);
+                                        return true;
+                                    } catch (e) {
+                                        console.warn(`[login] ${opts.label} attempt ${attempt} failed`, e);
+                                    }
+                                }
+                                return false;
+                            }
+
+                            const results = await Promise.all([
+                                uploadWithRetry({ pubkey: publicKey, keyLevel, nonce: challenge.nonce, kid, signature: sigA, label: "keyA" }),
+                                uploadWithRetry({ pubkey: publicKeyPw, keyLevel: keyLevelPw, nonce: challenge.nonce, kid: kidPw, signature: sigB, label: "keyB" }),
+                            ]);
+
+                            const accepted = results.filter(Boolean).length;
+                            if (accepted === 0) {
+                                console.error("[login] Both keys rejected — cannot sign documents on this device");
+                            } else {
+                                console.log(`[login] ${accepted}/2 keys accepted`);
+                            }
+                        } else {
+                            console.log("[login] Keys already exist on this device");
+                        }
+                    } catch (keyErr) {
+                        console.error("[login] Key setup failed (non-fatal):", keyErr);
+                    }
+                }
+
+                await goto(resolve("/"));
             });
     };
 </script>
