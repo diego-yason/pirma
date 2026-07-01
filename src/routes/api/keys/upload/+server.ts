@@ -3,7 +3,7 @@ import type { RequestHandler } from "./$types";
 import { db } from "$lib/server/db";
 import { cryptoKeys } from "$lib/server/db/schema";
 import { logger } from "$lib/server/logger";
-import { createVerify } from "node:crypto";
+import { verifyEcdsaSignature } from "$lib/server/crypto/verify-signature";
 import { consumeChallenge } from "$lib/server/crypto/key-challenge";
 
 export const POST: RequestHandler = async ({ request, locals, getClientAddress }) => {
@@ -70,22 +70,11 @@ export const POST: RequestHandler = async ({ request, locals, getClientAddress }
 
     // Verify the signature
     const challengeData = JSON.stringify(challenge);
-    let sigBuf: Buffer = Buffer.from(signature, "base64");
-
-    if (sigBuf.length === 64) {
-        sigBuf = p1363ToDer(sigBuf);
-    }
-
-    const verify = createVerify("SHA256");
-    verify.update(challengeData);
-    verify.end();
-
-    const isValid = verify.verify(pubkey, sigBuf);
+    const isValid = verifyEcdsaSignature(pubkey, challengeData, signature);
     if (!isValid) {
         logger.warn("keyUpload", "Signature verification failed", {
             kid,
             userId: locals.user.id,
-            sigLength: sigBuf.length,
         });
         return json({ error: "Signature verification failed — key rejected" }, { status: 401 });
     }
@@ -102,6 +91,7 @@ export const POST: RequestHandler = async ({ request, locals, getClientAddress }
             .values({
                 userId: locals.user.id,
                 pubkey,
+                kid,
                 keyLevel,
                 algorithm,
                 deviceInfo,
@@ -122,22 +112,3 @@ export const POST: RequestHandler = async ({ request, locals, getClientAddress }
         return json({ error: "Failed to store key" }, { status: 500 });
     }
 };
-
-// ── P1363 → DER conversion ──────────────────────────────────────
-
-function p1363ToDer(sig: Buffer): Buffer {
-    const half = sig.length / 2;
-    const derR = encodeInteger(sig.subarray(0, half));
-    const derS = encodeInteger(sig.subarray(half));
-    const seq = Buffer.concat([derR, derS]);
-    return Buffer.concat([Buffer.from([0x30, seq.length]), seq]);
-}
-
-function encodeInteger(bytes: Buffer): Buffer {
-    let start = 0;
-    while (start < bytes.length && bytes[start] === 0) start++;
-    const stripped = start < bytes.length ? bytes.subarray(start) : Buffer.from([0]);
-    const prefix = stripped[0] & 0x80 ? Buffer.from([0x00]) : Buffer.alloc(0);
-    const contents = Buffer.concat([prefix, stripped]);
-    return Buffer.concat([Buffer.from([0x02, contents.length]), contents]);
-}

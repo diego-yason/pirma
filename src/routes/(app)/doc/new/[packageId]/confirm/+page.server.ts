@@ -9,7 +9,7 @@ import {
     packages,
     user,
 } from "$lib/server/db/schema";
-import { eq, inArray, and, isNull } from "drizzle-orm";
+import { eq, inArray, and } from "drizzle-orm";
 import { requirePackageOwnership } from "$lib/server/package-guard";
 import { createGuestToken } from "$lib/server/auth/guest-token";
 import { env } from "$env/dynamic/private";
@@ -298,7 +298,7 @@ export const actions: Actions = {
                 await db
                     .select({ email: user.email })
                     .from(user)
-                    .where(inArray(user.email, signers.map((s) => s.email).filter(Boolean)))
+                    .where(inArray(user.email, signers.map((s) => s.email).filter((e): e is string => !!e)))
             ).map((u) => u.email),
         );
 

@@ -52,19 +52,33 @@ function openDB(): Promise<IDBDatabase> {
     });
 }
 
-async function storeEncryptedKey(kid: string, userId: string, encryptedPrivateKey: string) {
-    console.log("[SW] storeEncryptedKey", { kid, userId, keyLength: encryptedPrivateKey.length });
+async function storeEncryptedKey(
+    kid: string,
+    userId: string,
+    pubkey: string,
+    encryptedPrivateKey: string,
+) {
+    console.log("[SW] storeEncryptedKey", {
+        kid,
+        userId,
+        pubkeyLength: pubkey.length,
+        keyLength: encryptedPrivateKey.length,
+    });
     const db = await openDB();
     return new Promise<void>((resolve, reject) => {
         const tx = db.transaction(STORE_NAME, "readwrite");
-        tx.objectStore(STORE_NAME).put({ kid, userId, encryptedPrivateKey });
+        tx.objectStore(STORE_NAME).put({ kid, userId, pubkey, encryptedPrivateKey });
         tx.oncomplete = () => {
             console.log("[SW] Key stored in IndexedDB", { kid, userId });
             db.close();
             resolve();
         };
         tx.onerror = () => {
-            console.error("[SW] Failed to store key in IndexedDB", { kid, userId, error: tx.error?.message });
+            console.error("[SW] Failed to store key in IndexedDB", {
+                kid,
+                userId,
+                error: tx.error?.message,
+            });
             reject(tx.error);
         };
     });
@@ -96,10 +110,98 @@ async function hasKeysForUser(userId: string): Promise<boolean> {
             resolve(count > 0);
         };
         req.onerror = () => {
-            console.error("[SW hasKeysForUser] Query failed", { userId, error: req.error?.message });
+            console.error("[SW hasKeysForUser] Query failed", {
+                userId,
+                error: req.error?.message,
+            });
             reject(req.error);
         };
     });
+}
+
+// ── Key loading helpers ─────────────────────────────────────────
+
+interface EncryptedKeyRecord {
+    kid: string;
+    userId: string;
+    pubkey: string;
+    encryptedPrivateKey: string;
+}
+
+/** Fetch all encrypted key records for a user from IndexedDB. */
+async function getKeysForUser(userId: string): Promise<EncryptedKeyRecord[]> {
+    const db = await openDB();
+    return new Promise((resolve, reject) => {
+        if (!db.objectStoreNames.contains(STORE_NAME)) {
+            db.close();
+            resolve([]);
+            return;
+        }
+        const tx = db.transaction(STORE_NAME, "readonly");
+        const store = tx.objectStore(STORE_NAME);
+        if (!store.indexNames.contains("userId")) {
+            db.close();
+            resolve([]);
+            return;
+        }
+        const index = store.index("userId");
+        const req = index.getAll(userId);
+        req.onsuccess = () => {
+            const results = req.result as EncryptedKeyRecord[];
+            db.close();
+            resolve(results ?? []);
+        };
+        req.onerror = () => {
+            console.error("[SW getKeysForUser] Failed", { userId, error: req.error?.message });
+            db.close();
+            reject(req.error);
+        };
+    });
+}
+
+/**
+ * Load keys from IndexedDB into the in-memory keyStore.
+ * For level 1, decrypts with deriveKey(userId, userId).
+ * Level 2 keys are skipped (require password).
+ * Returns loaded count and the list of loaded kid values.
+ */
+async function handleLoadKeys(
+    userId: string,
+): Promise<{ loaded: number; skipped: number; kids: string[] }> {
+    const records = await getKeysForUser(userId);
+    let loaded = 0;
+    let skipped = 0;
+    const kids: string[] = [];
+
+    for (const rec of records) {
+        try {
+            // Try level 1 decryption (userId-encrypted)
+            const raw = b64Decode(rec.encryptedPrivateKey);
+            const iv = raw.slice(0, IV_LENGTH);
+            const ciphertext = raw.slice(IV_LENGTH);
+            const aesKey = await deriveKey(userId, userId);
+            const privateKey = await crypto.subtle.unwrapKey(
+                "pkcs8",
+                ciphertext.buffer as ArrayBuffer,
+                aesKey,
+                { name: "AES-GCM", iv },
+                { name: "ECDSA", namedCurve: "P-256" },
+                true,
+                ["sign"],
+            );
+            keyStore.set(rec.kid, privateKey);
+            kids.push(rec.kid);
+            loaded++;
+            console.log("[SW handleLoadKeys] Loaded key", { kid: rec.kid });
+        } catch {
+            // Not a level 1 key or corrupted — skip
+            skipped++;
+            console.log("[SW handleLoadKeys] Skipped key (not level 1)", { kid: rec.kid });
+        }
+    }
+
+    console.log("[SW handleLoadKeys] Complete", { userId, loaded, skipped, kids });
+    return { loaded, skipped, kids };
 }
 
 // ── Key generation ──────────────────────────────────────────────
@@ -126,7 +228,12 @@ async function handleGenerateKeyPair(userId: string, password: string) {
     });
     const kidA = crypto.randomUUID();
     keyStore.set(kidA, kpA.privateKey);
-    await storeEncryptedKey(kidA, userId, ivAndCiphertext(ivA, new Uint8Array(wrappedA)));
+    await storeEncryptedKey(
+        kidA,
+        userId,
+        spkiToPem(new Uint8Array(spkiA)),
+        ivAndCiphertext(ivA, new Uint8Array(wrappedA)),
+    );
     console.log("[SW] Key A ready", { kid: kidA });
 
     // ── Key B: encrypted with password + userId salt ───────────
@@ -141,7 +248,12 @@ async function handleGenerateKeyPair(userId: string, password: string) {
     });
     const kidB = crypto.randomUUID();
     keyStore.set(kidB, kpB.privateKey);
-    await storeEncryptedKey(kidB, userId, ivAndCiphertext(ivB, new Uint8Array(wrappedB)));
+    await storeEncryptedKey(
+        kidB,
+        userId,
+        spkiToPem(new Uint8Array(spkiB)),
+        ivAndCiphertext(ivB, new Uint8Array(wrappedB)),
+    );
     console.log("[SW] Key B ready", { kid: kidB });
 
     console.log("[SW] Key generation complete", { kidA, kidB, userId });
@@ -175,7 +287,12 @@ async function handleSign(kid: string, data: string) {
     );
 
     const sigB64 = b64Encode(new Uint8Array(signature));
-    console.log("[SW sign] Signature produced", { kid, sigLength: sigB64.length });
+    console.log("[SW sign] Signature produced", {
+        kid,
+        sigPreview: sigB64.slice(0, 32) + "…",
+        sigLength: sigB64.length,
+        dataLength: data.length,
+    });
 
     return { signature: sigB64 };
 }
@@ -251,7 +368,11 @@ sw.addEventListener("message", (event: ExtendableMessageEvent) => {
             }
             handleGenerateKeyPair(userId, password)
                 .then((data) => {
-                    console.log("[SW] generateKeyPair success", { userId, kid: data.kid, kidPw: data.kidPw });
+                    console.log("[SW] generateKeyPair success", {
+                        userId,
+                        kid: data.kid,
+                        kidPw: data.kidPw,
+                    });
                     respond({ success: true, data });
                 })
                 .catch((err: Error) => {
@@ -261,13 +382,18 @@ sw.addEventListener("message", (event: ExtendableMessageEvent) => {
             break;
         }
         case "sign": {
-            const { kid, data } = (msg.payload ?? {}) as { kid?: string; data?: string };
+            const { kid, data, keyLevel, context } = (msg.payload ?? {}) as {
+                kid?: string;
+                data?: string;
+                keyLevel?: number;
+                context?: Record<string, unknown>;
+            };
             if (!kid || !data) {
                 console.warn("[SW] sign missing kid or data");
                 respond({ success: false, error: "kid and data are required" });
                 break;
             }
-            console.log("[SW] sign request", { kid, dataLength: data.length });
+            console.log("[SW] sign request", { kid, dataLength: data.length, keyLevel });
             handleSign(kid, data)
                 .then((result) => {
                     console.log("[SW] sign success", { kid });
@@ -283,6 +409,24 @@ sw.addEventListener("message", (event: ExtendableMessageEvent) => {
             console.log("[SW] Received clearKeys — clearing in-memory key store");
             keyStore.clear();
             respond({ success: true, data: {} });
+            break;
+        }
+        case "loadKeys": {
+            console.log("[SW] Received loadKeys message");
+            const { userId } = (msg.payload ?? {}) as { userId?: string };
+            if (!userId) {
+                respond({ success: false, error: "userId is required" });
+                break;
+            }
+            handleLoadKeys(userId)
+                .then((result) => {
+                    console.log("[SW] loadKeys complete", result);
+                    respond({ success: true, data: result });
+                })
+                .catch((err: Error) => {
+                    console.error("[SW] loadKeys failed", { userId, error: err.message });
+                    respond({ success: false, error: err.message });
+                });
             break;
         }
         default:
@@ -319,4 +463,11 @@ function ivAndCiphertext(iv: Uint8Array, ciphertext: Uint8Array): string {
     out.set(iv);
     out.set(ciphertext, iv.length);
     return b64Encode(out);
+}
+
+function b64Decode(str: string): Uint8Array {
+    const bin = atob(str);
+    const buf = new Uint8Array(bin.length);
+    for (let i = 0; i < bin.length; i++) buf[i] = bin.charCodeAt(i);
+    return buf;
 }

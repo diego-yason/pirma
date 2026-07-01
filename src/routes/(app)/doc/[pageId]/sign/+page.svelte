@@ -6,6 +6,8 @@
     // import { registerPublicKey } from "$lib/client/archive/crypto"; // archived — superseded by SW key system
     import { authClient } from "$lib/client/auth/auth-client";
     import { setupDeviceKeys } from "$lib/client/crypto/setup-device-keys";
+    import { sign, loadKeys } from "$lib/client/crypto/sw-key";
+    import { buildSigningPayload } from "$lib/shared/signing-payload";
     import { page } from "$app/state";
 
     let { data }: PageProps = $props();
@@ -166,21 +168,98 @@
     async function handleFinalize() {
         finalizing = true;
         try {
+            // 1. Ensure keys are loaded in the SW's in-memory keyStore
+            console.log("[sign] Loading keys for signing", { userId: data.user.id });
+            const keys = await loadKeys(data.user.id);
+            if (keys.loaded === 0) {
+                console.error("[sign] No keys available for signing — cannot finalize", {
+                    userId: data.user.id,
+                });
+                finalizing = false;
+                return;
+            }
+            console.log("[sign] Keys loaded", { loaded: keys.loaded, skipped: keys.skipped });
+
+            // Use the first available kid (level 1 — userId-encrypted)
+            const kid = keys.kids[0];
+            if (!kid) {
+                console.error("[sign] No kid returned after loading keys", {
+                    loaded: keys.loaded,
+                    kids: keys.kids,
+                });
+                finalizing = false;
+                return;
+            }
+
+            // 2. Get the signed field IDs
+            const fieldIds = Object.entries(localSignStatus)
+                .filter(([, status]) => status === "signed" || status === "anchored")
+                .map(([fieldId]) => fieldId);
+
+            if (fieldIds.length === 0) {
+                console.warn("[sign] No fields are marked as signed — nothing to finalize", {
+                    userId: data.user.id,
+                });
+                finalizing = false;
+                return;
+            }
+            console.log("[sign] Signing fields", {
+                count: fieldIds.length,
+                kid,
+                fieldIds,
+            });
+
+            // 3. Sign each field's payload with the SW key
+            const signatures: Record<string, string> = {};
+            for (const fieldId of fieldIds) {
+                const userField = data.userFields.find((f) => f.fieldId === fieldId);
+                const doc = data.documents.find((d) => d.id === userField?.documentId);
+                if (!doc || !doc.hash) {
+                    console.error("[sign] Cannot sign field — document or hash missing", {
+                        fieldId,
+                        documentId: userField?.documentId,
+                    });
+                    continue;
+                }
+
+                const payload = buildSigningPayload(doc.hash, fieldIds.length);
+                const sig = await sign(kid, payload, 1);
+                signatures[fieldId] = sig;
+            }
+
+            // 4. POST to the server
             const body = new FormData();
-            body.append(
-                "signedFields",
-                JSON.stringify(
-                    Object.entries(localSignStatus)
-                        .filter(([, status]) => status === "signed" || status === "anchored")
-                        .map(([fieldId]) => fieldId),
-                ),
-            );
-            // Include guest token so the server can authenticate the request
+            body.append("signedFields", JSON.stringify(fieldIds));
+            body.append("signatures", JSON.stringify(signatures));
+            body.append("kid", kid);
+            body.append("keyLevel", "1");
+
             if (guestToken) {
                 body.append("guestToken", guestToken);
             }
-            await fetch(`/doc/${data.pkg.id}/sign?/finalize`, { method: "POST", body });
-            // TODO: navigate to view page or show success message
+
+            const res = await fetch(`/doc/${data.pkg.id}/sign?/finalize`, {
+                method: "POST",
+                body,
+            });
+
+            if (!res.ok) {
+                const err = await res.json().catch(() => ({}));
+                console.error("[sign] Finalize rejected by server", {
+                    status: res.status,
+                    error: err.error ?? "unknown",
+                    signedCount: fieldIds.length,
+                });
+            } else {
+                console.log("[sign] Finalize succeeded — redirecting to view page", {
+                    packageId: data.pkg.id,
+                    signedCount: fieldIds.length,
+                });
+                const { goto } = await import("$app/navigation");
+                goto(`/doc/${data.pkg.id}/view`);
+            }
+        } catch (err) {
+            console.error("[sign] Finalize threw unexpectedly", err);
         } finally {
             finalizing = false;
         }

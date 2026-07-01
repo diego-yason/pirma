@@ -211,6 +211,13 @@
       "when": 1782938611832,
       "tag": "0029_cloudy_silver_sable",
       "breakpoints": true
+    },
+    {
+      "idx": 30,
+      "version": "7",
+      "when": 1782944114965,
+      "tag": "0030_last_puff_adder",
+      "breakpoints": true
     }
   ]
 }

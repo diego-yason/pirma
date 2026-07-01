@@ -65,10 +65,18 @@ export async function hasKeys(userId: string): Promise<boolean> {
     return result.has;
 }
 
-/** Sign data with the key identified by `kid`. Returns base64-encoded DER signature. */
-export async function sign(kid: string, data: string): Promise<string> {
+/** Sign data with the key identified by `kid`. Returns base64-encoded DER signature.
+ *  @param keyLevel — reserved for future key-level-specific signing behavior (level 2+)
+ *  @param context — reserved for key-level-specific data (e.g. password digest for level 2)
+ */
+export async function sign(
+    kid: string,
+    data: string,
+    keyLevel?: number,
+    context?: Record<string, unknown>,
+): Promise<string> {
     ensureListener();
-    const result = await send<{ signature: string }>("sign", { kid, data });
+    const result = await send<{ signature: string }>("sign", { kid, data, keyLevel, context });
     return result.signature;
 }
 
@@ -76,4 +84,22 @@ export async function sign(kid: string, data: string): Promise<string> {
 export async function clearKeys(): Promise<void> {
     ensureListener();
     await send("clearKeys");
+}
+
+/**
+ * Load keys from IndexedDB into the SW's in-memory keyStore.
+ * Level 1 keys are loaded automatically (userId-derived).
+ * Level 2 keys are skipped unless a password is provided.
+ * Returns the number of keys loaded, skipped, and the list of kid values.
+ */
+export async function loadKeys(
+    userId: string,
+    password?: string,
+): Promise<{ loaded: number; skipped: number; kids: string[] }> {
+    ensureListener();
+    const result = await send<{ loaded: number; skipped: number; kids: string[] }>("loadKeys", {
+        userId,
+        ...(password ? { password } : {}),
+    });
+    return result;
 }

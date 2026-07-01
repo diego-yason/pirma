@@ -16,6 +16,8 @@ import { supabaseAdmin } from "$lib/server/storage/supabase";
 import { getSignedUrl, setSignedUrl } from "$lib/server/storage/url-cache";
 import { verifyGuestToken } from "$lib/server/auth/guest-token";
 import { logger } from "$lib/server/logger";
+import { verifyEcdsaSignature } from "$lib/server/crypto/verify-signature";
+import { buildSigningPayload } from "$lib/shared/signing-payload";
 import type { PlacedRect } from "$lib/client/types/SignatureBoxTypes";
 
 export const load: PageServerLoad = async ({ params, locals, url }) => {
@@ -264,6 +266,7 @@ export const load: PageServerLoad = async ({ params, locals, url }) => {
             storagePath: documents.storagePath,
             placementFields: documents.placementFields,
             pageCount: documents.pageCount,
+            hash: documents.hash,
         })
         .from(documents)
         .innerJoin(documentAssignments, eq(documents.id, documentAssignments.documentId))
@@ -294,6 +297,7 @@ export const load: PageServerLoad = async ({ params, locals, url }) => {
                 id: doc.id,
                 title: doc.title,
                 url,
+                hash: doc.hash,
                 pageCount: doc.pageCount ?? 0,
                 allFields: ((doc.placementFields ?? []) as PlacedRect[]).map((f) => ({
                     id: f.id,
@@ -420,23 +424,21 @@ export const load: PageServerLoad = async ({ params, locals, url }) => {
     });
 
     // Fetch ALL signatures across all users for these documents (for greyed-out field display)
-    const allSigRows = docIds.length > 0
-        ? await db
-              .select({
-                  txId: signatures.txId,
-                  status: signatures.status,
-              })
-              .from(signatures)
-              .innerJoin(cryptoKeys, eq(signatures.cryptoKey, cryptoKeys.id))
-              .where(
-                  and(
-                      isNull(cryptoKeys.revokedAt),
-                      inArray(signatures.documentId, docIds),
-                  ),
-              )
-        : [];
+    const allSigRows =
+        docIds.length > 0
+            ? await db
+                  .select({
+                      txId: signatures.txId,
+                      status: signatures.status,
+                  })
+                  .from(signatures)
+                  .innerJoin(cryptoKeys, eq(signatures.cryptoKey, cryptoKeys.id))
+                  .where(and(isNull(cryptoKeys.revokedAt), inArray(signatures.documentId, docIds)))
+            : [];
     const allSignedFieldIds = new Set(
-        allSigRows.filter((s) => s.status === "signed" || s.status === "anchored").map((s) => s.txId),
+        allSigRows
+            .filter((s) => s.status === "signed" || s.status === "anchored")
+            .map((s) => s.txId),
     );
 
     // Build per-document allFields (for greyed-out display of others' fields)
@@ -454,7 +456,9 @@ export const load: PageServerLoad = async ({ params, locals, url }) => {
                 height: f.height,
                 label: f.label,
             })),
-            allSignedStatus: Object.fromEntries(fields.map((f) => [f.id, allSignedFieldIds.has(f.id)])),
+            allSignedStatus: Object.fromEntries(
+                fields.map((f) => [f.id, allSignedFieldIds.has(f.id)]),
+            ),
         };
     });
 
@@ -528,6 +532,7 @@ async function handleGuestLoad(
             storagePath: documents.storagePath,
             placementFields: documents.placementFields,
             pageCount: documents.pageCount,
+            hash: documents.hash,
         })
         .from(documents)
         .innerJoin(documentAssignments, eq(documents.id, documentAssignments.documentId))
@@ -558,6 +563,7 @@ async function handleGuestLoad(
                 id: doc.id,
                 title: doc.title,
                 url,
+                hash: doc.hash,
                 pageCount: doc.pageCount ?? 0,
                 allFields: ((doc.placementFields ?? []) as PlacedRect[]).map((f) => ({
                     id: f.id,
@@ -737,24 +743,150 @@ export const actions: Actions = {
             signedFieldCount: signedFieldIds.length,
         });
 
-        // TODO: verify all signed fields belong to this party
-        // TODO: verify all required fields are signed (no unsigned fields left)
+        if (party.type !== "user") {
+            logger.warn("sign", "Finalize — only authenticated users can sign cryptographically", {
+                packageId,
+                partyType: party.type,
+            });
+            return fail(400, { error: "Guest finalize not yet supported" });
+        }
 
-        // ── Your logic here ─────────────────────────────────────
-        // e.g. create signature records, update document status,
-        //      notify next signer in sequence, etc.
-        // ─────────────────────────────────────────────────────────
+        // Read crypto signature data from form
+        const signaturesRaw = formData.get("signatures") as string | null;
+        const kid = formData.get("kid") as string | null;
+        const keyLevelRaw = formData.get("keyLevel") as string | null;
+        const keyLevel = keyLevelRaw ? Number(keyLevelRaw) : 1;
 
-        // TODO: mark signatures as signed in the database
-        // for (const fieldId of signedFieldIds) {
-        //     await db.insert(signatures).values({ ... });
-        // }
+        if (!signaturesRaw || !kid) {
+            logger.warn("sign", "Finalize — missing signatures or kid", { packageId });
+            return fail(400, { error: "Missing signature data" });
+        }
+
+        let sigMap: Record<string, string>;
+        try {
+            sigMap = JSON.parse(signaturesRaw);
+        } catch {
+            return fail(400, { error: "Invalid signatures JSON" });
+        }
+
+        // Fetch the user's active key (by userId + keyLevel)
+        const [activeKey] = await db
+            .select({
+                id: cryptoKeys.id,
+                pubkey: cryptoKeys.pubkey,
+                keyLevel: cryptoKeys.keyLevel,
+            })
+            .from(cryptoKeys)
+            .where(
+                and(
+                    eq(cryptoKeys.userId, party.userId),
+                    eq(cryptoKeys.keyLevel, keyLevel),
+                    isNull(cryptoKeys.revokedAt),
+                ),
+            )
+            .limit(1);
+
+        if (!activeKey) {
+            logger.warn("sign", "Finalize — no matching active key found", {
+                packageId,
+                userId: party.userId,
+                keyLevel,
+                kid,
+                hasSignatures: signedFieldIds.length > 0,
+            });
+            return fail(400, { error: "Signing key not found or has been revoked" });
+        }
+
+        // Fetch documents to get hashes and placement fields
+        const packageDocs = await db
+            .select({
+                id: documents.id,
+                hash: documents.hash,
+                placementFields: documents.placementFields,
+            })
+            .from(documents)
+            .innerJoin(documentAssignments, eq(documents.id, documentAssignments.documentId))
+            .where(eq(documentAssignments.packageId, packageId));
+
+        const docMap = new Map(packageDocs.map((d) => [d.id, d]));
+        const allFieldIds = new Set(signedFieldIds);
+        const sigFieldDoc = new Map<string, string>(); // fieldId → documentId
+
+        // Build a map of fieldId → documentId from placementFields
+        for (const doc of packageDocs) {
+            const fields = (doc.placementFields ?? []) as Array<{ id: string }>;
+            for (const f of fields) {
+                if (allFieldIds.has(f.id)) {
+                    sigFieldDoc.set(f.id, doc.id);
+                }
+            }
+        }
+
+        // Verify each signature
+        const now = new Date();
+        const sigInserts: Array<typeof signatures.$inferInsert> = [];
+
+        for (const fieldId of signedFieldIds) {
+            const sigB64 = sigMap[fieldId];
+            if (!sigB64) {
+                logger.warn("sign", "Finalize — missing signature for field", { fieldId });
+                return fail(400, { error: `Missing signature for field ${fieldId}` });
+            }
+
+            const docId = sigFieldDoc.get(fieldId);
+            if (!docId) {
+                logger.warn("sign", "Finalize — field not found in any document", { fieldId });
+                return fail(400, { error: `Field ${fieldId} not found in documents` });
+            }
+
+            const doc = docMap.get(docId)!;
+            const payload = buildSigningPayload(doc.hash, signedFieldIds.length);
+
+            if (!verifyEcdsaSignature(activeKey.pubkey, payload, sigB64)) {
+                logger.warn("sign", "Finalize — signature verification failed", {
+                    fieldCount: signedFieldIds.length,
+                    docHash: doc.hash,
+                    pubkey: activeKey.pubkey,
+                    signature: sigB64,
+                });
+                return fail(400, { error: `Signature verification failed for field ${fieldId}` });
+            }
+
+            sigInserts.push({
+                txId: fieldId,
+                documentId: docId,
+                documentHash: doc.hash,
+                status: "signed",
+                signedAt: now,
+                cryptoKey: activeKey.id,
+                signaturePayload: sigB64,
+                signatureAlgorithm: "ECDSA-P256-SHA256",
+            });
+        }
+
+        // All signatures verified — batch insert
+        if (sigInserts.length > 0) {
+            await db.insert(signatures).values(sigInserts);
+
+            // Update lastUsedAt on the key
+            await db
+                .update(cryptoKeys)
+                .set({ lastUsedAt: now })
+                .where(eq(cryptoKeys.id, activeKey.id));
+
+            logger.info("sign", "Finalize — signatures stored", {
+                packageId,
+                userId: party.userId,
+                count: sigInserts.length,
+            });
+        }
 
         // TODO: check if all signers are done → mark documents as executed
 
         logger.info("sign", "Finalize completed successfully", {
             packageId,
-            partyType: party.type,
+            userId: party.userId,
+            signedFieldCount: sigInserts.length,
         });
         return { success: true };
     },
