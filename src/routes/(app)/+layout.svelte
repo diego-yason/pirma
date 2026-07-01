@@ -44,8 +44,9 @@
 
     // Check whether device-bound signing keys exist and are still valid on the server.
     // Runs at most once — a one-shot flag prevents the reactivity loop when showKeySetup toggles.
+    // For anonymous users, the sign page handles key setup with an in-memory secret — skip here.
     $effect(() => {
-        if (data.user.id && !keyCheckDone) {
+        if (data.user.id && !keyCheckDone && !data.isAnonymous) {
             keyCheckDone = true;
 
             if (data.keyRotation) {

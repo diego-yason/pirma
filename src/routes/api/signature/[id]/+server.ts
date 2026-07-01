@@ -2,7 +2,7 @@ import { error } from "@sveltejs/kit";
 import type { RequestHandler } from "./$types";
 import { db } from "$lib/server/db";
 import { userSignatures } from "$lib/server/db/schema";
-import { supabaseAdmin } from "$lib/server/supabase";
+import { supabaseAdmin } from "$lib/server/storage/supabase";
 import { eq, and, isNull } from "drizzle-orm";
 
 export const GET: RequestHandler = async ({ params }) => {

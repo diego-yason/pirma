@@ -11,7 +11,7 @@ import {
 } from "$lib/server/db/schema";
 import { eq, inArray, and, isNull } from "drizzle-orm";
 import { requirePackageOwnership } from "$lib/server/package-guard";
-import { createGuestToken } from "$lib/server/guest-token";
+import { createGuestToken } from "$lib/server/auth/guest-token";
 import { env } from "$env/dynamic/private";
 import { logger } from "$lib/server/logger";
 

@@ -1,6 +1,6 @@
 import { json } from "@sveltejs/kit";
 import type { RequestHandler } from "./$types";
-import { createChallenge } from "$lib/server/key-challenge";
+import { createChallenge } from "$lib/server/crypto/key-challenge";
 import { logger } from "$lib/server/logger";
 
 export const GET: RequestHandler = async ({ locals }) => {

@@ -1,6 +1,6 @@
 import { json } from "@sveltejs/kit";
 import type { RequestHandler } from "./$types";
-import { checkKeyRotation } from "$lib/server/key-rotation";
+import { checkKeyRotation } from "$lib/server/crypto/key-rotation";
 
 /**
  * Returns whether the authenticated user's active key needs rotation.

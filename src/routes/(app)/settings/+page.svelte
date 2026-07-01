@@ -1,7 +1,7 @@
 <script lang="ts">
     import { enhance } from "$app/forms";
     import type { PageProps } from "./$types";
-    import SignatureDrawPad from "$lib/client/SignatureDrawPad.svelte";
+    import SignatureDrawPad from "$lib/client/ui/SignatureDrawPad.svelte";
 
     let { data, form }: PageProps = $props();
 

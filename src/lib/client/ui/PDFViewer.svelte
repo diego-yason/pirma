@@ -1,5 +1,5 @@
 <script lang="ts">
-    import type { PlacedRect, RecipientInfo } from "./types/SignatureBoxTypes";
+    import type { PlacedRect, RecipientInfo } from "../types/SignatureBoxTypes";
 
     type Mode = "design" | "sign";
     type Tool = "signature" | "text" | null;

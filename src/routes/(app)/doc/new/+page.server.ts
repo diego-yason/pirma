@@ -2,7 +2,7 @@ import type { Actions, PageServerLoad } from "./$types";
 import { redirect, fail } from "@sveltejs/kit";
 import { db } from "$lib/server/db";
 import { documents, packages, documentAssignments } from "$lib/server/db/schema";
-import { supabaseAdmin } from "$lib/server/supabase";
+import { supabaseAdmin } from "$lib/server/storage/supabase";
 import { and, eq } from "drizzle-orm";
 import { logger } from "$lib/server/logger";
 

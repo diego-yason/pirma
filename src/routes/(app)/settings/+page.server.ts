@@ -2,7 +2,7 @@ import type { Actions, PageServerLoad } from "./$types";
 import { fail } from "@sveltejs/kit";
 import { db } from "$lib/server/db";
 import { userSignatures } from "$lib/server/db/schema";
-import { supabaseAdmin } from "$lib/server/supabase";
+import { supabaseAdmin } from "$lib/server/storage/supabase";
 import { eq, and, isNull } from "drizzle-orm";
 import { logger } from "$lib/server/logger";
 
@@ -23,12 +23,7 @@ export const load: PageServerLoad = async ({ locals }) => {
             createdAt: userSignatures.createdAt,
         })
         .from(userSignatures)
-        .where(
-            and(
-                eq(userSignatures.userId, locals.user.id),
-                isNull(userSignatures.removedAt),
-            ),
-        )
+        .where(and(eq(userSignatures.userId, locals.user.id), isNull(userSignatures.removedAt)))
         .orderBy(userSignatures.createdAt);
 
     const signatures = await Promise.all(

@@ -1,5 +1,5 @@
 import type { PageServerLoad, Actions } from "./$types";
-import type { PlacedRect } from "$lib/client/SignatureBoxTypes";
+import type { PlacedRect } from "$lib/client/types/SignatureBoxTypes";
 import { redirect, fail } from "@sveltejs/kit";
 import { db } from "$lib/server/db";
 import { packageRecipients, documents, documentAssignments } from "$lib/server/db/schema";
@@ -8,8 +8,8 @@ import { requirePackageOwnership } from "$lib/server/package-guard";
 import { logger } from "$lib/server/logger";
 import { PUBLIC_MAX_RECIPIENTS } from "$env/static/public";
 
-import { supabaseAdmin } from "$lib/server/supabase";
-import { getSignedUrl, setSignedUrl } from "$lib/server/url-cache";
+import { supabaseAdmin } from "$lib/server/storage/supabase";
+import { getSignedUrl, setSignedUrl } from "$lib/server/storage/url-cache";
 
 const MAX_RECIPIENTS = Number(PUBLIC_MAX_RECIPIENTS) || 100;
 

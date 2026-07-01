@@ -4,7 +4,7 @@ import { db } from "$lib/server/db";
 import { cryptoKeys } from "$lib/server/db/schema";
 import { logger } from "$lib/server/logger";
 import { createVerify } from "node:crypto";
-import { consumeChallenge } from "$lib/server/key-challenge";
+import { consumeChallenge } from "$lib/server/crypto/key-challenge";
 
 export const POST: RequestHandler = async ({ request, locals, getClientAddress }) => {
     if (!locals.user) {

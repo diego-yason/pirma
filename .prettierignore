@@ -17,3 +17,6 @@ skills-lock.json
 
 # auto generated
 src/stories
+
+# Not mine
+/plugins/better-auth-opaque

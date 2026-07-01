@@ -2,7 +2,7 @@ import { json } from "@sveltejs/kit";
 import type { RequestHandler } from "./$types";
 import { db } from "$lib/server/db";
 import { packageRecipients, guestTokens } from "$lib/server/db/schema";
-import { verifyGuestToken } from "$lib/server/guest-token";
+import { verifyGuestToken } from "$lib/server/auth/guest-token";
 import { eq, and } from "drizzle-orm";
 import { logger } from "$lib/server/logger";
 

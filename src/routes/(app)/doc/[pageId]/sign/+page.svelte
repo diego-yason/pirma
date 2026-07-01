@@ -1,10 +1,11 @@
 <script lang="ts">
     import type { PageProps } from "./$types";
     import type { PlacedRect } from "$lib/client/types/SignatureBoxTypes";
-    import PDFViewer from "$lib/client/PDFViewer.svelte";
-    import SignatureCreator from "$lib/client/SignatureCreator.svelte";
+    import PDFViewer from "$lib/client/ui/PDFViewer.svelte";
+    import SignatureCreator from "$lib/client/ui/SignatureCreator.svelte";
     // import { registerPublicKey } from "$lib/client/archive/crypto"; // archived — superseded by SW key system
     import { authClient } from "$lib/client/auth/auth-client";
+    import { setupDeviceKeys } from "$lib/client/crypto/setup-device-keys";
     import { page } from "$app/state";
 
     let { data }: PageProps = $props();
@@ -12,17 +13,23 @@
     // Extract guest token from URL (if present)
     let guestToken = $derived(data.isGuest ? (page.url.searchParams.get("token") ?? "") : "");
 
+    // Random in-memory secret for guest key generation — lost on page close
+    let guestKeySecret = $state("");
+
     // Ensure a signing key is available in memory and registered on the server
     $effect(() => {
         if (data.isGuest && data.needsAnonymousSignIn) {
             setupGuestSession();
-        } else if (!data.isGuest) {
-            registerPublicKey();
         }
     });
 
     async function setupGuestSession() {
         try {
+            // Generate a random in-memory secret for key derivation.
+            // This lives only in JS memory — lost on page/tab close.
+            guestKeySecret = crypto.randomUUID();
+            console.log("[sign] Guest session key secret generated");
+
             // 1. Create an anonymous Better Auth session
             const anonResult = await authClient.signIn.anonymous();
             const anonUser = anonResult?.data?.user;
@@ -54,9 +61,17 @@
                 return; // Don't reload — let the user retry
             }
 
-            // 3. Reload — the server will now see the anonymous session
-            //    and match it to the linked recipient, entering the
-            //    authenticated flow (including key registration).
+            // 3. Set up device-bound keys using the in-memory secret
+            //    (no password prompt for guest users)
+            const accepted = await setupDeviceKeys(anonUser.id, guestKeySecret, true);
+            if (accepted === 0) {
+                console.error("[sign] Guest key setup failed — cannot sign documents");
+                return;
+            }
+            console.log("[sign] Guest keys set up successfully", { accepted });
+
+            // 4. Reload — the server will now see the anonymous session
+            //    and match it to the linked recipient.
             window.location.reload();
         } catch (err) {
             console.error("Failed to set up guest session", err);
@@ -205,7 +220,12 @@
 
     // Open the modal when the user has no saved signature
     $effect(() => {
-        if (!data.isGuest && !data.needsAnonymousSignIn && !data.defaultSignature && !localSignatureUrl) {
+        if (
+            !data.isGuest &&
+            !data.needsAnonymousSignIn &&
+            !data.defaultSignature &&
+            !localSignatureUrl
+        ) {
             const timer = setTimeout(() => {
                 showSignatureSetup = true;
             }, 500);
@@ -247,11 +267,7 @@
                 Create a signature to use when signing documents.
             </p>
 
-            <SignatureCreator
-                onsave={onSigSave}
-                onsaveerror={onSigError}
-                onskip={onSigSkip}
-            />
+            <SignatureCreator onsave={onSigSave} onsaveerror={onSigError} onskip={onSigSkip} />
 
             {#if sigError}
                 <p class="mt-2 text-sm text-red-600">{sigError}</p>

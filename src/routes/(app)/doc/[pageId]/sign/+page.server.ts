@@ -12,11 +12,11 @@ import {
     user,
 } from "$lib/server/db/schema";
 import { eq, and, isNull, inArray } from "drizzle-orm";
-import { supabaseAdmin } from "$lib/server/supabase";
-import { getSignedUrl, setSignedUrl } from "$lib/server/url-cache";
-import { verifyGuestToken } from "$lib/server/guest-token";
+import { supabaseAdmin } from "$lib/server/storage/supabase";
+import { getSignedUrl, setSignedUrl } from "$lib/server/storage/url-cache";
+import { verifyGuestToken } from "$lib/server/auth/guest-token";
 import { logger } from "$lib/server/logger";
-import type { PlacedRect } from "$lib/client/SignatureBoxTypes";
+import type { PlacedRect } from "$lib/client/types/SignatureBoxTypes";
 
 export const load: PageServerLoad = async ({ params, locals, url }) => {
     const packageId = params.pageId;
