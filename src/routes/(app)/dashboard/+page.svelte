@@ -42,53 +42,65 @@
     {/if}
 </div>
 
-<div class="px-4 mt-8">
+<div class="px-4 mt-8 max-w-xl">
     <div class="py-2 border border-neutral-800 items-center rounded-t-md flex justify-between px-4">
-        <h2 class="text-2xl font-semibold tracking-wide">Recent Documents</h2>
+        <h2 class="text-2xl font-semibold tracking-wide">Recent Envelopes</h2>
         <a class="text-secondary-500 tracking-wide" href={resolve("/doc/list")}>View All</a>
     </div>
-    <!-- header -->
-    <div class="text-sm grid border-neutral-800 grid-cols-8 border border-t-0 py-4 px-4">
-        <p class="font-medium text-neutral-500 tracking-wider uppercase col-span-3">
-            Document Name
-        </p>
-        <p class="font-medium text-neutral-500 tracking-wider uppercase col-span-2">Owner</p>
-        <p class="font-medium text-neutral-500 tracking-wider uppercase">Date</p>
-        <p class="font-medium text-neutral-500 tracking-wider uppercase">Status</p>
-        <p class="font-medium text-neutral-500 tracking-wider uppercase">view</p>
-    </div>
-    {#each data.recentDocuments as doc (doc.id)}
-        <div
-            class="text-sm grid py-4 border border-t-0 border-neutral-800 rounded-b-md grid-cols-8 px-4 items-center"
-        >
-            <p class="col-span-3">{doc.title}</p>
-            <p class="col-span-2">You</p>
-            <p class="">
-                {new Date(doc.createdAt).toLocaleDateString("en-SG", {
-                    day: "numeric",
-                    month: "short",
-                    year: "numeric",
-                })}
-            </p>
-            <p class="">{statusLabel[doc.status] ?? doc.status}</p>
-            {#if doc.status === "draft" && doc.packageId}
-                <a href={resolve(`/doc/new/${doc.packageId}`)} class="text-secondary-200"
-                    >View Document</a
-                >
-            {:else if doc.packageId}
-                <a href={resolve(`/doc/${doc.packageId}`)} class="text-secondary-200"
-                    >View Document</a
-                >
-            {:else}
-                <span class="text-secondary-200">View Document</span>
-            {/if}
+    {#each data.recentDocuments as pkg (pkg.id)}
+        <div class="border border-t-0 border-neutral-800">
+            <div
+                class="px-4 py-3 border-b border-neutral-800 flex items-center justify-between bg-neutral-900/30"
+            >
+                <div class="min-w-0 flex-1">
+                    <p class="text-sm font-semibold truncate">{pkg.name}</p>
+                    <p class="text-xs text-neutral-500 mt-0.5">
+                        {pkg.documents.length} doc{pkg.documents.length !== 1 ? "s" : ""}
+                        · Created {pkg.documents[0]?.createdAt
+                            ? new Date(pkg.documents[0].createdAt).toLocaleDateString("en-SG", {
+                                  day: "numeric",
+                                  month: "short",
+                                  year: "numeric",
+                              })
+                            : ""}
+                    </p>
+                </div>
+                <div class="flex items-center gap-3 text-xs shrink-0">
+                    {#if pkg.documents.some((d) => d.status === "draft")}
+                        <span class="rounded-full bg-neutral-800 px-2 py-0.5 text-neutral-400">Draft</span>
+                    {:else if pkg.documents.every((d) => d.status === "executed")}
+                        <span class="rounded-full bg-emerald-900/50 px-2 py-0.5 text-emerald-300">Executed</span>
+                    {:else}
+                        <span class="rounded-full bg-amber-900/50 px-2 py-0.5 text-amber-300">In Progress</span>
+                    {/if}
+                    <a
+                        href={resolve(`/doc/${pkg.id}`)}
+                        class="text-secondary-200 hover:underline"
+                    >
+                        View
+                    </a>
+                </div>
+            </div>
+            <div class="divide-y divide-neutral-900">
+                {#each pkg.documents as doc (doc.id)}
+                    <a
+                        href={doc.status === "draft"
+                            ? resolve(`/doc/new/${pkg.id}`)
+                            : resolve(`/doc/${pkg.id}`)}
+                        class="flex items-center gap-2 px-4 py-2 pl-10 text-sm hover:bg-neutral-900/20 transition"
+                    >
+                        <span class="text-neutral-600 shrink-0">└─</span>
+                        <span class="truncate">{doc.title}</span>
+                    </a>
+                {/each}
+            </div>
         </div>
     {/each}
     {#if data.recentDocuments.length === 0}
         <p
             class="text-neutral-500 text-sm px-4 py-4 border border-t-0 border-neutral-800 rounded-b-md"
         >
-            No documents yet. Upload your first document to get started.
+            No envelopes yet. Upload your first document to get started.
         </p>
     {/if}
 </div>

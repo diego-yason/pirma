@@ -67,28 +67,20 @@ export const load: PageServerLoad = async ({ locals }) => {
         .orderBy(desc(completedDocumentsView.updatedAt))
         .limit(5);
 
-    // ── "My Recent Documents" ──────────────────────────────────────
-    // Uses documents_owner_idx → WHERE owner = ?
-    // ─────────────────────────────────────────────────────────────────
-    const recentDocs = db
+    // ── "My Recent Documents" (grouped by package/envelope) ───────
+    const recentPkgs = db
         .select({
-            id: documents.id,
-            title: documents.title,
-            status: documents.status,
-            createdAt: documents.createdAt,
-            updatedAt: documents.updatedAt,
-            packageId: documentAssignments.packageId,
+            id: packages.id,
+            name: packages.name,
+            updatedAt: packages.updatedAt,
         })
-        .from(documents)
-        .leftJoin(documentAssignments, eq(documents.id, documentAssignments.documentId))
-        .where(eq(documents.owner, locals.user.id))
-        .orderBy(desc(documents.updatedAt))
+        .from(packages)
+        .where(eq(packages.owner, locals.user.id))
+        .orderBy(desc(packages.updatedAt))
         .limit(10);
 
     // ── "Packages I Can View" ──────────────────────────────────────
-    // Uses package_viewers_user_id_idx → WHERE user_id = ?
-    // ─────────────────────────────────────────────────────────────────
-    const viewablePackages = db
+    const viewablePkgs = db
         .select({
             id: packages.id,
             name: packages.name,
@@ -99,12 +91,41 @@ export const load: PageServerLoad = async ({ locals }) => {
         .where(eq(packageViewers.userId, locals.user.id))
         .limit(10);
 
-    const [pending, completed, recent, viewable] = await Promise.all([
+    const [pending, completed, recentPkgRows, viewable] = await Promise.all([
         pendingPkgs,
         completedDocs,
-        recentDocs,
-        viewablePackages,
+        recentPkgs,
+        viewablePkgs,
     ]);
+
+    // Fetch documents for each recent package
+    const recentPkgIds = recentPkgRows.map((p) => p.id);
+    const recentDocRows = recentPkgIds.length > 0
+        ? await db
+              .select({
+                  id: documents.id,
+                  title: documents.title,
+                  status: documents.status,
+                  createdAt: documents.createdAt,
+                  updatedAt: documents.updatedAt,
+                  packageId: documentAssignments.packageId,
+              })
+              .from(documents)
+              .innerJoin(documentAssignments, eq(documents.id, documentAssignments.documentId))
+              .where(inArray(documentAssignments.packageId, recentPkgIds))
+              .orderBy(desc(documents.updatedAt))
+        : [];
+    const docsByPkg = new Map<string, typeof recentDocRows>();
+    for (const doc of recentDocRows) {
+        const list = docsByPkg.get(doc.packageId) ?? [];
+        list.push(doc);
+        docsByPkg.set(doc.packageId, list);
+    }
+    const recentPackages = recentPkgRows.map((p) => ({
+        id: p.id,
+        name: p.name,
+        documents: docsByPkg.get(p.id) ?? [],
+    }));
 
     // Build expiration date map and owner map for pending packages
     const pendingPkgIds = pending.map((p) => p.id);
@@ -138,7 +159,7 @@ export const load: PageServerLoad = async ({ locals }) => {
         userId: locals.user.id,
         pendingCount: pending.length,
         completedCount: completed.length,
-        recentCount: recent.length,
+        recentCount: recentPackages.length,
         viewableCount: viewable.length,
     });
 
@@ -149,7 +170,7 @@ export const load: PageServerLoad = async ({ locals }) => {
             docCount: Number(p.docCount),
         })),
         completedDocuments: completed,
-        recentDocuments: recent,
+        recentDocuments: recentPackages,
         viewablePackages: viewable,
         expirationDates: expirationMap,
         ownerInfo: ownerMap,
