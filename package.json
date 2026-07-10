@@ -45,7 +45,7 @@
 		"@types/node": "^22.19.19",
 		"@vitest/browser-playwright": "^4.1.7",
 		"@vitest/coverage-v8": "^4.1.7",
-		"better-auth": "~1.4.22",
+		"better-auth": "~1.6.13",
 		"drizzle-kit": "^0.31.10",
 		"drizzle-orm": "^0.45.2",
 		"eslint": "^10.4.0",
