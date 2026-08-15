@@ -2,7 +2,7 @@
     // @ts-nocheck snippets mm
     import { page } from "$app/state";
     import { resolve } from "$app/paths";
-    import { hasDeviceKeys, setupDeviceKeys } from "#lib/client/crypto/setup-device-keys.js";
+    import { setupDeviceKeys } from "#lib/client/crypto/setup-device-keys.js";
     import { authClient } from "#lib/client/auth/auth-client.js";
     import type { LayoutProps } from "./$types";
 
@@ -42,39 +42,29 @@
     let keyLoading = $state(false);
     let keyCheckDone = $state(false);
 
-    // Check whether device-bound signing keys exist and are still valid on the server.
+    // Check whether a persistent (level-2) signing key exists and is valid.
     // Runs at most once — a one-shot flag prevents the reactivity loop when showKeySetup toggles.
-    // For anonymous users, the sign page handles key setup with an in-memory secret — skip here.
+    // Level-1 session keys are generated silently on demand and never prompt for a password.
+    // For anonymous users, the sign page handles keys on its own — skip here.
     $effect(() => {
         if (data.user.id && !keyCheckDone && !data.isAnonymous) {
             keyCheckDone = true;
 
             if (data.keyRotation) {
-                // Key exists but needs rotation (age, idle, usage, or algorithm)
-                console.warn("[layout] Key needs rotation", data.keyRotation);
+                // Persistent level-2 key exists but needs rotation
+                // (age, idle, usage, or algorithm)
+                console.warn("[layout] Level-2 key needs rotation", data.keyRotation);
                 keySetupForce = true;
                 keySetupReason = data.keyRotation.reason;
                 showKeySetup = true;
-            } else if (!data.hasKey) {
-                // Server reports no active (non-revoked) keys — prompt setup
-                console.warn("[layout] No active keys on server for user", {
+            } else if (!data.hasLevel2) {
+                // No persistent level-2 key — offer to create one with a password
+                console.warn("[layout] No level-2 key for user", {
                     userId: data.user.id,
                 });
                 keySetupForce = true;
                 keySetupReason = "";
                 showKeySetup = true;
-            } else {
-                // Server has keys — verify the device still has them locally
-                hasDeviceKeys(data.user.id).then((exists) => {
-                    if (!exists) {
-                        console.warn("[layout] Keys exist on server but not on this device", {
-                            userId: data.user.id,
-                        });
-                        keySetupForce = false;
-                        keySetupReason = "";
-                        showKeySetup = true;
-                    }
-                });
             }
         }
     });

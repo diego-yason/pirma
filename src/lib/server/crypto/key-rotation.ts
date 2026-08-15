@@ -102,7 +102,7 @@ export function checkKeyPolicy(key: {
  */
 export async function checkKeyUsage(keyId: string): Promise<RotationResult> {
     const [count] = await db
-        .select({ count: sql`count(*)::int` })
+        .select({ count: sql<number>`count(*)::int` })
         .from(signatures)
         .where(
             and(
@@ -124,16 +124,21 @@ export async function checkKeyUsage(keyId: string): Promise<RotationResult> {
 
 /**
  * Full rotation check for a user's active (non-revoked) key.
- * Returns the first policy violation, or null if the key is fine.
+ * Pass `keyLevel` to scope the check to a specific tier (e.g. 2 for the
+ * persistent password-bound key). Returns the first policy violation, or null
+ * if the key is fine.
  *
  * Usage example in a load function:
  * ```ts
  * import { checkKeyRotation } from "#lib/server/key-rotation";
- * const rotation = await checkKeyRotation(userId);
+ * const rotation = await checkKeyRotation(userId, 2);
  * if (rotation) { /* warn the user *&#47; }
  * ```
  */
-export async function checkKeyRotation(userId: string): Promise<RotationResult | null> {
+export async function checkKeyRotation(
+    userId: string,
+    keyLevel?: number,
+): Promise<RotationResult | null> {
     const [key] = await db
         .select({
             id: cryptoKeys.id,
@@ -142,7 +147,13 @@ export async function checkKeyRotation(userId: string): Promise<RotationResult |
             algorithm: cryptoKeys.algorithm,
         })
         .from(cryptoKeys)
-        .where(and(eq(cryptoKeys.userId, userId), isNull(cryptoKeys.revokedAt)))
+        .where(
+            and(
+                eq(cryptoKeys.userId, userId),
+                isNull(cryptoKeys.revokedAt),
+                keyLevel ? eq(cryptoKeys.keyLevel, keyLevel) : undefined,
+            ),
+        )
         .limit(1);
 
     if (!key) return null; // no active key at all

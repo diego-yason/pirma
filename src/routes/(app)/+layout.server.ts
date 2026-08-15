@@ -12,7 +12,7 @@ export const load: LayoutServerLoad = async ({ locals, url }) => {
     }
 
     let isAnonymous = false;
-    let hasKey = false;
+    let hasLevel2 = false;
     let keyRotation: { reason: string; check: string } | null = null;
     let recipientName: string | null = null;
     let recipientEmail: string | null = null;
@@ -25,17 +25,25 @@ export const load: LayoutServerLoad = async ({ locals, url }) => {
             .limit(1);
         isAnonymous = row?.isAnonymous ?? false;
 
-        // Check if user already has an active signing key
+        // Check whether the user has an active persistent (level-2) signing key.
+        // Level-1 session keys are ephemeral and auto-generated — they never
+        // require a password prompt, so only level-2 drives the UI prompt.
         const [keyRow] = await db
             .select({ id: cryptoKeys.id })
             .from(cryptoKeys)
-            .where(and(eq(cryptoKeys.userId, locals.user.id), isNull(cryptoKeys.revokedAt)))
+            .where(
+                and(
+                    eq(cryptoKeys.userId, locals.user.id),
+                    eq(cryptoKeys.keyLevel, 2),
+                    isNull(cryptoKeys.revokedAt),
+                ),
+            )
             .limit(1);
-        hasKey = !!keyRow;
+        hasLevel2 = !!keyRow;
 
-        // Check if the active key needs rotation
-        if (hasKey) {
-            const rotation = await checkKeyRotation(locals.user.id);
+        // Rotation policy applies to the persistent level-2 key only.
+        if (hasLevel2) {
+            const rotation = await checkKeyRotation(locals.user.id, 2);
             if (rotation) {
                 keyRotation = { reason: rotation.reason!, check: rotation.check! };
             }
@@ -67,7 +75,7 @@ export const load: LayoutServerLoad = async ({ locals, url }) => {
             email: recipientEmail ?? locals.user?.email,
         },
         isAnonymous,
-        hasKey,
+        hasLevel2,
         keyRotation,
     };
 };
