@@ -9,11 +9,19 @@ const sw = self as unknown as ServiceWorkerGlobalScope;
 
 const PBKDF2_ITERATIONS = 600_000;
 const IV_LENGTH = 12;
+const SALT_LENGTH = 16;
 const DB_NAME = "pirma-sw-keys";
 const STORE_NAME = "encrypted-keys";
 
-// In-memory private key references for active signing sessions
-const keyStore = new Map<string, CryptoKey>();
+// In-memory private keys for active signing sessions.
+// Level-1 keys live HERE ONLY (never persisted to disk); level-2 keys are
+// loaded into here from IndexedDB after a password unlock.
+interface InMemoryKey {
+    userId: string;
+    keyLevel: number;
+    key: CryptoKey;
+}
+const keyStore = new Map<string, InMemoryKey>();
 
 let msgCounter = 0;
 
@@ -57,17 +65,20 @@ async function storeEncryptedKey(
     userId: string,
     pubkey: string,
     encryptedPrivateKey: string,
+    salt: string,
+    keyLevel: number,
 ) {
     console.log("[SW] storeEncryptedKey", {
         kid,
         userId,
         pubkeyLength: pubkey.length,
         keyLength: encryptedPrivateKey.length,
+        keyLevel,
     });
     const db = await openDB();
     return new Promise<void>((resolve, reject) => {
         const tx = db.transaction(STORE_NAME, "readwrite");
-        tx.objectStore(STORE_NAME).put({ kid, userId, pubkey, encryptedPrivateKey });
+        tx.objectStore(STORE_NAME).put({ kid, userId, pubkey, encryptedPrivateKey, salt, keyLevel });
         tx.oncomplete = () => {
             console.log("[SW] Key stored in IndexedDB", { kid, userId });
             db.close();
@@ -84,11 +95,20 @@ async function storeEncryptedKey(
     });
 }
 
-async function hasKeysForUser(userId: string): Promise<boolean> {
+/** Level-1 session keys live only in memory — check there. */
+function hasKeysForUser(userId: string): boolean {
+    for (const rec of keyStore.values()) {
+        if (rec.userId === userId && rec.keyLevel === 1) return true;
+    }
+    return false;
+}
+
+/** Level-2 keys are persisted (password-wrapped) in IndexedDB — check there. */
+async function hasPersistentKeysForUser(userId: string): Promise<boolean> {
     const db = await openDB();
     return new Promise((resolve, reject) => {
         if (!db.objectStoreNames.contains(STORE_NAME)) {
-            console.log("[SW hasKeysForUser] No encrypted-keys store yet", { userId });
+            console.log("[SW hasPersistentKeysForUser] No encrypted-keys store yet", { userId });
             db.close();
             resolve(false);
             return;
@@ -96,21 +116,24 @@ async function hasKeysForUser(userId: string): Promise<boolean> {
         const tx = db.transaction(STORE_NAME, "readonly");
         const store = tx.objectStore(STORE_NAME);
         if (!store.indexNames.contains("userId")) {
-            console.warn("[SW hasKeysForUser] userId index not found", { userId });
+            console.warn("[SW hasPersistentKeysForUser] userId index not found", { userId });
             db.close();
             resolve(false);
             return;
         }
         const index = store.index("userId");
-        const req = index.count(userId);
+        const req = index.getAll(userId);
         req.onsuccess = () => {
-            const count = req.result;
-            console.log(`[SW hasKeysForUser] Found ${count} keys for user`, { userId });
+            const results = req.result as EncryptedKeyRecord[];
+            const has = results.some((r) => r.keyLevel === 2 && !!r.salt);
+            console.log(`[SW hasPersistentKeysForUser] ${has ? "found" : "no"} level-2 keys`, {
+                userId,
+            });
             db.close();
-            resolve(count > 0);
+            resolve(has);
         };
         req.onerror = () => {
-            console.error("[SW hasKeysForUser] Query failed", {
+            console.error("[SW hasPersistentKeysForUser] Query failed", {
                 userId,
                 error: req.error?.message,
             });
@@ -126,9 +149,13 @@ interface EncryptedKeyRecord {
     userId: string;
     pubkey: string;
     encryptedPrivateKey: string;
+    /** Random per-key PBKDF2 salt (base64). Absent on legacy userId-derived records. */
+    salt?: string;
+    /** 2 for password-wrapped persistent keys. */
+    keyLevel?: number;
 }
 
-/** Fetch all encrypted key records for a user from IndexedDB. */
+/** Fetch the persistent (level-2) key records for a user from IndexedDB. */
 async function getKeysForUser(userId: string): Promise<EncryptedKeyRecord[]> {
     const db = await openDB();
     return new Promise((resolve, reject) => {
@@ -149,7 +176,9 @@ async function getKeysForUser(userId: string): Promise<EncryptedKeyRecord[]> {
         req.onsuccess = () => {
             const results = req.result as EncryptedKeyRecord[];
             db.close();
-            resolve(results ?? []);
+            // Only level-2 records with a salt are loadable. Legacy level-1
+            // records (userId-derived, no salt) are intentionally ignored.
+            resolve((results ?? []).filter((r) => r.keyLevel === 2 && !!r.salt));
         };
         req.onerror = () => {
             console.error("[SW getKeysForUser] Failed", { userId, error: req.error?.message });
@@ -160,44 +189,58 @@ async function getKeysForUser(userId: string): Promise<EncryptedKeyRecord[]> {
 }
 
 /**
- * Load keys from IndexedDB into the in-memory keyStore.
- * For level 1, decrypts with deriveKey(userId, userId).
- * Level 2 keys are skipped (require password).
- * Returns loaded count and the list of loaded kid values.
+ * Load keys into the in-memory keyStore.
+ * - Level-1 session keys are already in memory (never persisted).
+ * - Level-2 keys are read from IndexedDB and unwrapped with the password.
+ *   Without a password they are skipped.
  */
 async function handleLoadKeys(
     userId: string,
+    password?: string,
 ): Promise<{ loaded: number; skipped: number; kids: string[] }> {
-    const records = await getKeysForUser(userId);
     let loaded = 0;
     let skipped = 0;
     const kids: string[] = [];
 
-    for (const rec of records) {
-        try {
-            // Try level 1 decryption (userId-encrypted)
-            const raw = b64Decode(rec.encryptedPrivateKey);
-            const iv = raw.slice(0, IV_LENGTH);
-            const ciphertext = raw.slice(IV_LENGTH);
-            const aesKey = await deriveKey(userId, userId);
-            const privateKey = await crypto.subtle.unwrapKey(
-                "pkcs8",
-                ciphertext.buffer as ArrayBuffer,
-                aesKey,
-                { name: "AES-GCM", iv },
-                { name: "ECDSA", namedCurve: "P-256" },
-                true,
-                ["sign"],
-            );
-            keyStore.set(rec.kid, privateKey);
-            kids.push(rec.kid);
+    // Level-1 session keys (in-memory only)
+    for (const [kid, rec] of keyStore) {
+        if (rec.userId === userId && rec.keyLevel === 1) {
+            kids.push(kid);
             loaded++;
-            console.log("[SW handleLoadKeys] Loaded key", { kid: rec.kid });
-        } catch {
-            // Not a level 1 key or corrupted — skip
-            skipped++;
-            console.log("[SW handleLoadKeys] Skipped key (not level 1)", { kid: rec.kid });
         }
+    }
+
+    // Level-2 persistent keys (IndexedDB, password-wrapped)
+    const records = await getKeysForUser(userId);
+    if (password) {
+        for (const rec of records) {
+            try {
+                const raw = b64Decode(rec.encryptedPrivateKey);
+                const iv = raw.slice(0, IV_LENGTH);
+                const ciphertext = raw.slice(IV_LENGTH);
+                const aesKey = await deriveKey(password, b64Decode(rec.salt!));
+                const privateKey = await crypto.subtle.unwrapKey(
+                    "pkcs8",
+                    ciphertext.buffer as ArrayBuffer,
+                    aesKey,
+                    { name: "AES-GCM", iv },
+                    { name: "ECDSA", namedCurve: "P-256" },
+                    true,
+                    ["sign"],
+                );
+                keyStore.set(rec.kid, { userId, keyLevel: 2, key: privateKey });
+                kids.push(rec.kid);
+                loaded++;
+                console.log("[SW handleLoadKeys] Loaded level-2 key", { kid: rec.kid });
+            } catch {
+                skipped++;
+                console.log("[SW handleLoadKeys] Skipped key (wrong password or corrupted)", {
+                    kid: rec.kid,
+                });
+            }
+        }
+    } else {
+        skipped += records.length;
     }
 
     console.log("[SW handleLoadKeys] Complete", { userId, loaded, skipped, kids });
@@ -207,52 +250,57 @@ async function handleLoadKeys(
 // ── Key generation ──────────────────────────────────────────────
 
 /**
- * Generates two key pairs at registration:
- *   1. userId-encrypted key — derived from userId alone (deterministic, no password needed)
- *   2. Password-encrypted key — derived from password + userId as salt
- * Both private keys stay in the SW; only public keys are returned.
+ * Generates signing key pair(s):
+ *   1. Level-1 SESSION key — non-extractable, held only in memory, never persisted.
+ *   2. Level-2 persistent key — wrapped with the password + random salt, stored in IndexedDB.
+ *      Skipped entirely when no password is provided (e.g. guest/anonymous users).
+ * Only public keys are ever returned to the caller.
  */
 async function handleGenerateKeyPair(userId: string, password: string) {
-    console.log("[SW] Starting key generation", { userId });
+    console.log("[SW] Starting key generation", { userId, hasPassword: !!password });
     const algorithm = { name: "ECDSA", namedCurve: "P-256" } as const;
 
-    // ── Key A: encrypted with userId only ──────────────────────
-    console.log("[SW] Generating key A (userId-encrypted)");
-    const kpA = await crypto.subtle.generateKey(algorithm, true, ["sign", "verify"]);
+    // ── Key A: level-1 SESSION key (in-memory only) ────────────
+    console.log("[SW] Generating key A (level-1 session key)");
+    const kpA = await crypto.subtle.generateKey(algorithm, false, ["sign"]);
     const spkiA = await crypto.subtle.exportKey("spki", kpA.publicKey);
-    const aesA = await deriveKey(userId, userId); // password = userId, salt = userId
-    const ivA = crypto.getRandomValues(new Uint8Array(IV_LENGTH));
-    const wrappedA = await crypto.subtle.wrapKey("pkcs8", kpA.privateKey, aesA, {
-        name: "AES-GCM",
-        iv: ivA,
-    });
     const kidA = crypto.randomUUID();
-    keyStore.set(kidA, kpA.privateKey);
-    await storeEncryptedKey(
-        kidA,
-        userId,
-        spkiToPem(new Uint8Array(spkiA)),
-        ivAndCiphertext(ivA, new Uint8Array(wrappedA)),
-    );
+    keyStore.set(kidA, { userId, keyLevel: 1, key: kpA.privateKey });
     console.log("[SW] Key A ready", { kid: kidA });
 
-    // ── Key B: encrypted with password + userId salt ───────────
-    console.log("[SW] Generating key B (password-encrypted)");
+    // ── Key B: level-2 persistent key (password-wrapped) ───────
+    if (!password) {
+        console.log("[SW] No password — skipping level-2 key");
+        return {
+            kid: kidA,
+            publicKey: spkiToPem(new Uint8Array(spkiA)),
+            keyLevel: 1,
+            kidPw: null,
+            publicKeyPw: null,
+            keyLevelPw: null,
+            algorithm: "ECDSA-P256",
+        };
+    }
+
+    console.log("[SW] Generating key B (level-2 password-encrypted)");
     const kpB = await crypto.subtle.generateKey(algorithm, true, ["sign", "verify"]);
     const spkiB = await crypto.subtle.exportKey("spki", kpB.publicKey);
-    const aesB = await deriveKey(password, userId);
+    const salt = crypto.getRandomValues(new Uint8Array(SALT_LENGTH));
+    const aesB = await deriveKey(password, salt);
     const ivB = crypto.getRandomValues(new Uint8Array(IV_LENGTH));
     const wrappedB = await crypto.subtle.wrapKey("pkcs8", kpB.privateKey, aesB, {
         name: "AES-GCM",
         iv: ivB,
     });
     const kidB = crypto.randomUUID();
-    keyStore.set(kidB, kpB.privateKey);
+    keyStore.set(kidB, { userId, keyLevel: 2, key: kpB.privateKey });
     await storeEncryptedKey(
         kidB,
         userId,
         spkiToPem(new Uint8Array(spkiB)),
         ivAndCiphertext(ivB, new Uint8Array(wrappedB)),
+        b64Encode(salt),
+        2,
     );
     console.log("[SW] Key B ready", { kid: kidB });
 
@@ -271,13 +319,14 @@ async function handleGenerateKeyPair(userId: string, password: string) {
 // ── Signing ─────────────────────────────────────────────────────
 
 async function handleSign(kid: string, data: string) {
-    const key = keyStore.get(kid);
-    if (!key) {
+    const entry = keyStore.get(kid);
+    if (!entry) {
         console.warn("[SW sign] Key not found", { kid, keyStoreSize: keyStore.size });
         throw new Error("Key not found in SW memory");
     }
 
-    console.log("[SW sign] Signing data", { kid, dataLength: data.length });
+    const key = entry.key;
+    console.log("[SW sign] Signing data", { kid, keyLevel: entry.keyLevel, dataLength: data.length });
 
     const enc = new TextEncoder();
     const signature = await crypto.subtle.sign(
@@ -299,7 +348,7 @@ async function handleSign(kid: string, data: string) {
 
 // ── PBKDF2 key derivation ───────────────────────────────────────
 
-async function deriveKey(password: string, salt: string): Promise<CryptoKey> {
+async function deriveKey(password: string, salt: string | Uint8Array): Promise<CryptoKey> {
     const enc = new TextEncoder();
     const keyMaterial = await crypto.subtle.importKey(
         "raw",
@@ -311,7 +360,7 @@ async function deriveKey(password: string, salt: string): Promise<CryptoKey> {
     return crypto.subtle.deriveKey(
         {
             name: "PBKDF2",
-            salt: enc.encode(salt),
+            salt: typeof salt === "string" ? enc.encode(salt) : salt,
             iterations: PBKDF2_ITERATIONS,
             hash: "SHA-256",
         },
@@ -345,13 +394,25 @@ sw.addEventListener("message", (event: ExtendableMessageEvent) => {
                 respond({ success: false, error: "userId is required" });
                 break;
             }
-            hasKeysForUser(userId)
+            const has = hasKeysForUser(userId);
+            console.log("[SW] hasKeys response", { userId, has });
+            respond({ success: true, data: { has } });
+            break;
+        }
+        case "hasPersistentKeys": {
+            console.log("[SW] Received hasPersistentKeys message");
+            const { userId } = (msg.payload ?? {}) as { userId?: string };
+            if (!userId) {
+                respond({ success: false, error: "userId is required" });
+                break;
+            }
+            hasPersistentKeysForUser(userId)
                 .then((has) => {
-                    console.log("[SW] hasKeys response", { userId, has });
+                    console.log("[SW] hasPersistentKeys response", { userId, has });
                     respond({ success: true, data: { has } });
                 })
                 .catch((err: Error) => {
-                    console.error("[SW] hasKeys error", { userId, error: err.message });
+                    console.error("[SW] hasPersistentKeys error", { userId, error: err.message });
                     respond({ success: false, error: err.message });
                 });
             break;
@@ -362,11 +423,11 @@ sw.addEventListener("message", (event: ExtendableMessageEvent) => {
                 userId?: string;
                 password?: string;
             };
-            if (!userId || !password) {
-                respond({ success: false, error: "userId and password are required" });
+            if (!userId) {
+                respond({ success: false, error: "userId is required" });
                 break;
             }
-            handleGenerateKeyPair(userId, password)
+            handleGenerateKeyPair(userId, password ?? "")
                 .then((data) => {
                     console.log("[SW] generateKeyPair success", {
                         userId,
@@ -413,12 +474,15 @@ sw.addEventListener("message", (event: ExtendableMessageEvent) => {
         }
         case "loadKeys": {
             console.log("[SW] Received loadKeys message");
-            const { userId } = (msg.payload ?? {}) as { userId?: string };
+            const { userId, password } = (msg.payload ?? {}) as {
+                userId?: string;
+                password?: string;
+            };
             if (!userId) {
                 respond({ success: false, error: "userId is required" });
                 break;
             }
-            handleLoadKeys(userId)
+            handleLoadKeys(userId, password)
                 .then((result) => {
                     console.log("[SW] loadKeys complete", result);
                     respond({ success: true, data: result });

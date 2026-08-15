@@ -86,18 +86,35 @@ export const POST: RequestHandler = async ({ request, locals, getClientAddress }
     });
 
     try {
-        const [record] = await db
-            .insert(cryptoKeys)
-            .values({
-                userId: locals.user.id,
-                pubkey,
-                kid,
-                keyLevel,
-                algorithm,
-                deviceInfo,
-                lastUsedAt: new Date(),
-            })
-            .returning();
+        const now = new Date();
+        const record = await db.transaction(async (tx) => {
+            // Revoke prior active keys of the same level for this user. Old rows
+            // are retained (never deleted) so past signatures stay verifiable.
+            await tx
+                .update(cryptoKeys)
+                .set({ revokedAt: now })
+                .where(
+                    and(
+                        eq(cryptoKeys.userId, locals.user.id),
+                        eq(cryptoKeys.keyLevel, keyLevel),
+                        isNull(cryptoKeys.revokedAt),
+                    ),
+                );
+
+            const [inserted] = await tx
+                .insert(cryptoKeys)
+                .values({
+                    userId: locals.user.id,
+                    pubkey,
+                    kid,
+                    keyLevel,
+                    algorithm,
+                    deviceInfo,
+                    lastUsedAt: now,
+                })
+                .returning();
+            return inserted;
+        });
 
         logger.info("keyUpload", "Key stored", {
             keyId: record.id,

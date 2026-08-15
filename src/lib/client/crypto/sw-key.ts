@@ -34,16 +34,16 @@ function send<T = unknown>(type: string, payload?: Record<string, unknown>): Pro
     });
 }
 
-/** Generate key pairs in the service worker. Returns two keys:
- *  - `kid` / `publicKey` — encrypted with userId only (no password needed to unlock)
- *  - `kidPw` / `publicKeyPw` — encrypted with password + salt */
+/** Generate key pair(s) in the service worker. Returns:
+ *  - `kid` / `publicKey` — level-1 session key (in-memory only, never persisted)
+ *  - `kidPw` / `publicKeyPw` — level-2 key, wrapped with password + random salt (null when no password) */
 export async function generateKeyPair(options: { userId: string; password: string }): Promise<{
     kid: string;
     publicKey: string;
     keyLevel: number;
-    kidPw: string;
-    publicKeyPw: string;
-    keyLevelPw: number;
+    kidPw: string | null;
+    publicKeyPw: string | null;
+    keyLevelPw: number | null;
     algorithm: string;
 }> {
     ensureListener();
@@ -51,17 +51,24 @@ export async function generateKeyPair(options: { userId: string; password: strin
         kid: string;
         publicKey: string;
         keyLevel: number;
-        kidPw: string;
-        publicKeyPw: string;
-        keyLevelPw: number;
+        kidPw: string | null;
+        publicKeyPw: string | null;
+        keyLevelPw: number | null;
         algorithm: string;
     }>;
 }
 
-/** Check whether keys already exist in the SW for this user (device-bound). */
+/** Check whether a level-1 session key already exists in the SW's memory. */
 export async function hasKeys(userId: string): Promise<boolean> {
     ensureListener();
     const result = await send<{ has: boolean }>("hasKeys", { userId });
+    return result.has;
+}
+
+/** Check whether a persistent (level-2, password-wrapped) key exists in IndexedDB. */
+export async function hasPersistentKeys(userId: string): Promise<boolean> {
+    ensureListener();
+    const result = await send<{ has: boolean }>("hasPersistentKeys", { userId });
     return result.has;
 }
 
@@ -87,9 +94,9 @@ export async function clearKeys(): Promise<void> {
 }
 
 /**
- * Load keys from IndexedDB into the SW's in-memory keyStore.
- * Level 1 keys are loaded automatically (userId-derived).
- * Level 2 keys are skipped unless a password is provided.
+ * Load keys into the SW's in-memory keyStore.
+ * Level-1 session keys are already in memory (loaded automatically).
+ * Level-2 keys are unwrapped from IndexedDB only when a password is provided.
  * Returns the number of keys loaded, skipped, and the list of kid values.
  */
 export async function loadKeys(

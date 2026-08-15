@@ -16,9 +16,6 @@
     // Extract guest token from URL (if present)
     let guestToken = $derived(data.isGuest ? (page.url.searchParams.get("token") ?? "") : "");
 
-    // Random in-memory secret for guest key generation — lost on page close
-    let guestKeySecret = $state("");
-
     // Ensure a signing key is available in memory and registered on the server
     $effect(() => {
         if (data.isGuest && data.needsAnonymousSignIn) {
@@ -28,10 +25,7 @@
 
     async function setupGuestSession() {
         try {
-            // Generate a random in-memory secret for key derivation.
-            // This lives only in JS memory — lost on page/tab close.
-            guestKeySecret = crypto.randomUUID();
-            console.log("[sign] Guest session key secret generated");
+            console.log("[sign] Guest session setup started");
 
             // 1. Create an anonymous Better Auth session
             const anonResult = await authClient.signIn.anonymous();
@@ -64,9 +58,10 @@
                 return; // Don't reload — let the user retry
             }
 
-            // 3. Set up device-bound keys using the in-memory secret
-            //    (no password prompt for guest users)
-            const accepted = await setupDeviceKeys(anonUser.id, guestKeySecret, true);
+            // 3. Set up a level-1 session key (no password needed for guests).
+            //    The key lives only in SW memory and is discarded when the
+            //    session ends.
+            const accepted = await setupDeviceKeys(anonUser.id, undefined, true);
             if (accepted === 0) {
                 console.error("[sign] Guest key setup failed — cannot sign documents");
                 return;
@@ -166,12 +161,20 @@
         showRejectModal = false;
     }
 
-    async function handleFinalize() {
+    async function handleFinalize(retried = false) {
         finalizing = true;
         try {
-            // 1. Ensure keys are loaded in the SW's in-memory keyStore
+            // 1. Ensure a level-1 session key is loaded in the SW's keyStore.
+            //    If the SW restarted, the in-memory key is gone — regenerate lazily.
             console.log("[sign] Loading keys for signing", { userId: data.user.id });
-            const keys = await loadKeys(data.user.id);
+            let keys = await loadKeys(data.user.id);
+            if (keys.loaded === 0) {
+                console.warn("[sign] No session key — generating level-1 key on the fly", {
+                    userId: data.user.id,
+                });
+                await setupDeviceKeys(data.user.id);
+                keys = await loadKeys(data.user.id);
+            }
             if (keys.loaded === 0) {
                 console.error("[sign] No keys available for signing — cannot finalize", {
                     userId: data.user.id,
@@ -181,7 +184,7 @@
             }
             console.log("[sign] Keys loaded", { loaded: keys.loaded, skipped: keys.skipped });
 
-            // Use the first available kid (level 1 — userId-encrypted)
+            // Use the first available kid (level 1 — session key held in SW memory)
             const kid = keys.kids[0];
             if (!kid) {
                 console.error("[sign] No kid returned after loading keys", {
@@ -265,11 +268,26 @@
 
             if (!res.ok) {
                 const err = await res.json().catch(() => ({}));
+                const errMsg = (err as { error?: string })?.error ?? "unknown";
                 console.error("[sign] Finalize rejected by server", {
                     status: res.status,
-                    error: err.error ?? "unknown",
+                    error: errMsg,
                     signedCount: fieldIds.length,
                 });
+                // Session key was revoked server-side (e.g. a newer login on
+                // another device, or rotation). Regenerate the level-1 key and
+                // retry once.
+                if (
+                    !retried &&
+                    (errMsg.includes("revoked") ||
+                        errMsg.includes("not found") ||
+                        errMsg.includes("no matching active key"))
+                ) {
+                    console.warn("[sign] Regenerating level-1 session key and retrying once");
+                    await setupDeviceKeys(data.user.id, undefined, true);
+                    finalizing = false;
+                    return handleFinalize(true);
+                }
             } else {
                 console.log("[sign] Finalize succeeded — redirecting to view page", {
                     packageId: data.pkg.id,

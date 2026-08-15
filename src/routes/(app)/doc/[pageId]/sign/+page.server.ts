@@ -776,7 +776,7 @@ export const actions: Actions = {
             return fail(400, { error: "Invalid signatures JSON" });
         }
 
-        // Fetch the user's active key (by userId + keyLevel)
+        // Fetch the signing key identified by `kid` (owned by this user, not revoked)
         const [activeKey] = await db
             .select({
                 id: cryptoKeys.id,
@@ -787,7 +787,7 @@ export const actions: Actions = {
             .where(
                 and(
                     eq(cryptoKeys.userId, party.userId),
-                    eq(cryptoKeys.keyLevel, keyLevel),
+                    eq(cryptoKeys.kid, kid),
                     isNull(cryptoKeys.revokedAt),
                 ),
             )
@@ -802,6 +802,18 @@ export const actions: Actions = {
                 hasSignatures: signedFieldIds.length > 0,
             });
             return fail(400, { error: "Signing key not found or has been revoked" });
+        }
+
+        // Enforce the requested key level (level-1 session vs level-2 persistent)
+        if (activeKey.keyLevel !== keyLevel) {
+            logger.warn("sign", "Finalize — kid/keyLevel mismatch", {
+                packageId,
+                userId: party.userId,
+                kid,
+                expected: keyLevel,
+                actual: activeKey.keyLevel,
+            });
+            return fail(400, { error: "Signing key level mismatch" });
         }
 
         // Fetch documents to get hashes and placement fields
