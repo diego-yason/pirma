@@ -1,16 +1,15 @@
 import type { RequestHandler } from "./$types";
-import { json } from "@sveltejs/kit";
 import { eq, and, desc, isNull } from "drizzle-orm";
-import { db } from "$lib/server/db";
-import { documents, documentAssignments } from "$lib/server/db/schema";
-import { logger } from "$lib/server/logger";
+import { db } from "#lib/server/db/index.js";
+import { documents, documentAssignments } from "#lib/server/db/schema.js";
+import { logger } from "#lib/server/logger.js";
 
 const PAGE_SIZE = 10;
 
 export const GET: RequestHandler = async ({ locals, url }) => {
     if (!locals.user) {
         logger.warn("docList", "Unauthorized access attempt");
-        return json({ error: "Unauthorized" }, { status: 401 });
+        return Response.json({ error: "Unauthorized" }, { status: 401 });
     }
 
     const pageParam = Number(url.searchParams.get("page"));
@@ -61,7 +60,7 @@ export const GET: RequestHandler = async ({ locals, url }) => {
             page,
         });
 
-        return json(
+        return Response.json(
             {
                 documents: userDocuments,
                 pagination: {
@@ -73,6 +72,6 @@ export const GET: RequestHandler = async ({ locals, url }) => {
         );
     } catch (err) {
         logger.error("docList", "Query failed", err);
-        return json({ error: "Failed to fetch documents" }, { status: 500 });
+        return Response.json({ error: "Failed to fetch documents" }, { status: 500 });
     }
 };

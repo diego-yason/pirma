@@ -1,6 +1,6 @@
 import type { PageServerLoad, Actions } from "./$types";
 import { redirect, fail } from "@sveltejs/kit";
-import { db } from "$lib/server/db";
+import { db } from "#lib/server/db/index.js";
 import {
     guestTokens,
     packageRecipients,
@@ -8,12 +8,12 @@ import {
     documentAssignments,
     packages,
     user,
-} from "$lib/server/db/schema";
+} from "#lib/server/db/schema.js";
 import { eq, inArray, and } from "drizzle-orm";
-import { requirePackageOwnership } from "$lib/server/package-guard";
-import { createGuestToken } from "$lib/server/auth/guest-token";
-import { env } from "$env/dynamic/private";
-import { logger } from "$lib/server/logger";
+import { requirePackageOwnership } from "#lib/server/package-guard.js";
+import { createGuestToken } from "#lib/server/auth/guest-token.js";
+import { ORIGIN } from "$app/env/private";
+import { logger } from "#lib/server/logger.js";
 
 export const load: PageServerLoad = async ({ params, locals }) => {
     if (!locals.user) {
@@ -209,6 +209,7 @@ export const actions: Actions = {
                             ),
                         )
                         .limit(1);
+
                     if (existing.length > 0) {
                         meRecipientId = existing[0].id;
                     } else {
@@ -222,6 +223,7 @@ export const actions: Actions = {
                                 role: "signer",
                             })
                             .returning({ id: packageRecipients.id });
+
                         meRecipientId = inserted.id;
                     }
                 }
@@ -237,6 +239,7 @@ export const actions: Actions = {
                     const signerIds = groups[i].signerIds
                         .map((sid) => (sid === "me" ? meRecipientId : sid))
                         .filter((sid): sid is string => sid != null);
+
                     if (signerIds.length > 0) {
                         await db
                             .update(packageRecipients)
@@ -298,11 +301,16 @@ export const actions: Actions = {
                 await db
                     .select({ email: user.email })
                     .from(user)
-                    .where(inArray(user.email, signers.map((s) => s.email).filter((e): e is string => !!e)))
+                    .where(
+                        inArray(
+                            user.email,
+                            signers.map((s) => s.email).filter((e): e is string => !!e),
+                        ),
+                    )
             ).map((u) => u.email),
         );
 
-        const signingBase = `${env.ORIGIN}/doc/${params.packageId}/sign`;
+        const signingBase = `${ORIGIN}/doc/${params.packageId}/sign`;
 
         for (const signer of signers) {
             const isGuest = !signer.email || !knownEmails.has(signer.email);
@@ -424,6 +432,7 @@ export const actions: Actions = {
                     const signerIds = groups[i].signerIds
                         .map((sid) => (sid === "me" ? meRecipientId : sid))
                         .filter((sid): sid is string => sid != null);
+
                     if (signerIds.length > 0) {
                         await db
                             .update(packageRecipients)

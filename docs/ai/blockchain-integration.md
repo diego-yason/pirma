@@ -19,16 +19,16 @@ Currently the `signatures.status` enum already has `anchored` (`pending | signed
 
 ## 2. Current state (what already exists)
 
-| Thing | Where | Notes |
-|---|---|---|
-| `documents.hash` (SHA-256) | `documents` table | Computed at upload in `doc/new/+page.server.ts` |
-| `signatures.documentHash` | `signatures` table | One row per document per signer |
-| `signatures.signaturePayload` | `signatures` table | ECDSA signature (base64) |
-| `signatures.signatureAlgorithm` | `signatures` table | e.g. `ECDSA-P256-SHA256` |
-| `signatures.status` | `signatures` table | `pending/signed/anchored/rejected` |
-| `documents.status` | `documents` table | `draft/finalized/executed` — `executed` TODO exists |
-| Signing payload format | `src/lib/shared/signing-payload.ts` | `"${documentHash}:${fieldCount}"` |
-| "All signers done → executed" | `sign/+page.server.ts` | `// TODO: check if all signers are done → mark documents as executed` |
+| Thing                           | Where                               | Notes                                                                 |
+| ------------------------------- | ----------------------------------- | --------------------------------------------------------------------- |
+| `documents.hash` (SHA-256)      | `documents` table                   | Computed at upload in `doc/new/+page.server.ts`                       |
+| `signatures.documentHash`       | `signatures` table                  | One row per document per signer                                       |
+| `signatures.signaturePayload`   | `signatures` table                  | ECDSA signature (base64)                                              |
+| `signatures.signatureAlgorithm` | `signatures` table                  | e.g. `ECDSA-P256-SHA256`                                              |
+| `signatures.status`             | `signatures` table                  | `pending/signed/anchored/rejected`                                    |
+| `documents.status`              | `documents` table                   | `draft/finalized/executed` — `executed` TODO exists                   |
+| Signing payload format          | `src/lib/shared/signing-payload.ts` | `"${documentHash}:${fieldCount}"`                                     |
+| "All signers done → executed"   | `sign/+page.server.ts`              | `// TODO: check if all signers are done → mark documents as executed` |
 
 ## 3. Architecture
 
@@ -56,9 +56,9 @@ Request:
 
 ```jsonc
 {
-  "payloadHash": "sha256hex",      // required
-  "chain": "ethereum-l2",          // optional, override default
-  "metadata": { "documentId": "uuid" } // optional, service-agnostic
+    "payloadHash": "sha256hex", // required
+    "chain": "ethereum-l2", // optional, override default
+    "metadata": { "documentId": "uuid" }, // optional, service-agnostic
 }
 ```
 
@@ -66,9 +66,9 @@ Response `200`:
 
 ```jsonc
 {
-  "anchorId": "svc_abc123",
-  "txHash": "0x...",               // may be null until mined
-  "status": "submitted"            // submitted | pending | confirmed | failed
+    "anchorId": "svc_abc123",
+    "txHash": "0x...", // may be null until mined
+    "status": "submitted", // submitted | pending | confirmed | failed
 }
 ```
 
@@ -78,14 +78,14 @@ Response `200`:
 
 ```jsonc
 {
-  "anchorId": "svc_abc123",
-  "txHash": "0x...",
-  "status": "confirmed",           // submitted | pending | confirmed | failed
-  "blockNumber": 18234567,
-  "blockHash": "0x...",
-  "confirmations": 12,
-  "timestamp": "2026-08-15T12:00:00Z", // block timestamp
-  "error": null                    // human-readable reason if failed
+    "anchorId": "svc_abc123",
+    "txHash": "0x...",
+    "status": "confirmed", // submitted | pending | confirmed | failed
+    "blockNumber": 18234567,
+    "blockHash": "0x...",
+    "confirmations": 12,
+    "timestamp": "2026-08-15T12:00:00Z", // block timestamp
+    "error": null, // human-readable reason if failed
 }
 ```
 
@@ -97,10 +97,10 @@ Response `200`:
 
 ```jsonc
 {
-  "anchored": true,
-  "txHash": "0x...",
-  "blockNumber": 18234567,
-  "timestamp": "2026-08-15T12:00:00Z"
+    "anchored": true,
+    "txHash": "0x...",
+    "blockNumber": 18234567,
+    "timestamp": "2026-08-15T12:00:00Z",
 }
 ```
 
@@ -115,13 +115,13 @@ Service calls `POST /api/blockchain/webhook` when an anchor confirms/fails.
 
 ```jsonc
 {
-  "anchorId": "svc_abc123",
-  "txHash": "0x...",
-  "status": "confirmed",
-  "blockNumber": 18234567,
-  "blockHash": "0x...",
-  "confirmations": 12,
-  "timestamp": "2026-08-15T12:00:00Z"
+    "anchorId": "svc_abc123",
+    "txHash": "0x...",
+    "status": "confirmed",
+    "blockNumber": 18234567,
+    "blockHash": "0x...",
+    "confirmations": 12,
+    "timestamp": "2026-08-15T12:00:00Z",
 }
 ```
 
@@ -172,6 +172,7 @@ export interface VerifyResult {
 ```
 
 Requirements:
+
 - Timeout per request (`BLOCKCHAIN_TIMEOUT_MS`, default 10s).
 - Retry with exponential backoff for transient failures (`BLOCKCHAIN_MAX_RETRIES`, default 3).
 - Request ID + structured logging via `$lib/server/logger` (tag `blockchain`).
@@ -189,33 +190,41 @@ Shared request/response types used by both the server client and any verificatio
 
 ```ts
 export const anchorStatusEnum = pgEnum("anchor_status", [
-    "submitted", "pending", "confirmed", "failed",
+    "submitted",
+    "pending",
+    "confirmed",
+    "failed",
 ]);
 
-export const signatureAnchors = pgTable("signature_anchors", {
-    id: uuid("id").primaryKey().defaultRandom(),
-    documentId: uuid("document_id")
-        .notNull()
-        .references(() => documents.id),
-    payloadHash: text("payload_hash").notNull().unique(),
-    anchorId: text("anchor_id"),           // service-side id
-    txHash: text("tx_hash"),
-    blockNumber: bigint("block_number", { mode: "number" }),
-    blockHash: text("block_hash"),
-    chain: text("chain"),
-    status: anchorStatusEnum("status").notNull().default("submitted"),
-    proofJson: jsonb("proof_json"),        // merkle path / receipt (verify offline)
-    submittedAt: timestamp("submitted_at").notNull().defaultNow(),
-    confirmedAt: timestamp("confirmed_at"),
-    attempts: integer("attempts").notNull().default(0),
-    lastError: text("last_error"),
-}, (table) => [
-    index("signature_anchors_document_id_idx").on(table.documentId),
-    index("signature_anchors_status_idx").on(table.status),
-]).enableRLS();
+export const signatureAnchors = pgTable(
+    "signature_anchors",
+    {
+        id: uuid("id").primaryKey().defaultRandom(),
+        documentId: uuid("document_id")
+            .notNull()
+            .references(() => documents.id),
+        payloadHash: text("payload_hash").notNull().unique(),
+        anchorId: text("anchor_id"), // service-side id
+        txHash: text("tx_hash"),
+        blockNumber: bigint("block_number", { mode: "number" }),
+        blockHash: text("block_hash"),
+        chain: text("chain"),
+        status: anchorStatusEnum("status").notNull().default("submitted"),
+        proofJson: jsonb("proof_json"), // merkle path / receipt (verify offline)
+        submittedAt: timestamp("submitted_at").notNull().defaultNow(),
+        confirmedAt: timestamp("confirmed_at"),
+        attempts: integer("attempts").notNull().default(0),
+        lastError: text("last_error"),
+    },
+    (table) => [
+        index("signature_anchors_document_id_idx").on(table.documentId),
+        index("signature_anchors_status_idx").on(table.status),
+    ],
+).enableRLS();
 ```
 
 RLS policy:
+
 - Public read: `id`, `payloadHash`, `txHash`, `blockNumber`, `blockHash`, `timestamp`, `status` (for verification page).
 - Owner-write; service/anon can read public proof columns only.
 
@@ -271,15 +280,17 @@ Deterministic, canonical, collision-resistant, PII-free.
 // pseudo
 payloadHash = sha256(
     canonicalJson({
-        documentHash,                 // documents.hash (hex)
-        signers: sortedBySignerId([   // stable order = reproducible hash
-            { signerUserId, signaturePayload, signedAtISO }
+        documentHash, // documents.hash (hex)
+        signers: sortedBySignerId([
+            // stable order = reproducible hash
+            { signerUserId, signaturePayload, signedAtISO },
         ]),
-    })
-)
+    }),
+);
 ```
 
 Rules:
+
 - Sort signers by `signerUserId` (not insertion order).
 - Use a canonical JSON serializer (no whitespace variance) — e.g. `JSON.stringify` with sorted keys.
 - Never include names/emails/document content — only hashes + signatures + timestamps.

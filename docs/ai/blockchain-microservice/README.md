@@ -4,6 +4,7 @@
 > Created: 2026-08-16
 > Repo: `diego-yason/pirma`
 > Related:
+>
 > - `docs/ai/blockchain-microservice/api-contract.md` — the full HTTP contract (this doc links to it)
 > - `docs/ai/blockchain-integration.md` — broader internal integration spec (state machine, data model, payload hash)
 > - `src/lib/server/db/schema.ts` (`signatures`, `documents`)
@@ -55,22 +56,22 @@ flowchart LR
 
 Pirma drives anchoring and queries proof status:
 
-| Direction | Method / Path | Purpose |
-|---|---|---|
-| → | `POST /v1/anchor` | Submit a `payloadHash` for anchoring |
-| → | `POST /v1/anchor/batch` | Batch-submit multiple hashes (optional) |
-| → | `GET /v1/anchor/:anchorId` | Poll status of one anchor |
-| → | `GET /v1/verify?payloadHash=…` | Public proof check (cross-check) |
-| → | `GET /v1/health` | Liveness/readiness probe |
+| Direction | Method / Path                  | Purpose                                 |
+| --------- | ------------------------------ | --------------------------------------- |
+| →         | `POST /v1/anchor`              | Submit a `payloadHash` for anchoring    |
+| →         | `POST /v1/anchor/batch`        | Batch-submit multiple hashes (optional) |
+| →         | `GET /v1/anchor/:anchorId`     | Poll status of one anchor               |
+| →         | `GET /v1/verify?payloadHash=…` | Public proof check (cross-check)        |
+| →         | `GET /v1/health`               | Liveness/readiness probe                |
 
 ### Reverse flow — microservice → Pirma
 
 The microservice pushes state changes back to Pirma via a webhook Pirma exposes:
 
-| Direction | Method / Path | Purpose |
-|---|---|---|
-| ← | `POST /api/blockchain/webhook` | Pirma's endpoint that receives anchor events |
-| ← | `GET /api/blockchain/health` | (optional) lets the service check Pirma is alive before calling the webhook |
+| Direction | Method / Path                  | Purpose                                                                     |
+| --------- | ------------------------------ | --------------------------------------------------------------------------- |
+| ←         | `POST /api/blockchain/webhook` | Pirma's endpoint that receives anchor events                                |
+| ←         | `GET /api/blockchain/health`   | (optional) lets the service check Pirma is alive before calling the webhook |
 
 The reverse flow is **at-least-once, best-effort delivery**. Pirma treats it as an
 optimization/notification layer; the **source of truth is always the forward `GET

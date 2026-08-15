@@ -1,6 +1,6 @@
 import type { PageServerLoad } from "./$types";
 import { redirect } from "@sveltejs/kit";
-import { db } from "$lib/server/db";
+import { db } from "#lib/server/db/index.js";
 import {
     packages,
     documents,
@@ -10,11 +10,11 @@ import {
     cryptoKeys,
     userSignatures,
     user,
-} from "$lib/server/db/schema";
+} from "#lib/server/db/schema.js";
 import { eq, and, isNull, inArray } from "drizzle-orm";
-import { supabaseAdmin } from "$lib/server/storage/supabase";
-import { getSignedUrl, setSignedUrl } from "$lib/server/storage/url-cache";
-import { logger } from "$lib/server/logger";
+import { supabaseAdmin } from "#lib/server/storage/supabase.js";
+import { getSignedUrl, setSignedUrl } from "#lib/server/storage/url-cache.js";
+import { logger } from "#lib/server/logger.js";
 
 export const load: PageServerLoad = async ({ params, locals }) => {
     if (!locals.user) {

@@ -255,9 +255,7 @@ export const userSignatures = pgTable(
         createdAt: timestamp("created_at").notNull().defaultNow(),
         removedAt: timestamp("removed_at"),
     },
-    (table) => [
-        index("user_signatures_user_id_idx").on(table.userId),
-    ],
+    (table) => [index("user_signatures_user_id_idx").on(table.userId)],
 ).enableRLS();
 
 // ── Guest Tokens (for anonymous/guest signers) ──────────────────

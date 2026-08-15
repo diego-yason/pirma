@@ -28,7 +28,10 @@ export async function registerWebAuthnKey(options: {
 
     const credential = (await navigator.credentials.create({
         publicKey: {
-            challenge: challenge.buffer.slice(challenge.byteOffset, challenge.byteOffset + challenge.byteLength),
+            challenge: challenge.buffer.slice(
+                challenge.byteOffset,
+                challenge.byteOffset + challenge.byteLength,
+            ),
             rp: { name: "Pirma", id: window.location.hostname },
             user: {
                 id: userId.buffer.slice(userId.byteOffset, userId.byteOffset + userId.byteLength),
@@ -36,7 +39,7 @@ export async function registerWebAuthnKey(options: {
                 displayName: options.userName,
             },
             pubKeyCredParams: [
-                { type: "public-key", alg: -7 },  // ES256
+                { type: "public-key", alg: -7 }, // ES256
                 { type: "public-key", alg: -257 }, // RS256
             ],
             authenticatorSelection: {
@@ -52,7 +55,10 @@ export async function registerWebAuthnKey(options: {
     const pubkeyBytes = response.getPublicKey();
     if (!pubkeyBytes) throw new Error("WebAuthn: public key not available from authenticator");
 
-    const vendor = typeof navigator !== 'undefined' ? (navigator as unknown as Record<string, unknown>).vendor as string | undefined : undefined;
+    const vendor =
+        typeof navigator !== "undefined"
+            ? ((navigator as unknown as Record<string, unknown>).vendor as string | undefined)
+            : undefined;
     return {
         credentialId: b64urlEncode(new Uint8Array(credential.rawId)),
         pubkey: b64urlEncode(new Uint8Array(pubkeyBytes)),
@@ -71,8 +77,14 @@ export async function signWithWebAuthn(
 ): Promise<{ signature: string; authenticatorData: string }> {
     const rawIdArr = b64urlDecode(credentialIdBase64);
     const challengeArr = new Uint8Array(challenge);
-    const idBuf = rawIdArr.buffer.slice(rawIdArr.byteOffset, rawIdArr.byteOffset + rawIdArr.byteLength) as ArrayBuffer;
-    const challengeBuf = challengeArr.buffer.slice(challengeArr.byteOffset, challengeArr.byteOffset + challengeArr.byteLength) as ArrayBuffer;
+    const idBuf = rawIdArr.buffer.slice(
+        rawIdArr.byteOffset,
+        rawIdArr.byteOffset + rawIdArr.byteLength,
+    ) as ArrayBuffer;
+    const challengeBuf = challengeArr.buffer.slice(
+        challengeArr.byteOffset,
+        challengeArr.byteOffset + challengeArr.byteLength,
+    ) as ArrayBuffer;
     const credential = (await navigator.credentials.get({
         publicKey: {
             challenge: challengeBuf,

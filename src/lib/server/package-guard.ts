@@ -1,7 +1,7 @@
-import { db } from "$lib/server/db";
-import { packages } from "$lib/server/db/schema";
+import { db } from "#lib/server/db/index.js";
+import { packages } from "#lib/server/db/schema.js";
 import { eq, and } from "drizzle-orm";
-import { logger } from "$lib/server/logger";
+import { logger } from "#lib/server/logger.js";
 
 /**
  * Returns the package if owned by the given user, or null.

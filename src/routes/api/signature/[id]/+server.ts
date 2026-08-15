@@ -1,8 +1,8 @@
 import { error } from "@sveltejs/kit";
 import type { RequestHandler } from "./$types";
-import { db } from "$lib/server/db";
-import { userSignatures } from "$lib/server/db/schema";
-import { supabaseAdmin } from "$lib/server/storage/supabase";
+import { db } from "#lib/server/db/index.js";
+import { userSignatures } from "#lib/server/db/schema.js";
+import { supabaseAdmin } from "#lib/server/storage/supabase.js";
 import { eq, and, isNull } from "drizzle-orm";
 
 export const GET: RequestHandler = async ({ params }) => {
@@ -12,21 +12,14 @@ export const GET: RequestHandler = async ({ params }) => {
             mimeType: userSignatures.mimeType,
         })
         .from(userSignatures)
-        .where(
-            and(
-                eq(userSignatures.id, params.id),
-                isNull(userSignatures.removedAt),
-            ),
-        )
+        .where(and(eq(userSignatures.id, params.id), isNull(userSignatures.removedAt)))
         .limit(1);
 
     if (!sig) {
         error(404, "Signature not found");
     }
 
-    const { data } = await supabaseAdmin.storage
-        .from("signatures")
-        .download(sig.storagePath);
+    const { data } = await supabaseAdmin.storage.from("signatures").download(sig.storagePath);
 
     if (!data) {
         error(404, "Signature file not found");

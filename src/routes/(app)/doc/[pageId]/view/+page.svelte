@@ -1,7 +1,7 @@
 <script lang="ts">
     import type { PageProps } from "./$types";
-    import type { PlacedRect } from "$lib/client/types/SignatureBoxTypes";
-    import PDFViewer from "$lib/client/ui/PDFViewer.svelte";
+    import type { PlacedRect } from "#lib/client/types/SignatureBoxTypes";
+    import PDFViewer from "#lib/client/ui/PDFViewer.svelte";
 
     let { data }: PageProps = $props();
 

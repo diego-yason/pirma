@@ -1,15 +1,15 @@
 import type { PageServerLoad, Actions } from "./$types";
-import type { PlacedRect } from "$lib/client/types/SignatureBoxTypes";
+import type { PlacedRect } from "#lib/client/types/SignatureBoxTypes";
 import { redirect, fail } from "@sveltejs/kit";
-import { db } from "$lib/server/db";
-import { packageRecipients, documents, documentAssignments } from "$lib/server/db/schema";
+import { db } from "#lib/server/db/index.js";
+import { packageRecipients, documents, documentAssignments } from "#lib/server/db/schema.js";
 import { eq, and } from "drizzle-orm";
-import { requirePackageOwnership } from "$lib/server/package-guard";
-import { logger } from "$lib/server/logger";
-import { PUBLIC_MAX_RECIPIENTS } from "$env/static/public";
+import { requirePackageOwnership } from "#lib/server/package-guard.js";
+import { logger } from "#lib/server/logger.js";
+import { PUBLIC_MAX_RECIPIENTS } from "$app/env/public";
 
-import { supabaseAdmin } from "$lib/server/storage/supabase";
-import { getSignedUrl, setSignedUrl } from "$lib/server/storage/url-cache";
+import { supabaseAdmin } from "#lib/server/storage/supabase.js";
+import { getSignedUrl, setSignedUrl } from "#lib/server/storage/url-cache.js";
 
 const MAX_RECIPIENTS = Number(PUBLIC_MAX_RECIPIENTS) || 100;
 

@@ -45,7 +45,8 @@
 <div class="px-4 mt-8 max-w-xl">
     <div class="py-2 border border-neutral-800 items-center rounded-t-md flex justify-between px-4">
         <h2 class="text-2xl font-semibold tracking-wide">Recent Envelopes</h2>
-        <a class="text-secondary-500 tracking-wide" href={resolve("/doc/list")}>View All</a>
+
+        <a class="text-secondary-500 tracking-wide" href={resolve("doc/list")}>View All</a>
     </div>
     {#each data.recentDocuments as pkg (pkg.id)}
         <div class="border border-t-0 border-neutral-800">
@@ -67,16 +68,19 @@
                 </div>
                 <div class="flex items-center gap-3 text-xs shrink-0">
                     {#if pkg.documents.some((d) => d.status === "draft")}
-                        <span class="rounded-full bg-neutral-800 px-2 py-0.5 text-neutral-400">Draft</span>
+                        <span class="rounded-full bg-neutral-800 px-2 py-0.5 text-neutral-400"
+                            >Draft</span
+                        >
                     {:else if pkg.documents.every((d) => d.status === "executed")}
-                        <span class="rounded-full bg-emerald-900/50 px-2 py-0.5 text-emerald-300">Executed</span>
+                        <span class="rounded-full bg-emerald-900/50 px-2 py-0.5 text-emerald-300"
+                            >Executed</span
+                        >
                     {:else}
-                        <span class="rounded-full bg-amber-900/50 px-2 py-0.5 text-amber-300">In Progress</span>
+                        <span class="rounded-full bg-amber-900/50 px-2 py-0.5 text-amber-300"
+                            >In Progress</span
+                        >
                     {/if}
-                    <a
-                        href={resolve(`/doc/${pkg.id}`)}
-                        class="text-secondary-200 hover:underline"
-                    >
+                    <a href={resolve(`doc/${pkg.id}`)} class="text-secondary-200 hover:underline">
                         View
                     </a>
                 </div>
@@ -85,8 +89,8 @@
                 {#each pkg.documents as doc (doc.id)}
                     <a
                         href={doc.status === "draft"
-                            ? resolve(`/doc/new/${pkg.id}`)
-                            : resolve(`/doc/${pkg.id}`)}
+                            ? resolve(`doc/new/${pkg.id}`)
+                            : resolve(`doc/${pkg.id}`)}
                         class="flex items-center gap-2 px-4 py-2 pl-10 text-sm hover:bg-neutral-900/20 transition"
                     >
                         <span class="text-neutral-600 shrink-0">└─</span>

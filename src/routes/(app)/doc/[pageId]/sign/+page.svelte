@@ -1,13 +1,13 @@
 <script lang="ts">
     import type { PageProps } from "./$types";
-    import type { PlacedRect } from "$lib/client/types/SignatureBoxTypes";
-    import PDFViewer from "$lib/client/ui/PDFViewer.svelte";
-    import SignatureCreator from "$lib/client/ui/SignatureCreator.svelte";
-    // import { registerPublicKey } from "$lib/client/archive/crypto"; // archived — superseded by SW key system
-    import { authClient } from "$lib/client/auth/auth-client";
-    import { setupDeviceKeys } from "$lib/client/crypto/setup-device-keys";
-    import { sign, loadKeys } from "$lib/client/crypto/sw-key";
-    import { buildSigningPayload } from "$lib/shared/signing-payload";
+    import type { PlacedRect } from "#lib/client/types/SignatureBoxTypes";
+    import PDFViewer from "#lib/client/ui/PDFViewer.svelte";
+    import SignatureCreator from "#lib/client/ui/SignatureCreator.svelte";
+    // import { registerPublicKey } from "#lib/client/archive/crypto.js"; // archived — superseded by SW key system
+    import { authClient } from "#lib/client/auth/auth-client.js";
+    import { setupDeviceKeys } from "#lib/client/crypto/setup-device-keys.js";
+    import { sign, loadKeys } from "#lib/client/crypto/sw-key.js";
+    import { buildSigningPayload } from "#lib/shared/signing-payload.js";
     import { page } from "$app/state";
     import { SvelteMap } from "svelte/reactivity";
 

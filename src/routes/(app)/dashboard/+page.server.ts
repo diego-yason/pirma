@@ -1,6 +1,6 @@
 import type { PageServerLoad } from "./$types";
 import { redirect } from "@sveltejs/kit";
-import { db } from "$lib/server/db";
+import { db } from "#lib/server/db/index.js";
 import { eq, desc, inArray, and, count } from "drizzle-orm";
 import {
     documents,
@@ -10,8 +10,8 @@ import {
     documentAssignments,
     packageRecipients,
     user,
-} from "$lib/server/db/schema";
-import { logger } from "$lib/server/logger";
+} from "#lib/server/db/schema.js";
+import { logger } from "#lib/server/logger.js";
 
 export const load: PageServerLoad = async ({ locals }) => {
     if (!locals.user) {
@@ -34,10 +34,7 @@ export const load: PageServerLoad = async ({ locals }) => {
         })
         .from(packages)
         .innerJoin(packageRecipients, eq(packages.id, packageRecipients.packageId))
-        .innerJoin(
-            documentAssignments,
-            eq(packages.id, documentAssignments.packageId),
-        )
+        .innerJoin(documentAssignments, eq(packages.id, documentAssignments.packageId))
         .innerJoin(documents, eq(documentAssignments.documentId, documents.id))
         .where(
             and(
@@ -100,21 +97,22 @@ export const load: PageServerLoad = async ({ locals }) => {
 
     // Fetch documents for each recent package
     const recentPkgIds = recentPkgRows.map((p) => p.id);
-    const recentDocRows = recentPkgIds.length > 0
-        ? await db
-              .select({
-                  id: documents.id,
-                  title: documents.title,
-                  status: documents.status,
-                  createdAt: documents.createdAt,
-                  updatedAt: documents.updatedAt,
-                  packageId: documentAssignments.packageId,
-              })
-              .from(documents)
-              .innerJoin(documentAssignments, eq(documents.id, documentAssignments.documentId))
-              .where(inArray(documentAssignments.packageId, recentPkgIds))
-              .orderBy(desc(documents.updatedAt))
-        : [];
+    const recentDocRows =
+        recentPkgIds.length > 0
+            ? await db
+                  .select({
+                      id: documents.id,
+                      title: documents.title,
+                      status: documents.status,
+                      createdAt: documents.createdAt,
+                      updatedAt: documents.updatedAt,
+                      packageId: documentAssignments.packageId,
+                  })
+                  .from(documents)
+                  .innerJoin(documentAssignments, eq(documents.id, documentAssignments.documentId))
+                  .where(inArray(documentAssignments.packageId, recentPkgIds))
+                  .orderBy(desc(documents.updatedAt))
+            : [];
     const docsByPkg = new Map<string, typeof recentDocRows>();
     for (const doc of recentDocRows) {
         const list = docsByPkg.get(doc.packageId) ?? [];
@@ -148,10 +146,7 @@ export const load: PageServerLoad = async ({ locals }) => {
 
         // Expiration dates already on the pending rows
         for (const p of pending) {
-            expirationMap.set(
-                p.id,
-                p.expirationDate?.toISOString().split("T")[0] ?? null,
-            );
+            expirationMap.set(p.id, p.expirationDate?.toISOString().split("T")[0] ?? null);
         }
     }
 

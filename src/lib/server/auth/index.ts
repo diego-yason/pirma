@@ -3,16 +3,14 @@ import { drizzleAdapter } from "better-auth/adapters/drizzle";
 import { sveltekitCookies } from "better-auth/svelte-kit";
 import { passkey } from "@better-auth/passkey";
 import { anonymous } from "better-auth/plugins";
-import { env } from "$env/dynamic/private";
+import { ORIGIN, BETTER_AUTH_SECRET, OPAQUE_SERVER_KEY } from "$app/env/private";
 import { getRequestEvent } from "$app/server";
-import { db } from "$lib/server/db";
-import { opaque } from "$plugins/better-auth-opaque/src";
-
-import { OPAQUE_SERVER_KEY } from "$env/static/private";
+import { db } from "#lib/server/db/index.js";
+import { opaque } from "$plugins/better-auth-opaque/src/server";
 
 export const auth = betterAuth({
-    baseURL: env.ORIGIN,
-    secret: env.BETTER_AUTH_SECRET,
+    baseURL: ORIGIN,
+    secret: BETTER_AUTH_SECRET,
     database: drizzleAdapter(db, { provider: "pg" }),
     emailAndPassword: { enabled: true },
     plugins: [

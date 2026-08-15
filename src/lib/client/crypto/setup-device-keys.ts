@@ -1,5 +1,5 @@
-import { getDeviceFingerprint } from "$lib/client/crypto/device-fingerprint";
-import type { DeviceFingerprint } from "$lib/client/crypto/device-fingerprint";
+import { getDeviceFingerprint } from "#lib/client/crypto/device-fingerprint.js";
+import type { DeviceFingerprint } from "#lib/client/crypto/device-fingerprint.js";
 
 /**
  * Unified device-bound key setup flow.

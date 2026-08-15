@@ -1,14 +1,14 @@
 packages:
-  - '.'
+    - "."
 
 allowBuilds:
-  '@prisma/client': true
-  better-sqlite3: true
-  esbuild: true
+    "@prisma/client": true
+    better-sqlite3: true
+    esbuild: true
 
 onlyBuiltDependencies:
-  - '@prisma/client'
-  - '@tailwindcss/oxide'
-  - better-sqlite3
-  - esbuild
-  - tesseract.js
+    - "@prisma/client"
+    - "@tailwindcss/oxide"
+    - better-sqlite3
+    - esbuild
+    - tesseract.js

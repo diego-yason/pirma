@@ -1,10 +1,10 @@
 import type { Actions, PageServerLoad } from "./$types";
 import { fail } from "@sveltejs/kit";
-import { db } from "$lib/server/db";
-import { userSignatures } from "$lib/server/db/schema";
-import { supabaseAdmin } from "$lib/server/storage/supabase";
+import { db } from "#lib/server/db/index.js";
+import { userSignatures } from "#lib/server/db/schema.js";
+import { supabaseAdmin } from "#lib/server/storage/supabase.js";
 import { eq, and, isNull } from "drizzle-orm";
-import { logger } from "$lib/server/logger";
+import { logger } from "#lib/server/logger.js";
 
 const MAX_FILE_SIZE = 5 * 1024 * 1024; // 5 MB
 const ALLOWED_TYPES = ["image/png", "image/jpeg", "image/gif", "image/webp"];

@@ -1,6 +1,5 @@
-import { json } from "@sveltejs/kit";
 import type { RequestHandler } from "./$types";
-import { checkKeyRotation } from "$lib/server/crypto/key-rotation";
+import { checkKeyRotation } from "#lib/server/crypto/key-rotation.js";
 
 /**
  * Returns whether the authenticated user's active key needs rotation.
@@ -8,11 +7,11 @@ import { checkKeyRotation } from "$lib/server/crypto/key-rotation";
  */
 export const GET: RequestHandler = async ({ locals }) => {
     if (!locals.user) {
-        return json({ needsRotation: false, reason: null });
+        return Response.json({ needsRotation: false, reason: null });
     }
 
     const rotation = await checkKeyRotation(locals.user.id);
-    return json({
+    return Response.json({
         needsRotation: rotation !== null,
         reason: rotation?.reason ?? null,
     });

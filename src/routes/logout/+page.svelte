@@ -1,8 +1,8 @@
 <script lang="ts">
     import { resolve } from "$app/paths";
     import { goto } from "$app/navigation";
-    import { authClient } from "$lib/client/auth/auth-client";
-    import { clearKeys } from "$lib/client/crypto/sw-key";
+    import { authClient } from "#lib/client/auth/auth-client.js";
+    import { clearKeys } from "#lib/client/crypto/sw-key.js";
     import { onMount } from "svelte";
 
     onMount(async () => {
@@ -15,7 +15,7 @@
         }
 
         await authClient.signOut();
-        await goto(resolve("/login"));
+        await goto(resolve("login"));
     });
 </script>
 

@@ -1,6 +1,6 @@
 import type { LayoutLoad } from "./$types";
 
-import { dev } from "$app/environment";
+import { dev } from "$app/env";
 import { redirect } from "@sveltejs/kit";
 
 export const load: LayoutLoad = async () => {

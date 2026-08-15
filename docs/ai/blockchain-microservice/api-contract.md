@@ -16,9 +16,9 @@
 - **Encoding**: JSON (`application/json`), UTF-8.
 - **Timestamps**: ISO-8601 UTC, e.g. `2026-08-15T12:00:00Z`. Nullable where unknown.
 - **IDs**:
-  - `payloadHash` — hex SHA-256, lowercase. The anchor's idempotency key.
-  - `anchorId` — service-owned opaque string, e.g. `svc_abc123`.
-  - `eventId` — webhook event id (UUID), used for deduplication.
+    - `payloadHash` — hex SHA-256, lowercase. The anchor's idempotency key.
+    - `anchorId` — service-owned opaque string, e.g. `svc_abc123`.
+    - `eventId` — webhook event id (UUID), used for deduplication.
 - **Status enum** (shared): `submitted | pending | confirmed | failed`.
 - **Field rule**: unknown optional fields serialize as `null`, never omitted unless required.
 - **Versioning**: service endpoints are prefixed `/v1`. Pirma's webhook path is
@@ -32,15 +32,15 @@ export type AnchorStatus = "submitted" | "pending" | "confirmed" | "failed";
 
 export interface AnchorRecord {
     anchorId: string;
-    payloadHash: string;        // hex sha256
-    txHash: string | null;      // set when mined, null until then
+    payloadHash: string; // hex sha256
+    txHash: string | null; // set when mined, null until then
     status: AnchorStatus;
     chain: string | null;
     blockNumber: number | null;
     blockHash: string | null;
     confirmations: number | null;
-    timestamp: string | null;   // block timestamp (ISO-8601 UTC)
-    error: string | null;       // human-readable reason when status = "failed"
+    timestamp: string | null; // block timestamp (ISO-8601 UTC)
+    error: string | null; // human-readable reason when status = "failed"
 }
 ```
 
@@ -59,10 +59,10 @@ returns the existing anchor (same `anchorId`, current status) instead of creatin
 
 ```jsonc
 {
-  "payloadHash": "9f86d081884c7d659a2feaa0c55ad015a3bf4f1b2b0b822cd15d6c15b0f00a08",
-  "chain": "ethereum-l2",             // optional — override the service default
-  "confirmations": 12,                // optional — override the service default
-  "metadata": { "documentId": "uuid" } // optional, service-agnostic; stored with the anchor
+    "payloadHash": "9f86d081884c7d659a2feaa0c55ad015a3bf4f1b2b0b822cd15d6c15b0f00a08",
+    "chain": "ethereum-l2", // optional — override the service default
+    "confirmations": 12, // optional — override the service default
+    "metadata": { "documentId": "uuid" }, // optional, service-agnostic; stored with the anchor
 }
 ```
 
@@ -70,29 +70,29 @@ returns the existing anchor (same `anchorId`, current status) instead of creatin
 
 ```jsonc
 {
-  "anchorId": "svc_abc123",
-  "payloadHash": "9f86…a08",
-  "txHash": null,
-  "status": "submitted",             // "submitted" | "pending" | "confirmed" | "failed"
-  "chain": "ethereum-l2",
-  "blockNumber": null,
-  "blockHash": null,
-  "confirmations": null,
-  "timestamp": null,
-  "error": null
+    "anchorId": "svc_abc123",
+    "payloadHash": "9f86…a08",
+    "txHash": null,
+    "status": "submitted", // "submitted" | "pending" | "confirmed" | "failed"
+    "chain": "ethereum-l2",
+    "blockNumber": null,
+    "blockHash": null,
+    "confirmations": null,
+    "timestamp": null,
+    "error": null,
 }
 ```
 
 **Errors**
 
-| Code | Meaning |
-|---|---|
+| Code  | Meaning                                                                                                                                 |
+| ----- | --------------------------------------------------------------------------------------------------------------------------------------- |
 | `400` | Malformed body, bad `payloadHash` (not 64-hex), unsupported `chain`. Body: `{ "error": { "code": "invalid_request", "message": "…" } }` |
-| `401` | Missing/invalid API key |
-| `402` | Insufficient funds/quota (if the service charges per anchor) |
-| `409` | (only if the service disallows re-submit) hash already anchored — prefer idempotent `200` |
-| `429` | Rate limited. Retry-After header |
-| `5xx` | Service error |
+| `401` | Missing/invalid API key                                                                                                                 |
+| `402` | Insufficient funds/quota (if the service charges per anchor)                                                                            |
+| `409` | (only if the service disallows re-submit) hash already anchored — prefer idempotent `200`                                               |
+| `429` | Rate limited. Retry-After header                                                                                                        |
+| `5xx` | Service error                                                                                                                           |
 
 **Pirma behavior**
 
@@ -110,8 +110,8 @@ Used when the service is costly per anchor and Pirma wants to anchor several doc
 
 ```jsonc
 {
-  "payloadHashes": ["9f86…", "a2fe…"],
-  "chain": "ethereum-l2"             // optional
+    "payloadHashes": ["9f86…", "a2fe…"],
+    "chain": "ethereum-l2", // optional
 }
 ```
 
@@ -119,10 +119,10 @@ Used when the service is costly per anchor and Pirma wants to anchor several doc
 
 ```jsonc
 {
-  "results": [
-    { "payloadHash": "9f86…", "anchorId": "svc_abc123", "status": "submitted", "error": null },
-    { "payloadHash": "a2fe…", "anchorId": "svc_def456", "status": "submitted", "error": null }
-  ]
+    "results": [
+        { "payloadHash": "9f86…", "anchorId": "svc_abc123", "status": "submitted", "error": null },
+        { "payloadHash": "a2fe…", "anchorId": "svc_def456", "status": "submitted", "error": null },
+    ],
 }
 ```
 
@@ -137,32 +137,32 @@ Pirma's source of truth for anchor state.
 
 ```jsonc
 {
-  "anchorId": "svc_abc123",
-  "payloadHash": "9f86…a08",
-  "txHash": "0x8c1d…",
-  "status": "confirmed",
-  "chain": "ethereum-l2",
-  "blockNumber": 18234567,
-  "blockHash": "0x3f9a…",
-  "confirmations": 12,
-  "timestamp": "2026-08-15T12:00:00Z",
-  "error": null
+    "anchorId": "svc_abc123",
+    "payloadHash": "9f86…a08",
+    "txHash": "0x8c1d…",
+    "status": "confirmed",
+    "chain": "ethereum-l2",
+    "blockNumber": 18234567,
+    "blockHash": "0x3f9a…",
+    "confirmations": 12,
+    "timestamp": "2026-08-15T12:00:00Z",
+    "error": null,
 }
 ```
 
 **Errors**
 
-| Code | Meaning |
-|---|---|
+| Code  | Meaning            |
+| ----- | ------------------ |
 | `404` | Unknown `anchorId` |
-| `401` | Invalid API key |
-| `5xx` | Service error |
+| `401` | Invalid API key    |
+| `5xx` | Service error      |
 
 **Pirma behavior**
 
 - A polling job selects local rows with `status in ('submitted','pending')` and advances them.
 - `confirmed` → finalize proof locally. `failed` → record `lastError`, keep `signatures.status
-  = 'signed'`, surface to owner, allow manual re-submit.
+= 'signed'`, surface to owner, allow manual re-submit.
 
 ### 2.4 `GET /v1/verify` — public proof check
 
@@ -177,11 +177,11 @@ Cross-check a hash or anchor against the chain. Used by Pirma's verification UI/
 
 ```jsonc
 {
-  "anchored": true,
-  "payloadHash": "9f86…a08",
-  "txHash": "0x8c1d…",
-  "blockNumber": 18234567,
-  "timestamp": "2026-08-15T12:00:00Z"
+    "anchored": true,
+    "payloadHash": "9f86…a08",
+    "txHash": "0x8c1d…",
+    "blockNumber": 18234567,
+    "timestamp": "2026-08-15T12:00:00Z",
 }
 ```
 
@@ -213,29 +213,29 @@ this route; the service must know it (via configuration/registration).
 
 **Request headers**
 
-| Header | Value |
-|---|---|
-| `Content-Type` | `application/json` |
-| `X-Blockchain-Event-Id` | unique event id (UUID) — for deduplication |
+| Header                   | Value                                                                 |
+| ------------------------ | --------------------------------------------------------------------- |
+| `Content-Type`           | `application/json`                                                    |
+| `X-Blockchain-Event-Id`  | unique event id (UUID) — for deduplication                            |
 | `X-Blockchain-Signature` | HMAC-SHA256 hex of the raw body, keyed by `BLOCKCHAIN_WEBHOOK_SECRET` |
-| `X-Blockchain-Timestamp` | ISO-8601 UTC time the event was sent (replay window check) |
+| `X-Blockchain-Timestamp` | ISO-8601 UTC time the event was sent (replay window check)            |
 
 **Request body**
 
 ```jsonc
 {
-  "type": "anchor.confirmed",          // "anchor.confirmed" | "anchor.failed"
-  "anchorId": "svc_abc123",
-  "payloadHash": "9f86…a08",
-  "occurredAt": "2026-08-15T12:00:05Z",
-  "data": {
-    "txHash": "0x8c1d…",
-    "blockNumber": 18234567,
-    "blockHash": "0x3f9a…",
-    "confirmations": 12,
-    "timestamp": "2026-08-15T12:00:00Z"
-  },
-  "error": null                          // set only when type = "anchor.failed"
+    "type": "anchor.confirmed", // "anchor.confirmed" | "anchor.failed"
+    "anchorId": "svc_abc123",
+    "payloadHash": "9f86…a08",
+    "occurredAt": "2026-08-15T12:00:05Z",
+    "data": {
+        "txHash": "0x8c1d…",
+        "blockNumber": 18234567,
+        "blockHash": "0x3f9a…",
+        "confirmations": 12,
+        "timestamp": "2026-08-15T12:00:00Z",
+    },
+    "error": null, // set only when type = "anchor.failed"
 }
 ```
 
@@ -247,12 +247,12 @@ this route; the service must know it (via configuration/registration).
 
 **Errors (Pirma → service)**
 
-| Code | Meaning |
-|---|---|
-| `400` | Malformed body / unknown `type` |
-| `401` | Bad HMAC signature or stale timestamp |
+| Code  | Meaning                                                                            |
+| ----- | ---------------------------------------------------------------------------------- |
+| `400` | Malformed body / unknown `type`                                                    |
+| `401` | Bad HMAC signature or stale timestamp                                              |
 | `409` | Event already processed (optional; `200` is also acceptable for idempotent replay) |
-| `5xx` | Pirma failed to persist — service should retry |
+| `5xx` | Pirma failed to persist — service should retry                                     |
 
 **Delivery semantics (service side)**
 
@@ -315,12 +315,12 @@ Local effects when an anchor **fails**:
 
 ## 5. Idempotency & retries
 
-| Concern | Forward (Pirma → service) | Reverse (service → Pirma) |
-|---|---|---|
-| Key | `payloadHash` | `X-Blockchain-Event-Id` |
-| Re-submit behavior | Returns existing anchor (same `anchorId`) | Returns `200`, no side effects |
-| Retried by | Pirma's `anchor-client` (backoff, `BLOCKCHAIN_MAX_RETRIES`) | Service (backoff up to max attempts) |
-| Fallback | — | Pirma polling job reconciles missed events |
+| Concern            | Forward (Pirma → service)                                   | Reverse (service → Pirma)                  |
+| ------------------ | ----------------------------------------------------------- | ------------------------------------------ |
+| Key                | `payloadHash`                                               | `X-Blockchain-Event-Id`                    |
+| Re-submit behavior | Returns existing anchor (same `anchorId`)                   | Returns `200`, no side effects             |
+| Retried by         | Pirma's `anchor-client` (backoff, `BLOCKCHAIN_MAX_RETRIES`) | Service (backoff up to max attempts)       |
+| Fallback           | —                                                           | Pirma polling job reconciles missed events |
 
 Pirma must never double-submit the same `payloadHash`; it checks `signature_anchors` for an
 existing row first (unique constraint on `payload_hash`).

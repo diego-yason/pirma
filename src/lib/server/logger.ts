@@ -2,7 +2,7 @@
  * Simple dev logger with consistent formatting.
  *
  * Usage:
- *   import { log } from "$lib/server/logger";
+ *   import { log } from "#lib/server/logger.js";
  *   log.info("uploadFile", "Processing file", { name: "doc.pdf", size: 1024 });
  *   log.warn("uploadFile", "File too large", file.size);
  *   log.error("uploadFile", "Upload failed", err);

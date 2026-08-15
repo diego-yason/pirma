@@ -1,12 +1,11 @@
-import { json } from "@sveltejs/kit";
 import type { RequestHandler } from "./$types";
-import { createChallenge } from "$lib/server/crypto/key-challenge";
-import { logger } from "$lib/server/logger";
+import { createChallenge } from "#lib/server/crypto/key-challenge.js";
+import { logger } from "#lib/server/logger.js";
 
 export const GET: RequestHandler = async ({ locals }) => {
     if (!locals.user) {
         logger.warn("challengeEndpoint", "Challenge requested without session");
-        return json({ error: "Unauthorized" }, { status: 401 });
+        return Response.json({ error: "Unauthorized" }, { status: 401 });
     }
 
     const challenge = createChallenge(locals.user.id);
@@ -15,5 +14,5 @@ export const GET: RequestHandler = async ({ locals }) => {
         nonce: challenge.nonce,
     });
 
-    return json(challenge);
+    return Response.json(challenge);
 };

@@ -1,6 +1,6 @@
 import type { PageServerLoad, Actions } from "./$types";
 import { redirect, fail } from "@sveltejs/kit";
-import { db } from "$lib/server/db";
+import { db } from "#lib/server/db/index.js";
 import {
     packages,
     documents,
@@ -10,15 +10,15 @@ import {
     cryptoKeys,
     userSignatures,
     user,
-} from "$lib/server/db/schema";
+} from "#lib/server/db/schema.js";
 import { eq, and, isNull, inArray } from "drizzle-orm";
-import { supabaseAdmin } from "$lib/server/storage/supabase";
-import { getSignedUrl, setSignedUrl } from "$lib/server/storage/url-cache";
-import { verifyGuestToken } from "$lib/server/auth/guest-token";
-import { logger } from "$lib/server/logger";
-import { verifyEcdsaSignature } from "$lib/server/crypto/verify-signature";
-import { buildSigningPayload } from "$lib/shared/signing-payload";
-import type { PlacedRect } from "$lib/client/types/SignatureBoxTypes";
+import { supabaseAdmin } from "#lib/server/storage/supabase.js";
+import { getSignedUrl, setSignedUrl } from "#lib/server/storage/url-cache.js";
+import { verifyGuestToken } from "#lib/server/auth/guest-token.js";
+import { logger } from "#lib/server/logger.js";
+import { verifyEcdsaSignature } from "#lib/server/crypto/verify-signature.js";
+import { buildSigningPayload } from "#lib/shared/signing-payload.js";
+import type { PlacedRect } from "#lib/client/types/SignatureBoxTypes";
 
 export const load: PageServerLoad = async ({ params, locals, url }) => {
     const packageId = params.pageId;

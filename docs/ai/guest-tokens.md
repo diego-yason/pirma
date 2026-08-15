@@ -4,6 +4,7 @@
 > Created: 2026-08-16
 > Repo: `diego-yason/pirma`
 > Related:
+>
 > - `src/lib/server/auth/guest-token.ts` — current HMAC-signed token
 > - `src/lib/server/db/schema.ts` (`guestTokens`) — token lifecycle rows
 > - `src/routes/api/guest/link/+server.ts` — anonymous-user linking flow
@@ -21,11 +22,11 @@ It is functionally a JWT already. The consideration is whether to formalize it a
 
 ## Decisions (from product discussion, 2026-08-16)
 
-| # | Question | Decision |
-|---|---|---|
-| 1 | Single-use token? | **No.** A guest token may be reused within its validity window. `accessedAt` is informational, not a consumption flag. |
-| 2 | Revocation? | **Yes.** `guestTokens.revokedAt` must be enforced — the DB row is the source of truth. Verification must reject revoked tokens. |
-| 3 | Email binding? | **Yes.** The token should be bound to the recipient's email so a leaked URL can't be used by a different person. **OTP is planned eventually** (email OTP for guest sign-in) — the token design should not block that path. |
+| #   | Question          | Decision                                                                                                                                                                                                                    |
+| --- | ----------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 1   | Single-use token? | **No.** A guest token may be reused within its validity window. `accessedAt` is informational, not a consumption flag.                                                                                                      |
+| 2   | Revocation?       | **Yes.** `guestTokens.revokedAt` must be enforced — the DB row is the source of truth. Verification must reject revoked tokens.                                                                                             |
+| 3   | Email binding?    | **Yes.** The token should be bound to the recipient's email so a leaked URL can't be used by a different person. **OTP is planned eventually** (email OTP for guest sign-in) — the token design should not block that path. |
 
 ## Current state & gaps
 
@@ -45,12 +46,12 @@ It is functionally a JWT already. The consideration is whether to formalize it a
 - Secret: dedicated **`GUEST_TOKEN_SECRET`** env var; fall back to `BETTER_AUTH_SECRET` when
   unset (backward compatibility during rollout).
 - Claims:
-  - `sub` → `packageRecipients.id`
-  - `aud` → `"pirma-guest"`
-  - `iat`, `exp` (numeric dates)
-  - `jti` → random UUID (traceability, dedupe)
-  - `pkg` (private claim) → `packages.id`
-  - `email` (private claim) → recipient email hash or raw email (see OTP note below)
+    - `sub` → `packageRecipients.id`
+    - `aud` → `"pirma-guest"`
+    - `iat`, `exp` (numeric dates)
+    - `jti` → random UUID (traceability, dedupe)
+    - `pkg` (private claim) → `packages.id`
+    - `email` (private claim) → recipient email hash or raw email (see OTP note below)
 - Verify with `jwtVerify` + audience/issuer validation, then enforce the DB checks.
 
 ### DB enforcement (source of truth)
@@ -67,9 +68,9 @@ On every verification, after signature/expiry validation, look up the `guestToke
 - Near term: bind verification to the recipient's email on file (compare submitted email vs
   `packageRecipients.email`).
 - Planned: replace/augment the bearer-token step with an **email OTP flow** for guests:
-  1. Guest submits email (from the token).
-  2. Server sends a 6-digit OTP to that address.
-  3. Guest enters OTP → anonymous session linked to the recipient.
+    1. Guest submits email (from the token).
+    2. Server sends a 6-digit OTP to that address.
+    3. Guest enters OTP → anonymous session linked to the recipient.
 - Design goal: the JWT becomes a short-lived "invitation handle" that gets exchanged for an
   authenticated session; OTP is the proof-of-possession of the inbox. Keep the token's
   `recipientId`/`packageId` stable so the OTP exchange stays a drop-in replacement.

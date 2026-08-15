@@ -8,7 +8,7 @@
         "build": "vite build",
         "preview": "vite preview",
         "prepare": "svelte-kit sync || echo ''",
-        "check": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json",
+        "check": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json && svelte-check --tsconfig ./src/service-worker/tsconfig.json",
         "check:watch": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json --watch",
         "lint": "prettier --check . && eslint .",
         "format": "prettier --write .",
@@ -36,8 +36,9 @@
         "@storybook/addon-svelte-csf": "^5.1.2",
         "@storybook/addon-vitest": "^10.4.6",
         "@storybook/sveltekit": "^10.4.6",
-        "@sveltejs/adapter-auto": "^7.0.1",
-        "@sveltejs/kit": "^2.66.0",
+        "@sveltejs/adapter-auto": "next",
+        "@sveltejs/kit": "next",
+        "@sveltejs/load-config": "^0.2.2",
         "@sveltejs/vite-plugin-svelte": "^7.1.2",
         "@tailwindcss/forms": "^0.5.11",
         "@tailwindcss/typography": "^0.5.20",
@@ -59,8 +60,8 @@
         "prettier-plugin-svelte": "^4.1.1",
         "prettier-plugin-tailwindcss": "^0.8.0",
         "storybook": "^10.4.6",
-        "svelte": "^5.56.3",
-        "svelte-check": "^4.6.0",
+        "svelte": "^5.56.4",
+        "svelte-check": "^4.7.5",
         "tailwindcss": "^4.3.1",
         "typescript": "^6.0.3",
         "typescript-eslint": "^8.61.1",
@@ -77,5 +78,9 @@
         "pdf-lib": "^1.17.1",
         "pdfjs-dist": "^6.0.227",
         "zod": "^4.4.3"
+    },
+    "imports": {
+        "#lib": "./src/lib/index.js",
+        "#lib/*": "./src/lib/*"
     }
 }

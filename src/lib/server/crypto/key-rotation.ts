@@ -12,8 +12,8 @@
  *   KEY_ALLOWED_ALGORITHMS — comma-separated, e.g. "ECDSA-P256,ECDSA-P384"
  */
 
-import { db } from "$lib/server/db";
-import { signatures, cryptoKeys } from "$lib/server/db/schema";
+import { db } from "#lib/server/db/index.js";
+import { signatures, cryptoKeys } from "#lib/server/db/schema.js";
 import { eq, and, isNull, inArray, sql } from "drizzle-orm";
 
 // ── Config from environment ──────────────────────────────────────
@@ -23,7 +23,7 @@ import {
     KEY_MAX_AGE_DAYS,
     KEY_MAX_IDLE_DAYS,
     KEY_MAX_SIGNATURES,
-} from "$env/static/private";
+} from "$app/env/private";
 
 const MAX_AGE_DAYS = Number(KEY_MAX_AGE_DAYS) || 180;
 const MAX_IDLE_DAYS = Number(KEY_MAX_IDLE_DAYS) || 90;
@@ -92,11 +92,7 @@ export function checkKeyPolicy(key: {
     return (
         checkAge(key.createdAt) ??
         checkIdle(key.lastUsedAt) ??
-        checkAlgorithm(key.algorithm) ?? {
-            needsRotation: false,
-            reason: null,
-            check: null,
-        }
+        checkAlgorithm(key.algorithm) ?? { needsRotation: false, reason: null, check: null }
     );
 }
 
@@ -106,7 +102,7 @@ export function checkKeyPolicy(key: {
  */
 export async function checkKeyUsage(keyId: string): Promise<RotationResult> {
     const [count] = await db
-        .select({ count: sql<number>`count(*)::int` })
+        .select({ count: sql`count(*)::int` })
         .from(signatures)
         .where(
             and(
@@ -114,7 +110,6 @@ export async function checkKeyUsage(keyId: string): Promise<RotationResult> {
                 inArray(signatures.status, ["signed", "anchored"]),
             ),
         );
-
     const usageCount = count?.count ?? 0;
     if (usageCount >= MAX_SIGNATURES) {
         return {
@@ -133,7 +128,7 @@ export async function checkKeyUsage(keyId: string): Promise<RotationResult> {
  *
  * Usage example in a load function:
  * ```ts
- * import { checkKeyRotation } from "$lib/server/key-rotation";
+ * import { checkKeyRotation } from "#lib/server/key-rotation";
  * const rotation = await checkKeyRotation(userId);
  * if (rotation) { /* warn the user *&#47; }
  * ```

@@ -78,7 +78,14 @@ async function storeEncryptedKey(
     const db = await openDB();
     return new Promise<void>((resolve, reject) => {
         const tx = db.transaction(STORE_NAME, "readwrite");
-        tx.objectStore(STORE_NAME).put({ kid, userId, pubkey, encryptedPrivateKey, salt, keyLevel });
+        tx.objectStore(STORE_NAME).put({
+            kid,
+            userId,
+            pubkey,
+            encryptedPrivateKey,
+            salt,
+            keyLevel,
+        });
         tx.oncomplete = () => {
             console.log("[SW] Key stored in IndexedDB", { kid, userId });
             db.close();
@@ -326,7 +333,11 @@ async function handleSign(kid: string, data: string) {
     }
 
     const key = entry.key;
-    console.log("[SW sign] Signing data", { kid, keyLevel: entry.keyLevel, dataLength: data.length });
+    console.log("[SW sign] Signing data", {
+        kid,
+        keyLevel: entry.keyLevel,
+        dataLength: data.length,
+    });
 
     const enc = new TextEncoder();
     const signature = await crypto.subtle.sign(

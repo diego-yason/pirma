@@ -1,5 +1,5 @@
 import { createHmac, timingSafeEqual } from "node:crypto";
-import { env } from "$env/dynamic/private";
+import { BETTER_AUTH_SECRET } from "$app/env/private";
 
 const TOKEN_EXPIRY_MS = 7 * 24 * 60 * 60 * 1000; // 7 days
 
@@ -21,10 +21,7 @@ export function createGuestToken(recipientId: string, packageId: string): string
     const payload: GuestTokenPayload = { recipientId, packageId, exp };
     const payloadStr = JSON.stringify(payload);
     const payloadB64 = Buffer.from(payloadStr, "utf-8").toString("base64url");
-
-    const sig = createHmac("sha256", env.BETTER_AUTH_SECRET)
-        .update(payloadB64)
-        .digest("base64url");
+    const sig = createHmac("sha256", BETTER_AUTH_SECRET).update(payloadB64).digest("base64url");
 
     return `${payloadB64}.${sig}`;
 }
@@ -40,7 +37,7 @@ export function verifyGuestToken(token: string): GuestTokenPayload | null {
     const sig = token.slice(dot + 1);
 
     // Verify HMAC signature
-    const expectedSig = createHmac("sha256", env.BETTER_AUTH_SECRET)
+    const expectedSig = createHmac("sha256", BETTER_AUTH_SECRET)
         .update(payloadB64)
         .digest("base64url");
 

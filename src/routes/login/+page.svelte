@@ -1,9 +1,9 @@
 <script lang="ts">
     import { resolve } from "$app/paths";
     import { goto } from "$app/navigation";
-    import { authClient } from "$lib/client/auth/auth-client.js";
+    import { authClient } from "#lib/client/auth/auth-client.js";
     import type { EventHandler } from "svelte/elements";
-    import { setupDeviceKeys } from "$lib/client/crypto/setup-device-keys";
+    import { setupDeviceKeys } from "#lib/client/crypto/setup-device-keys.js";
 
     let submitting = $state(false);
     let email = $state("");
@@ -37,11 +37,7 @@
         }
 
         authClient.signIn
-            .opaque({
-                email,
-                password,
-            })
-            // @ts-expect-error not really important
+            .opaque({ email, password }) // @ts-expect-error not really important
             .then(async ({ data, error }) => {
                 if (error) {
                     console.error("[login] Login failed", error);
@@ -158,7 +154,7 @@
             </div>
         </div>
     </div>
-    <a href={resolve("/register")} class="text-center">
+    <a href={resolve("register")} class="text-center">
         Don't have an account?
         <span class="dark:text-secondary-200 text-secondary-800"> Sign up </span>
     </a>

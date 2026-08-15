@@ -1,10 +1,10 @@
 <script lang="ts">
     import { getContext } from "svelte";
     import type { PageProps } from "./$types";
-    import type { PlacedRect, RecipientInfo } from "$lib/client/types/SignatureBoxTypes";
-    import { PUBLIC_MAX_RECIPIENTS } from "$env/static/public";
-    import PDFViewer from "$lib/client/ui/PDFViewer.svelte";
-    import DocumentSelector from "$lib/client/ui/DocumentSelector.svelte";
+    import type { PlacedRect, RecipientInfo } from "#lib/client/types/SignatureBoxTypes";
+    import { PUBLIC_MAX_RECIPIENTS } from "$app/env/public";
+    import PDFViewer from "#lib/client/ui/PDFViewer.svelte";
+    import DocumentSelector from "#lib/client/ui/DocumentSelector.svelte";
     import { resolve } from "$app/paths";
 
     const MAX_RECIPIENTS = Number(PUBLIC_MAX_RECIPIENTS) || 100;
@@ -178,6 +178,7 @@
 
 <div class="ml-5 mt-8 flex gap-4 h-[calc(100vh-16rem)] min-h-0 pr-5">
     <DocumentSelector {documents} bind:selected={selectedDocIndex} />
+
     <div class="flex-2 overflow-y-auto">
         {#if !selectedDoc}
             <p class="text-neutral-500 text-sm px-2">No document selected.</p>
@@ -316,7 +317,7 @@
             {/if}
 
             <a
-                href={resolve(`/doc/new/${data.packageId}/confirm`)}
+                href={resolve(`doc/new/${data.packageId}/confirm`)}
                 class="mt-4 block w-full rounded-md bg-blue-600 px-4 py-2.5 text-center text-sm font-medium text-white transition hover:bg-blue-700"
             >
                 Next

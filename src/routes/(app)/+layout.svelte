@@ -1,9 +1,9 @@
 <script lang="ts">
     // @ts-nocheck snippets mm
-    import { page } from "$app/stores";
+    import { page } from "$app/state";
     import { resolve } from "$app/paths";
-    import { hasDeviceKeys, setupDeviceKeys } from "$lib/client/crypto/setup-device-keys";
-    import { authClient } from "$lib/client/auth/auth-client";
+    import { hasDeviceKeys, setupDeviceKeys } from "#lib/client/crypto/setup-device-keys.js";
+    import { authClient } from "#lib/client/auth/auth-client.js";
     import type { LayoutProps } from "./$types";
 
     type NavItem = {
@@ -28,7 +28,7 @@
     ];
 
     function isActive(item: NavItem): boolean {
-        const pathname = $page.url.pathname;
+        const pathname = page.url.pathname;
         return pathname === item.href || pathname.startsWith(item.href + "/");
     }
 
@@ -147,7 +147,7 @@
                 <div class="flex flex-col gap-2 border-t border-neutral-800 pt-3">
                     <a
                         class="flex items-center gap-2 rounded-md bg-amber-600 px-3 py-2.5 text-sm font-medium text-white transition hover:bg-amber-700"
-                        href={resolve("/register")}
+                        href={resolve("register")}
                     >
                         <svg
                             class="size-4 shrink-0"
@@ -160,13 +160,13 @@
                                 stroke-linecap="round"
                                 stroke-linejoin="round"
                                 d="M15.75 9V5.25A2.25 2.25 0 0 0 13.5 3h-6a2.25 2.25 0 0 0-2.25 2.25v13.5A2.25 2.25 0 0 0 7.5 21h6a2.25 2.25 0 0 0 2.25-2.25V15m3 0 3-3m0 0-3-3m3 3H9"
-                            />
+                            ></path>
                         </svg>
                         Convert to Full Account
                     </a>
                 </div>
             {:else}
-                <a class="font-medium text-sm tracking-wide" href={resolve("/logout")}>Logout</a>
+                <a class="font-medium text-sm tracking-wide" href={resolve("logout")}>Logout</a>
             {/if}
         </nav>
         <div class="flex flex-col gap-2 pb-5">
@@ -253,10 +253,9 @@
                 <button
                     type="button"
                     class="rounded-md border border-neutral-300 dark:border-neutral-600 px-4 py-2.5 text-sm font-medium text-neutral-700 dark:text-neutral-300 transition hover:bg-neutral-100 dark:hover:bg-neutral-800"
-                    onclick={() => (showKeySetup = false)}
+                    onclick={() => (showKeySetup = false)}>Skip</button
                 >
-                    Skip
-                </button>
+
                 <button
                     type="button"
                     class="rounded-md bg-blue-600 px-4 py-2.5 text-sm font-medium text-white transition hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"

@@ -1,10 +1,10 @@
 import type { LayoutServerLoad } from "./$types";
 import { redirect } from "@sveltejs/kit";
-import { db } from "$lib/server/db";
-import { user } from "$lib/server/db/auth.schema";
-import { packageRecipients, cryptoKeys } from "$lib/server/db/schema";
+import { db } from "#lib/server/db/index.js";
+import { user } from "#lib/server/db/auth.schema.js";
+import { packageRecipients, cryptoKeys } from "#lib/server/db/schema.js";
 import { eq, and, isNull } from "drizzle-orm";
-import { checkKeyRotation } from "$lib/server/crypto/key-rotation";
+import { checkKeyRotation } from "#lib/server/crypto/key-rotation.js";
 
 export const load: LayoutServerLoad = async ({ locals, url }) => {
     if (!locals.user && !url.pathname.includes("/sign")) {

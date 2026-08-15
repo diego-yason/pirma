@@ -1,7 +1,7 @@
 import type { PageServerLoad, Actions } from "./$types";
 import { redirect, fail } from "@sveltejs/kit";
-import { auth } from "$lib/server/auth";
-import { logger } from "$lib/server/logger";
+import { auth } from "#lib/server/auth/index.js";
+import { logger } from "#lib/server/logger.js";
 
 /** Map Better Auth errors to vague messages — never reveal which field is wrong. */
 function mapAuthError(err: unknown): { formError: string } {

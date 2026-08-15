@@ -1,6 +1,6 @@
 import type { PageServerLoad } from "./$types";
 import { redirect } from "@sveltejs/kit";
-import { db } from "$lib/server/db";
+import { db } from "#lib/server/db/index.js";
 import {
     packages,
     documents,
@@ -8,7 +8,7 @@ import {
     packageRecipients,
     signatures,
     cryptoKeys,
-} from "$lib/server/db/schema";
+} from "#lib/server/db/schema.js";
 import { eq, and, isNull, inArray } from "drizzle-orm";
 
 export const load: PageServerLoad = async ({ params, locals }) => {

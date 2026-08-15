@@ -1,8 +1,8 @@
 <script lang="ts">
-    import { authClient } from "$lib/client/auth/auth-client";
+    import { authClient } from "#lib/client/auth/auth-client.js";
     import { goto } from "$app/navigation";
     import { resolve } from "$app/paths";
-    import { setupDeviceKeys } from "$lib/client/crypto/setup-device-keys";
+    import { setupDeviceKeys } from "#lib/client/crypto/setup-device-keys.js";
 
     let email = $state("");
     let password = $state("");
@@ -89,7 +89,7 @@
                 }
 
                 console.log("[register] Registration complete, redirecting to login");
-                await goto(resolve("/login"));
+                await goto(resolve("login"));
             }
         } catch (err) {
             console.error("[register] Unexpected error:", err);
@@ -175,12 +175,12 @@
                                 r="10"
                                 stroke="currentColor"
                                 stroke-width="4"
-                            />
+                            ></circle>
                             <path
                                 class="opacity-75"
                                 fill="currentColor"
                                 d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
-                            />
+                            ></path>
                         </svg>
                         Creating account...
                     </span>
@@ -192,9 +192,10 @@
 
         <p class="text-center text-sm text-gray-600">
             Already have an account?
-            <a href={resolve("/login")} class="font-medium text-blue-600 hover:text-blue-500">
-                Sign in here
-            </a>
+
+            <a href={resolve("login")} class="font-medium text-blue-600 hover:text-blue-500"
+                >Sign in here</a
+            >
         </p>
     </div>
 </div>

@@ -41,54 +41,54 @@ flowchart LR
 ## Critical issues (fix before shipping)
 
 1. **`finalize` never checks the user is a signatory, and never checks field ownership.**
-   - File: `src/routes/(app)/doc/[pageId]/sign/+page.server.ts`
-   - The `load` function validates signatory membership, but the `finalize` action is
-     independently reachable. `resolveParty` just returns `locals.user.id`, and `sigFieldDoc`
-     is built from *all* package fields with no check that a field's `assignedTo` matches the
-     caller.
-   - A logged-in user can submit a crafted request and record signatures against fields
-     assigned to other signers.
-   - **Fix:** verify `party.userId` is in `packageRecipients` as `signer`, and that every
-     `signedFieldId` is assigned to them.
+    - File: `src/routes/(app)/doc/[pageId]/sign/+page.server.ts`
+    - The `load` function validates signatory membership, but the `finalize` action is
+      independently reachable. `resolveParty` just returns `locals.user.id`, and `sigFieldDoc`
+      is built from _all_ package fields with no check that a field's `assignedTo` matches the
+      caller.
+    - A logged-in user can submit a crafted request and record signatures against fields
+      assigned to other signers.
+    - **Fix:** verify `party.userId` is in `packageRecipients` as `signer`, and that every
+      `signedFieldId` is assigned to them.
 
 2. **Level-1 key "encryption" is not encryption.**
-   - File: `src/service-worker/index.ts` (`handleGenerateKeyPair`)
-   - `deriveKey(userId, userId)` uses the Better Auth user ID as both password and salt. User
-     IDs are not secret (they appear in the DB, client state, and logs).
-   - Anyone with access to IndexedDB can derive the same AES-GCM key and unwrap the private key.
-   - **Fix:** level-1 keys must be unlocked with real user authentication (password/OPAQUE
-     secret), or exist only as non-extractable, session-scoped keys.
+    - File: `src/service-worker/index.ts` (`handleGenerateKeyPair`)
+    - `deriveKey(userId, userId)` uses the Better Auth user ID as both password and salt. User
+      IDs are not secret (they appear in the DB, client state, and logs).
+    - Anyone with access to IndexedDB can derive the same AES-GCM key and unwrap the private key.
+    - **Fix:** level-1 keys must be unlocked with real user authentication (password/OPAQUE
+      secret), or exist only as non-extractable, session-scoped keys.
 
 3. **`kid` is ignored server-side and `keyLevel` is client-trusted.**
-   - `finalize` sends `kid` and `keyLevel`, then the server looks up the key by
-     `(userId, keyLevel)` with `.limit(1)` — `kid` is never used.
-   - With multiple active keys per level, verification can hit an arbitrary key and fail.
-   - Level-2 ("password-encrypted") signing is unimplemented: `loadKeys` skips level-2 keys and
-     `handleSign` ignores the `keyLevel` argument. The two-tier key system is currently
-     vestigial.
+    - `finalize` sends `kid` and `keyLevel`, then the server looks up the key by
+      `(userId, keyLevel)` with `.limit(1)` — `kid` is never used.
+    - With multiple active keys per level, verification can hit an arbitrary key and fail.
+    - Level-2 ("password-encrypted") signing is unimplemented: `loadKeys` skips level-2 keys and
+      `handleSign` ignores the `keyLevel` argument. The two-tier key system is currently
+      vestigial.
 
 ## High-priority gaps
 
 4. **Rotation/revocation is not enforced at signing time.** `finalize` never calls
    `checkKeyRotation`, and `revokedAt` is never set anywhere — there is no revocation endpoint.
-   The rotation policy only *warns* at login; an overused/expired key can still sign.
+   The rotation policy only _warns_ at login; an overused/expired key can still sign.
 
 5. **Guest signing is built on a throwaway secret.**
-   - File: `src/routes/(app)/doc/[pageId]/sign/+page.svelte` (`setupGuestSession`)
-   - `guestKeySecret = crypto.randomUUID()` lives only in memory, and `setupDeviceKeys(...,
-     force: true)` regenerates + re-uploads keys on every visit, leaving orphaned key rows.
-   - Guest signing only "works" by falling back to the insecure level-1 key.
+    - File: `src/routes/(app)/doc/[pageId]/sign/+page.svelte` (`setupGuestSession`)
+    - `guestKeySecret = crypto.randomUUID()` lives only in memory, and `setupDeviceKeys(...,
+force: true)` regenerates + re-uploads keys on every visit, leaving orphaned key rows.
+    - Guest signing only "works" by falling back to the insecure level-1 key.
 
 6. **Two competing postMessage RPC implementations with colliding IDs.**
-   - Files: `src/lib/client/crypto/sw-key.ts` and `src/lib/client/crypto/setup-device-keys.ts`
-   - Both register `serviceWorker` message listeners and both allocate IDs via `k${++nextId}`.
-     Collisions are possible and the wrong module can resolve the other's promise.
-   - **Fix:** consolidate into one RPC layer.
+    - Files: `src/lib/client/crypto/sw-key.ts` and `src/lib/client/crypto/setup-device-keys.ts`
+    - Both register `serviceWorker` message listeners and both allocate IDs via `k${++nextId}`.
+      Collisions are possible and the wrong module can resolve the other's promise.
+    - **Fix:** consolidate into one RPC layer.
 
 7. **Challenge nonces are an in-memory `Map`.**
-   - File: `src/lib/server/crypto/key-challenge.ts`
-   - Breaks across server restarts and multi-instance deployments; no rate limiting on
-     `/api/keys/challenge`.
+    - File: `src/lib/server/crypto/key-challenge.ts`
+    - Breaks across server restarts and multi-instance deployments; no rate limiting on
+      `/api/keys/challenge`.
 
 ## Medium issues
 
@@ -135,15 +135,15 @@ password-bound keys kept (recommendation option a).** Extra key rows are accepta
 
 ### What was implemented
 
-| Area | Change |
-|---|---|
-| Service worker | Level-1 keys are non-extractable (`extractable: false`, `["sign"]` only), held in the in-memory `keyStore`, **never written to IndexedDB**. Level-2 keys are wrapped with `PBKDF2(password, random per-key salt)` and persisted with the salt. |
-| SW messages | `hasKeys` now checks in-memory session keys; new `hasPersistentKeys` checks IndexedDB for level-2. `loadKeys` unwraps level-2 only when a password is provided. |
-| Client setup | `setupDeviceKeys(userId, password?, force?)` — password-less calls produce only the level-1 session key; level-2 is created only when a password is present and missing. "Always upload what the SW generated" keeps local + server state in sync (no orphaned keys). |
-| Guest/anonymous | Level-1 session key only; the throwaway `guestKeySecret` flow is removed. |
-| Server upload | Revokes prior active **same-level** keys for the user (retains rows, never deletes) inside a transaction. |
-| Server `finalize` | Looks up the key by `kid` (owned by user + not revoked) instead of `(userId, keyLevel)` + `.limit(1)`, and validates the requested `keyLevel` matches. |
-| Sign page | Lazily generates a level-1 session key if the SW lost it; if the server rejects the key as revoked, regenerates and retries once. |
+| Area              | Change                                                                                                                                                                                                                                                                |
+| ----------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Service worker    | Level-1 keys are non-extractable (`extractable: false`, `["sign"]` only), held in the in-memory `keyStore`, **never written to IndexedDB**. Level-2 keys are wrapped with `PBKDF2(password, random per-key salt)` and persisted with the salt.                        |
+| SW messages       | `hasKeys` now checks in-memory session keys; new `hasPersistentKeys` checks IndexedDB for level-2. `loadKeys` unwraps level-2 only when a password is provided.                                                                                                       |
+| Client setup      | `setupDeviceKeys(userId, password?, force?)` — password-less calls produce only the level-1 session key; level-2 is created only when a password is present and missing. "Always upload what the SW generated" keeps local + server state in sync (no orphaned keys). |
+| Guest/anonymous   | Level-1 session key only; the throwaway `guestKeySecret` flow is removed.                                                                                                                                                                                             |
+| Server upload     | Revokes prior active **same-level** keys for the user (retains rows, never deletes) inside a transaction.                                                                                                                                                             |
+| Server `finalize` | Looks up the key by `kid` (owned by user + not revoked) instead of `(userId, keyLevel)` + `.limit(1)`, and validates the requested `keyLevel` matches.                                                                                                                |
+| Sign page         | Lazily generates a level-1 session key if the SW lost it; if the server rejects the key as revoked, regenerates and retries once.                                                                                                                                     |
 
 ### Known tradeoffs / notes
 

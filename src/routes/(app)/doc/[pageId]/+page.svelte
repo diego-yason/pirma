@@ -80,14 +80,14 @@
         </div>
         {#if data.isRecipient}
             <a
-                href={resolve(`/doc/${data.pkg.id}/sign`)}
+                href={resolve(`doc/${data.pkg.id}/sign`)}
                 class="rounded-md bg-blue-600 px-6 py-2.5 text-sm font-medium text-white hover:bg-blue-700 transition"
             >
                 Sign Document
             </a>
         {/if}
         <a
-            href={resolve(`/doc/${data.pkg.id}/view`)}
+            href={resolve(`doc/${data.pkg.id}/view`)}
             class="rounded-md border border-neutral-300 dark:border-neutral-600 px-6 py-2.5 text-sm font-medium text-neutral-700 dark:text-neutral-300 hover:bg-neutral-100 dark:hover:bg-neutral-800 transition"
         >
             View

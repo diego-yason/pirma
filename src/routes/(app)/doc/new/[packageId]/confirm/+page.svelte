@@ -553,7 +553,11 @@
         <input type="hidden" name="signingOrderEnabled" value={signingOrder} />
         <input type="hidden" name="mfaRequired" value={mfaRequired} />
         <input type="hidden" name="expirationDate" value={expirationDate} />
-        <input type="hidden" name="groups" value={JSON.stringify(groups.map((g) => ({ id: g.id, signerIds: g.signerIds })))} />
+        <input
+            type="hidden"
+            name="groups"
+            value={JSON.stringify(groups.map((g) => ({ id: g.id, signerIds: g.signerIds })))}
+        />
 
         <button
             type="submit"
