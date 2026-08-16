@@ -42,6 +42,47 @@
 - A notary can only notarize while `commissionExpiresAt` is in the future and `revokedAt` is
   null. This is enforced where the notary is assigned/acts.
 
+### Compliance requirements (required to provide the notary service)
+
+A user may only be assigned to / perform notarial acts after completing **all four** of the
+following (each recorded with a timestamp + proof ref; none can be skipped):
+
+1. **Notary process video** — must watch the platform's notary process/training video.
+2. **Short quiz** — must pass the post-training assessment (ION flow, ack vs. jurat, witnesses,
+   journal/ROR rules, jurisdiction rules).
+3. **Certificate issuance** — a notary certificate is issued (completion/authorization); surfaced
+   on the notary's certificate / verify page per §4.
+4. **Application form** — a court application form is completed and filed by the **platform**
+   (managed in-app): the platform renders the per-jurisdiction form, transmits it to the court,
+   and records the filing status + proof of submission.
+
+**Court filing (platform-managed):** the platform renders the per-jurisdiction application form
+(e-filing API, email, or print/postal vendor — decision below), transmits it to the court, tracks
+the filing status (`draft → submitted → delivered/accepted → rejected`), and stores the proof
+ref. The notary sees filing status + outcome in-app and via the email/notification loop.
+
+Tracked in a `notary_compliance` table (one row per notary):
+
+```ts
+notaryCompliance = pgTable("notary_compliance", {
+  id: uuid PK,
+  notaryUserId: uuid FK notNull,               // references notaries.id
+  videoWatchedAt: timestamp,                    // 1 — notary process video
+  quizPassedAt: timestamp,                      // 2 — short quiz (store score + quizVersion)
+  certificateIssuedAt: timestamp,               // 3 — certificate issuance (certificateId)
+  courtApplicationSubmittedAt: timestamp,       // 4 — application form filed by the platform
+  courtApplicationPath: text,                   // rendered form / retained copy
+  courtFilingStatus: text({ enum: ["draft","submitted","delivered","accepted","rejected"] }),
+  courtFilingRef: text,                         // court / filing reference from the court
+  courtFilingAt: timestamp,                     // when the court acknowledged delivery
+  updatedAt: timestamp notNull defaultNow(),
+})
+```
+
+**Gating:** notary assignment and `finalize` check the `notaries` row **and** that all four
+compliance steps are complete (for #4, `courtFilingStatus` ≥ `submitted`). Renewal behavior
+(re-run video/quiz on commission renewal vs. one-time) is an open decision below.
+
 ## 2. Notary on a package
 
 - `packages.notaryUserId` (uuid FK, nullable) assigns a notary (per `document-flows.md`).
@@ -160,7 +201,7 @@ flowchart LR
 
 ## 6. Schema summary (all via `drizzle-kit generate`)
 
-- `notaries`, `notarizations`, `notary_journal_entries` (new)
+- `notaries`, `notarizations`, `notary_journal_entries`, `notary_compliance` (new)
 - `packages.notaryUserId` (column add)
 - `packageRecipients.role` gains `witness` (future, with ack/jurat wording)
 
@@ -178,3 +219,9 @@ flowchart LR
 3. Ack/jurat wording: per-jurisdiction templates (needed before certificates).
 4. Journal chain: separate endpoint/config (assumed).
 5. Journal read access: notary + platform (default).
+6. **Compliance gating**: enforce all four requirements before first notarization (recommended)
+   vs. allow application + court transmission post-hoc.
+7. **Certificate issuer**: platform vs. the court/commissioning authority (per jurisdiction).
+8. **Court filing channel** (platform-managed): e-filing API, email, or print/postal vendor —
+   per jurisdiction; the platform handles transmission + status tracking.
+9. **Renewal**: re-run video + quiz on commission renewal, or one-time per jurisdiction.

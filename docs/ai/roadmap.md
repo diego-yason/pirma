@@ -13,6 +13,112 @@
 
 ---
 
+## 0. Priority & type matrix
+
+> Consolidated view of the entire roadmap, sorted by **Priority** then **Type**.
+> Where they overlap, priority levels follow the *Working order* section at the bottom of this doc (e.g. the audit trail is placed after the notary work).
+>
+> **Priority** — follows the doc's *Suggested next steps* where already assigned; remaining items were prioritized in this consolidation:
+> - **P0** — Security-critical access-control gaps that must be closed before anything else
+> - **P1** — Foundation / high-value (auth foundations, signing loop, blocking decisions)
+> - **P2** — Near-term roadmap
+> - **P3** — Backlog / longer-term
+>
+> **Type** — `Security` (authn/authz, audit, identity, hardening) · `Feature` (new capability) · `Decision` (open question blocking work) · `Tech-debt` (cleanup/refactor)
+>
+> Implemented items (✅) carry priority `—` and are listed at the bottom for completeness.
+
+| Priority | Type | Item | Status | Ref |
+|---|---|---|---|---|
+| **P0** | Security | Server-side authorization in `finalize` (signatory membership + field ownership) | 🔲 | §1 |
+| **P0** | Security | Package viewers permission enforcement | 🔲 | §5 |
+| **P0** | Security | MFA-required / Tier-2 enforcement (`mfaRequired` → require level-2 signature) | 🔲 | §1 / §6 |
+| **P0** | Security | Enforce key rotation/revocation at signing time + add a revoke endpoint (`revokedAt` never set) | 🔲 | §1 |
+| **P1** | Security | Enforce `guestTokens.revokedAt` (DB is source of truth) | 🔲 | §4 |
+| **P1** | Security | Persist signing challenges (DB/Redis) + rate-limit `/api/keys/challenge` | 🔲 | §1 |
+| **P1** | Security | Strengthen signing payload (bind field IDs / package / version) | 🔲 | §1 |
+| **P1** | Security | Email verification on sign-up | ⚠️ | §6 |
+| **P1** | Security | Two-factor authentication (2FA) | ⚠️ | §6 |
+| **P1** | Feature | Signer email invitations & notifications | 🔲 | §5 |
+| **P1** | Feature | Owner notifications on sign / reject | 🔲 | §5 |
+| **P1** | Feature | Password reset | 🔲 | §5 |
+| **P1** | Feature | Reject flow completion (status + reason + notify) | 🔲 | §5 |
+| **P1** | Decision | PAdES signing certificate strategy (self-signed vs. platform CA vs. external TSP) | ⚠️ | §6 → blocks §3 Phase 3 |
+| **P1** | Decision | Conversion architecture (in-process WASM vs. document microservice) | ⚠️ | §6 → blocks §3 Phase 1 |
+| **P2** | Feature | `signature_anchors` table + `anchor_status` enum | 🔲 | §2 |
+| **P2** | Feature | `anchor-client` (submit / status / verify + retries) | 🔲 | §2 |
+| **P2** | Feature | Auto-anchor on finalize (idempotent by `payloadHash`) | 🔲 | §2 |
+| **P2** | Feature | Confirmation: polling job + webhook route | 🔲 | §2 |
+| **P2** | Feature | `signed → anchored` + `documents → executed` transition | 🔲 | §2 |
+| **P2** | Feature | PDF/A Phase 1 — ingestion conversion (PDF/DOCX/JPG/PNG → PDF/A-2b) | 🔲 | §3 |
+| **P2** | Feature | Email binding of guest token | 🔲 | §4 |
+| **P2** | Feature | Document templates | 🔲 | §5 |
+| **P2** | Feature | Contacts | 🔲 | §5 |
+| **P2** | Feature | Package expiration enforcement (`expirationDate` checked) | ⚠️ | §6 |
+| **P2** | Feature | Fillable form fields (initials, date, text, checkbox, dropdown) | 🔲 | §8.1 |
+| **P2** | Feature | Initials as a separate signature type | 🔲 | §8.2 |
+| **P2** | Feature | Mobile + accessibility (WCAG) signing flow | 🔲 | §8.2 |
+| **P2** | Feature | Signer identity verification (SMS OTP, KYC/ID, knowledge-based) | 🔲 | §8.3 |
+| **P2** | Feature | Notary commission (license, state/jurisdiction, expiry) | 🔲 | §8.4 |
+| **P2** | Feature | Notary compliance onboarding (process video + quiz + certificate + platform-managed court filing) | 🔲 | §8.4 |
+| **P2** | Feature | Notary journal (ROR) — private blockchain | 🔲 | §8.4 |
+| **P2** | Feature | RON (remote) + ION (in-person) notarization | 🔲 | §8.4 |
+| **P2** | Security | Structured audit trail / event log | 🔲 | §8.3 |
+| **P2** | Feature | ESIGN / UETA / eIDAS disclosure & rights | 🔲 | §8.5 |
+| **P2** | Feature | Organizations / teams & roles | 🔲 | §8.6 |
+| **P2** | Feature | Help center / per-persona FAQ (party + notary) | 🔲 | §8.8 |
+| **P2** | Feature | In-app "Contact support" form with auto-attached context (package/token/anchorId) | 🔲 | §8.8 |
+| **P2** | Feature | Token-expiry / link-expired self-service (request new link / resend invite) | 🔲 | §8.8 |
+| **P2** | Feature | Notary commission expiry notification (extends email set) | 🔲 | §8.8 |
+| **P2** | Decision | Resolve `src/env.ts` `@migration-task` (env var fallback to `""`) | ⚠️ | §7 |
+| **P3** | Feature | Public `/verify` page + API | 🔲 | §2 |
+| **P3** | Feature | Failed-anchor banner + manual re-submit | 🔲 | §2 |
+| **P3** | Feature | Anchoring targets artifact hash + every certificate hash | 🔲 | §2 / §3 |
+| **P3** | Feature | PDF/A Phase 2 — signed artifact generation (flatten + XMP + re-convert) | 🔲 | §3 |
+| **P3** | Feature | PAdES embedded signatures (party / notary / platform) | 🔲 | §3 |
+| **P3** | Feature | Detached ECDSA over final artifact hash (Phase 3 fallback) | 🔲 | §3 |
+| **P3** | Feature | PDF/A Phase 4 — verification (veraPDF/pdfcpu + PAdES + ECDSA + anchor) | 🔲 | §3 |
+| **P3** | Feature | Certificate artifacts (party / notary / platform) + audit pages | 🔲 | §3 |
+| **P3** | Feature | Notary flow (v1.x revision, notary step, no audit pages) | 🔲 | §3 |
+| **P3** | Feature | Certificate → blockchain transmission | 🔲 | §3 |
+| **P3** | Feature | Email OTP for guests | 🔲 | §4 |
+| **P3** | Feature | In-app notifications / activity feed | ⚠️ | §6 |
+| **P3** | Feature | Envelope lifecycle controls (void/cancel, replace signer, re-send) | 🔲 | §8.1 |
+| **P3** | Feature | Reminders & deadlines (nudge emails, overdue alerts) | 🔲 | §8.1 |
+| **P3** | Feature | Download/export (original + signed copies + audit data) | 🔲 | §8.1 |
+| **P3** | Feature | Trash / archive / retention policies | 🔲 | §8.1 |
+| **P3** | Feature | Document search | 🔲 | §8.1 |
+| **P3** | Feature | Guided signing ceremony (field-by-field) | 🔲 | §8.2 |
+| **P3** | Feature | Certificate of completion | 🔲 | §8.2 |
+| **P3** | Feature | Geolocation / device attestation capture | 🔲 | §8.3 |
+| **P3** | Feature | Acknowledgment vs. jurat wording | 🔲 | §8.4 |
+| **P3** | Feature | Witnesses | 🔲 | §8.4 |
+| **P3** | Feature | e-notary seal / QR code validator | 🔲 | §8.4 |
+| **P3** | Feature | Data-saving process (hot → cold → arctic storage) | 🔲 | §8.4 |
+| **P3** | Feature | Public developer API + webhooks | 🔲 | §8.5 |
+| **P3** | Feature | Billing / usage metering | 🔲 | §8.6 |
+| **P3** | Feature | Admin console | 🔲 | §8.6 |
+| **P3** | Feature | Reports / analytics | 🔲 | §8.6 |
+| **P3** | Feature | Upload integrations (cloud storage / sources) | 🔲 | §8.7 |
+| **P3** | Feature | Support-agent tooling in admin console (search + re-send/revoke/manual re-anchor) | 🔲 | §8.8 |
+| **P3** | Feature | Priority notary support channel | 🔲 | §8.8 |
+| **P3** | Feature | Deadline-warning email before `expirationDate` | 🔲 | §8.8 |
+| **P3** | Security | JWT migration (`jose`, HS256, standard claims, dedicated secret) | 🔲 | §4 |
+| **P3** | Tech-debt | Replace deprecated `config.alias` (`$plugins`) with subpath imports | 🔲 | §7 |
+| **P3** | Tech-debt | Fix pre-existing build warnings (a11y `href=""`, `state_referenced_locally`) | 🔲 | §7 |
+| **P3** | Tech-debt | Finish/delete `MIGRATION_TASKS.md` | 🔲 | §7 |
+| — | Feature | Level-1 session-only keys (SW memory, non-extractable) | ✅ | §1 |
+| — | Feature | Level-2 persistent, password-bound keys (random per-key salt) | ✅ | §1 |
+| — | Feature | Upload endpoint revokes prior same-level keys (transaction) | ✅ | §1 |
+| — | Feature | `finalize` looks up signing key by `kid` + enforces `keyLevel` | ✅ | §1 |
+| — | Feature | Guest/anonymous level-1 session keys (no throwaway secret) | ✅ | §1 |
+| — | Feature | Sign page lazy key generation + auto-retry on revoked key | ✅ | §1 |
+| — | Security | SW RPC ID prefixes (`dk`/`sk`) — no cross-module resolution (mitigation only) | ✅ | §1 |
+
+> **Ref** — `§1` Key & signing · `§2` Blockchain · `§3` PDF/A & flows · `§4` Guest tokens · `§5` Undocumented gaps · `§6` Security decisions · `§7` Tech debt · `§8.x` Platform features.
+
+---
+
 ## 1. Key & signing architecture
 
 Source: `docs/ai/keys/recommendations.md`
@@ -160,6 +266,7 @@ These exist as stubs/TODOs and are **not** in any `docs/ai` file other than this
 | Feature | Status | Notes |
 |---|---|---|
 | Notary commission (license, state/jurisdiction, expiry) | 🔲 | Design: `docs/ai/notary.md` |
+| Notary compliance onboarding (process video + quiz + certificate + court filing) | 🔲 | Design: `docs/ai/notary.md` §1 — all four gate acting as notary; filing is platform-managed |
 | Notary journal (ROR) — its own **private blockchain** | 🔲 | Design: `docs/ai/notary.md`; mechanism per `blockchain-integration.md` / `blockchain-microservice` (private chain variant) |
 | RON (remote) + ION (in-person) notarization | 🔲 | Design: `docs/ai/notary.md` (ION first; RON = two-way audiovisual + recording, deferred) |
 | Acknowledgment vs. jurat wording | 🔲 | Design: `docs/ai/notary.md` §4; per-jurisdiction templates needed |
@@ -188,6 +295,20 @@ These exist as stubs/TODOs and are **not** in any `docs/ai` file other than this
 | Feature | Status | Notes |
 |---|---|---|
 | Upload integrations (cloud storage / sources) | 🔲 | Design: `docs/ai/integrations-upload.md` — solely for uploading to the system |
+
+### 8.8 Support & help
+
+> Design: `docs/ai/support.md`
+
+| Feature | Status | Notes |
+|---|---|---|
+| Help center / per-persona FAQ (party + notary) | 🔲 | Static routes; answers "how do I sign?", OTP, commission, journal |
+| In-app "Contact support" form with auto-attached context | 🔲 | package/token/anchorId auto-derived; guests via captured email |
+| Token-expiry / link-expired self-service (request new link / resend invite) | 🔲 | Ties to `guest-tokens.md` (revokedAt + email binding) |
+| Notary commission expiry notification | 🔲 | Extends `email-notifications.md` set; prevents lapse |
+| Support-agent tooling in admin console (search + re-send/revoke/manual re-anchor) | 🔲 | Extends §8.6 admin console; actions logged to audit trail |
+| Priority notary support channel | 🔲 | Two-tier: standard (parties) vs. priority (notary) |
+| Deadline-warning email before `expirationDate` | 🔲 | Extends reminders in `email-notifications.md`; hard vs. soft decision |
 
 ---
 
