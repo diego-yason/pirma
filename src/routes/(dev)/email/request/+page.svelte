@@ -1,24 +1,20 @@
-Signatuer Requested: Vendor Service Agreement Hello Juan Dela Cruz,
+<script lang="ts">
+    let { data } = $props();
 
-<p>
-    <span class="font-medium">Acme Corporation</span> has sent you a document to review and sign. Please
-    click the button below to view the document.
-</p>
+    const { subject, html } = data as { subject: string; html: string };
+</script>
 
-<div>
-    <p>PDF</p>
-    <div class="flex flex-col">
-        <p>FileName.pdf</p>
-        <div class="flex">
-            <p>12 pages</p>
-            <p>Signature Requested</p>
-        </div>
-    </div>
+<svelte:head><title>Email preview — {subject}</title></svelte:head>
+
+<div class="mx-auto max-w-3xl px-6 py-10">
+    <h1 class="mb-1 text-lg font-semibold text-neutral-900">Email preview</h1>
+    <p class="mb-6 text-sm text-neutral-500">
+        Template: <span class="font-mono">signer-invite</span> · Subject:
+        <span class="font-mono">{subject}</span>
+    </p>
+    <iframe
+        title="Email preview"
+        class="h-[80vh] w-full rounded-lg border border-neutral-200 bg-white"
+        srcdoc={html}
+    />
 </div>
-
-<a
-    href=""
-    class="inline-block rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white transition hover:bg-blue-700"
->
-    Review & Sign -&gt;
-</a>

@@ -1,70 +1,94 @@
 /**
- * Simple dev logger with consistent formatting.
+ * Structured logger backed by pino.
  *
- * Usage:
- *   import { log } from "#lib/server/logger.js";
- *   log.info("uploadFile", "Processing file", { name: "doc.pdf", size: 1024 });
- *   log.warn("uploadFile", "File too large", file.size);
- *   log.error("uploadFile", "Upload failed", err);
+ * Keeps the existing call-site API:
+ *   import { logger } from "#lib/server/logger.js";
+ *   logger.info("uploadFile", "Processing file", { name: "doc.pdf", size: 1024 });
+ *   logger.warn("uploadFile", "File too large", { size });
+ *   logger.error("uploadFile", "Upload failed", err);
+ *
+ * - `action` is emitted as a structured field.
+ * - Object args are spread into the log record as structured fields.
+ * - `Error` args are attached as pino's `err` (stack is serialized).
+ * - Sensitive fields (tokens, codes, nonces, signatures, passwords, URLs that
+ *   carry tokens, authorization headers, cookies) are redacted centrally.
+ *
+ * Output: JSON lines (stdout) in production; `pino-pretty` in dev.
+ * Level: LOG_LEVEL (defaults to `info` in production, `debug` otherwise).
  */
+
+import { pino } from "pino";
+
+const level = process.env.LOG_LEVEL ?? (process.env.NODE_ENV === "production" ? "info" : "debug");
+
+const pinoLogger = pino({
+    level,
+    redact: {
+        paths: [
+            "signingUrl",
+            "*.signingUrl",
+            "**.signingUrl",
+            "token",
+            "*.token",
+            "**.token",
+            "code",
+            "*.code",
+            "**.code",
+            "nonce",
+            "*.nonce",
+            "**.nonce",
+            "password",
+            "*.password",
+            "**.password",
+            "signature",
+            "*.signature",
+            "**.signature",
+            "authorization",
+            "*.authorization",
+            "cookie",
+            "set-cookie",
+            "apiKey",
+            "*.apiKey",
+        ],
+        censor: "[REDACTED]",
+    },
+    transport:
+        process.env.NODE_ENV === "production"
+            ? undefined
+            : {
+                  target: "pino-pretty",
+                  options: { colorize: true, translateTime: "SYS:HH:MM:ss" },
+              },
+});
 
 type Level = "debug" | "info" | "warn" | "error";
 
-const PAD = 7; // longest level string + some padding
-
-function timestamp(): string {
-    return new Date().toISOString().slice(11, 23); // HH:MM:SS.mmm
-}
-
-function formatMessage(level: Level, action: string, message: string, ...args: unknown[]): string {
-    const prefix = `[${timestamp()}] [${level.toUpperCase().padEnd(PAD)}] [${action}]`;
-    const extra = args.length > 0 ? " " + args.map(serializeArg).join(" ") : "";
-    return `${prefix} ${message}${extra}`;
-}
-
-function serializeArg(arg: unknown): string {
-    if (arg instanceof Error) {
-        return arg.stack ?? arg.message;
-    }
-    if (typeof arg === "object" && arg !== null) {
-        try {
-            return JSON.stringify(arg, null, 0);
-        } catch {
-            return String(arg);
+function write(level: Level, action: string, message: string, args: unknown[]): void {
+    const fields: Record<string, unknown> = { action };
+    for (let i = 0; i < args.length; i++) {
+        const arg = args[i];
+        if (arg instanceof Error) {
+            fields.err = arg;
+        } else if (arg !== null && typeof arg === "object") {
+            Object.assign(fields, arg);
+        } else {
+            fields[`arg${i}`] = arg;
         }
     }
-    return String(arg);
-}
-
-function log(level: Level, action: string, message: string, ...args: unknown[]): void {
-    const formatted = formatMessage(level, action, message, ...args);
-    switch (level) {
-        case "debug":
-            console.debug(formatted);
-            break;
-        case "info":
-            console.log(formatted);
-            break;
-        case "warn":
-            console.warn(formatted);
-            break;
-        case "error":
-            console.error(formatted);
-            break;
-    }
+    pinoLogger[level](fields, message);
 }
 
 export const logger = {
     debug(action: string, message: string, ...args: unknown[]) {
-        log("debug", action, message, ...args);
+        write("debug", action, message, args);
     },
     info(action: string, message: string, ...args: unknown[]) {
-        log("info", action, message, ...args);
+        write("info", action, message, args);
     },
     warn(action: string, message: string, ...args: unknown[]) {
-        log("warn", action, message, ...args);
+        write("warn", action, message, args);
     },
     error(action: string, message: string, ...args: unknown[]) {
-        log("error", action, message, ...args);
+        write("error", action, message, args);
     },
 };

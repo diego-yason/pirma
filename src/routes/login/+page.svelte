@@ -104,6 +104,7 @@
                     <label for="password" class="font-bold tracking-wider"> Password </label>
                     <button
                         type="button"
+                        onclick={() => goto(resolve("forgot-password"))}
                         class="font-light dark:text-secondary-200 text-secondary-800 cursor-pointer bg-transparent border-none underline"
                     >
                         Forgot password?

@@ -110,3 +110,17 @@ export async function loadKeys(
     });
     return result;
 }
+
+/**
+ * Find the first kid of a given key level currently loaded in the SW's
+ * in-memory keyStore (level-2 keys must first be unlocked via loadKeys
+ * with the user's password).
+ */
+export async function getKeyForLevel(
+    userId: string,
+    keyLevel: number,
+): Promise<string | null> {
+    ensureListener();
+    const result = await send<{ kid: string | null }>("getKeyForLevel", { userId, keyLevel });
+    return result.kid;
+}

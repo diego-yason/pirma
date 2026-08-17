@@ -30,21 +30,21 @@
 
 | Priority | Type | Item | Status | Ref |
 |---|---|---|---|---|
-| **P0** | Security | Server-side authorization in `finalize` (signatory membership + field ownership) | 🔲 | §1 |
-| **P0** | Security | Package viewers permission enforcement | 🔲 | §5 |
-| **P0** | Security | MFA-required / Tier-2 enforcement (`mfaRequired` → require level-2 signature) | 🔲 | §1 / §6 |
-| **P0** | Security | Enforce key rotation/revocation at signing time + add a revoke endpoint (`revokedAt` never set) | 🔲 | §1 |
+| **P0** | Security | Server-side authorization in `finalize` (signatory membership + field ownership) | ✅ | §1 |
+| **P0** | Security | Package viewers permission enforcement | ✅ | §5 |
+| **P0** | Security | MFA-required / Tier-2 enforcement (`mfaRequired` → require level-2 signature) | ✅ | §1 / §6 |
+| **P0** | Security | Enforce key rotation/revocation at signing time + add a revoke endpoint (`revokedAt` never set) | ✅ | §1 |
 | **P1** | Security | Enforce `guestTokens.revokedAt` (DB is source of truth) | 🔲 | §4 |
 | **P1** | Security | Persist signing challenges (DB/Redis) + rate-limit `/api/keys/challenge` | 🔲 | §1 |
-| **P1** | Security | Strengthen signing payload (bind field IDs / package / version) | 🔲 | §1 |
+| **P1** | Security | Strengthen signing payload (bind field IDs / package / version) | ✅ | §1 |
 | **P1** | Security | Email verification on sign-up | ⚠️ | §6 |
 | **P1** | Security | Two-factor authentication (2FA) | ⚠️ | §6 |
-| **P1** | Feature | Signer email invitations & notifications | 🔲 | §5 |
-| **P1** | Feature | Owner notifications on sign / reject | 🔲 | §5 |
-| **P1** | Feature | Password reset | 🔲 | §5 |
-| **P1** | Feature | Reject flow completion (status + reason + notify) | 🔲 | §5 |
-| **P1** | Decision | PAdES signing certificate strategy (self-signed vs. platform CA vs. external TSP) | ⚠️ | §6 → blocks §3 Phase 3 |
-| **P1** | Decision | Conversion architecture (in-process WASM vs. document microservice) | ⚠️ | §6 → blocks §3 Phase 1 |
+| **P1** | Feature | Signer email invitations & notifications | � | §5 |
+| **P1** | Feature | Owner notifications on sign / reject | ✅ | §5 |
+| **P1** | Feature | Password reset | ✅ | §5 |
+| **P1** | Feature | Reject flow completion (status + reason + notify) | 🚧 | §5 |
+| **P1** | Decision | PAdES signing certificate strategy (self-signed vs. platform CA vs. external TSP) | ✅ | §6 → resolved: self-signed + TSA (`pdfa/pades-baseline-t-spec.md`) |
+| **P1** | Decision | Conversion architecture (in-process WASM vs. document microservice) | ✅ | §6 → resolved: in-process first cut, microservice later |
 | **P2** | Feature | `signature_anchors` table + `anchor_status` enum | 🔲 | §2 |
 | **P2** | Feature | `anchor-client` (submit / status / verify + retries) | 🔲 | §2 |
 | **P2** | Feature | Auto-anchor on finalize (idempotent by `payloadHash`) | 🔲 | §2 |
@@ -81,10 +81,10 @@
 | **P3** | Feature | Certificate artifacts (party / notary / platform) + audit pages | 🔲 | §3 |
 | **P3** | Feature | Notary flow (v1.x revision, notary step, no audit pages) | 🔲 | §3 |
 | **P3** | Feature | Certificate → blockchain transmission | 🔲 | §3 |
-| **P3** | Feature | Email OTP for guests | 🔲 | §4 |
+| **P3** | Feature | Email OTP for guests | ✅ | §4 |
 | **P3** | Feature | In-app notifications / activity feed | ⚠️ | §6 |
 | **P3** | Feature | Envelope lifecycle controls (void/cancel, replace signer, re-send) | 🔲 | §8.1 |
-| **P3** | Feature | Reminders & deadlines (nudge emails, overdue alerts) | 🔲 | §8.1 |
+| **P3** | Feature | Reminders & deadlines (nudge emails, overdue alerts) | � | §8.1 |
 | **P3** | Feature | Download/export (original + signed copies + audit data) | 🔲 | §8.1 |
 | **P3** | Feature | Trash / archive / retention policies | 🔲 | §8.1 |
 | **P3** | Feature | Document search | 🔲 | §8.1 |
@@ -132,12 +132,12 @@ Source: `docs/ai/keys/recommendations.md`
 | Guest/anonymous level-1 session keys (no throwaway secret) | ✅ | Implemented |
 | Sign page lazy key generation + auto-retry on revoked key | ✅ | Implemented |
 | SW RPC ID prefixes (`dk`/`sk`) — no cross-module resolution | ✅ | Mitigation only |
-| **Server-side authorization in `finalize`** (signatory membership + field ownership) | 🔲 | **P0 — security** |
-| Enforce rotation/revocation at signing time + add a revoke endpoint | 🔲 | `revokedAt` never set by any endpoint |
+| **Server-side authorization in `finalize`** (signatory membership + field ownership) | ✅ | **P0 — fixed 2026-08-16** |
+| Enforce rotation/revocation at signing time + add a revoke endpoint | ✅ | `finalize` runs `checkKeyPolicy` + `checkKeyUsage`; `POST /api/keys/revoke` sets `revokedAt` (2026-08-16) |
 | Consolidate SW RPC into one handler | 🔲 | Follow-up to ID-prefix mitigation |
 | Persist challenges (DB/Redis) + rate-limit `/api/keys/challenge` | 🔲 | Currently in-memory `Map` |
-| Strengthen signing payload (bind field IDs / package / version) | 🔲 | Currently `"${docHash}:${count}"` |
-| **MFA-required / Tier-2 enforcement** (`mfaRequired` → require level-2 signature) | 🔲 | Flag set + shown, never enforced; see §6 |
+| Strengthen signing payload (bind field IDs / package / version) | ✅ | Now `packageId:documentId:docHash:sortedFieldIds:signerUserId` (2026-08-16) |
+| **MFA-required / Tier-2 enforcement** (`mfaRequired` → require level-2 signature) | ✅ | Enforced 2026-08-16: server rejects level-1 keys on `mfaRequired`; sign page unlocks level-2 key w/ password |
 
 ---
 
@@ -184,7 +184,7 @@ Source: `docs/ai/guest-tokens.md`
 | JWT migration (`jose`, HS256, standard claims, dedicated secret) | 🔲 | Consideration |
 | **Enforce `guestTokens.revokedAt`** (DB is source of truth) | 🔲 | Never checked today |
 | Email binding of token | 🔲 | Planned |
-| Email OTP for guests | 🔲 | Future; token should not block it |
+| Email OTP for guests | ✅ | `guest_otps` table + `/api/guest/otp/{request,verify}` + sign-page OTP gate (migration `0002`) |
 
 ---
 
@@ -194,13 +194,13 @@ These exist as stubs/TODOs and are **not** in any `docs/ai` file other than this
 
 | Feature | Status | Where | Notes |
 |---|---|---|---|
-| **Signer email invitations & notifications** | 🔲 | `doc/new/[packageId]/confirm/+page.server.ts` (`// TODO: Send email…`) | Signing URL + guest token generated, nothing is emailed; no sender infra (only a dev email renderer). Design: `docs/ai/email-notifications.md` |
-| Owner notifications on sign / reject | 🔲 | — | No notification system at all. Design: `docs/ai/email-notifications.md` |
-| **Password reset** | 🔲 | `login/+page.svelte` ("Forgot password?" has no handler) | Better Auth `requestPasswordReset` not wired. Design: `docs/ai/signing-workspace-features.md` |
+| **Signer email invitations & notifications** | � | `doc/new/[packageId]/confirm/+page.server.ts` | Invite email sent (tokenized URL for guests, plain sign link for registered users). Email module + `email_events` built. In-app/activity feed still pending. Design: `docs/ai/email-notifications.md` |
+| Owner notifications on sign / reject | ✅ | `sign/+page.server.ts` `finalize` / `reject` | Owner emailed on sign and on reject (with reason). No in-app notifications (separate P3 item). Design: `docs/ai/email-notifications.md` |
+| **Password reset** | ✅ | `/forgot-password` + `/reset-password` routes | Better Auth `sendResetPassword` hook + `requestPasswordReset`/`resetPassword` wired; login "Forgot password?" links to the flow. |
 | **Document templates** | 🔲 | `doc/new/+page.svelte` + nav "Templates" → `/` | UI stub, no handler. Design: `docs/ai/signing-workspace-features.md` |
 | **Contacts** | 🔲 | nav "Contacts" → `/` | Placeholder only. Design: `docs/ai/signing-workspace-features.md` |
-| **Package viewers permission enforcement** | 🔲 | `doc/[pageId]/+page.server.ts` (`// TODO: check package_viewers`) | Table + dashboard join exist; access not enforced. Design: `docs/ai/signing-workspace-features.md` |
-| **Reject flow completion** | 🔲 | `sign/+page.server.ts` `reject` action | Stub: no `signatures.status='rejected'`, no reason storage, no owner notify; client confirmation is TODO. Design: `docs/ai/signing-workspace-features.md` |
+| **Package viewers permission enforcement** | ✅ | `doc/[pageId]/+page.server.ts` + `view/+page.server.ts` now check `package_viewers` (2026-08-16) |
+| **Reject flow completion** | � | `sign/+page.server.ts` `reject` action | Signatory verified, recipient marked (`package_recipients.rejectedAt`/`rejectionReason`), existing signature rows → `rejected`, owner notified. Client confirmation dialog still TODO. Design: `docs/ai/signing-workspace-features.md` |
 
 ---
 
@@ -212,8 +212,8 @@ These exist as stubs/TODOs and are **not** in any `docs/ai` file other than this
 | Two-factor authentication (2FA) | ⚠️ | Better Auth `twoFactor` plugin not enabled; relevant to `mfaRequired` |
 | Package expiration enforcement | ⚠️ | `packages.expirationDate` exists; unclear if enforced |
 | In-app notifications / activity feed | ⚠️ | Nothing exists |
-| PAdES signing certificate strategy | ⚠️ | Self-signed per user vs. platform CA vs. external TSP — blocks §3 Phase 3 |
-| Conversion architecture (in-process WASM vs. document microservice) | ⚠️ | Blocks §3 Phase 1 |
+| PAdES signing certificate strategy | ✅ | Resolved 2026-08-16: **self-signed per signer + trusted TSA timestamp** — `pdfa/pades-baseline-t-spec.md` |
+| Conversion architecture (in-process WASM vs. document microservice) | ✅ | Resolved 2026-08-16: **in-process first cut**; document microservice is the production path |
 
 ---
 
@@ -239,7 +239,7 @@ These exist as stubs/TODOs and are **not** in any `docs/ai` file other than this
 |---|---|---|
 | Fillable form fields (initials, date, text, checkbox, dropdown) | 🔲 | Design: `docs/ai/form-fields.md`; `placementFields` are signature-only today |
 | Envelope lifecycle controls (void/cancel, replace signer, re-send) | 🔲 | Design: `docs/ai/document-package-management.md` |
-| Reminders & deadlines (nudge emails, overdue alerts, enforce `expirationDate`) | 🔲 | Design: `docs/ai/document-package-management.md`; `expirationDate` stored but unchecked |
+| Reminders & deadlines (nudge emails, overdue alerts, enforce `expirationDate`) | � | Nudge emails done: `sendDueReminders` + `/api/cron/reminders` (day 3/7, `EMAIL_REMIND_DAYS`). Overdue alerts + hard `expirationDate` enforcement still pending. Design: `docs/ai/document-package-management.md` |
 | Download/export (original + signed copies + audit data) | 🔲 | Design: `docs/ai/document-package-management.md`; overlaps §3 artifacts |
 | Trash / archive / retention policies | 🔲 | Design: `docs/ai/document-package-management.md` (+ `storage-tiering.md`) |
 | Document search | 🔲 | Design: `docs/ai/document-package-management.md` |
@@ -316,7 +316,7 @@ These exist as stubs/TODOs and are **not** in any `docs/ai` file other than this
 
 Agreed attack order for the undocumented features:
 
-1. **Email & notifications** — `docs/ai/email-notifications.md` (draft) — 🚧 in progress
+1. **Email & notifications** — `docs/ai/email-notifications.md` — ✅ all 7 emails implemented (2026-08-16); reminders need a scheduler hitting `/api/cron/reminders`
 2. Section 5 codebase gaps — password reset, templates, contacts, viewers enforcement, reject flow
 3. Notary: **ION** + commission + journal (private blockchain) design
 4. Structured audit trail
@@ -327,8 +327,8 @@ Agreed attack order for the undocumented features:
 
 ## Suggested next steps (priority order)
 
-1. **P0 security:** server-side authorization in `finalize` (signatory + field ownership) — §1.
-2. **P0 security:** MFA-required / Tier-2 enforcement (`mfaRequired`) — §1/§6.
+1. **P0 security:** server-side authorization in `finalize` (signatory + field ownership) — §1. ✅ done 2026-08-16.
+2. **P0 security:** MFA-required / Tier-2 enforcement (`mfaRequired`) — §1/§6. ✅ done 2026-08-16.
 3. **P1:** Signer email invitations & notifications (foundation for the whole signing loop) — §5.
 4. **P1:** Password reset — §5.
 5. **P1:** Enforce `guestTokens.revokedAt` — §4.

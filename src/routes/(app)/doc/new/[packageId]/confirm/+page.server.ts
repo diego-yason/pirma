@@ -14,6 +14,8 @@ import { requirePackageOwnership } from "#lib/server/package-guard.js";
 import { createGuestToken } from "#lib/server/auth/guest-token.js";
 import { ORIGIN } from "$app/env/private";
 import { logger } from "#lib/server/logger.js";
+import { sendEmail } from "#lib/server/email/index.js";
+import { renderSignerInvite, signerInviteSubject } from "#lib/server/email/templates/index.js";
 
 export const load: PageServerLoad = async ({ params, locals }) => {
     if (!locals.user) {
@@ -312,8 +314,15 @@ export const actions: Actions = {
 
         const signingBase = `${ORIGIN}/doc/${params.packageId}/sign`;
 
+        // Package name + deadline used in the invitation emails
+        const [pkgInfo] = await db
+            .select({ name: packages.name, expirationDate: packages.expirationDate })
+            .from(packages)
+            .where(eq(packages.id, params.packageId));
+
         for (const signer of signers) {
             const isGuest = !signer.email || !knownEmails.has(signer.email);
+            let signingUrl = signingBase;
 
             if (isGuest) {
                 // Generate a signed guest token
@@ -328,14 +337,13 @@ export const actions: Actions = {
                     expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
                 });
 
-                const signingUrl = `${signingBase}?token=${token}`;
+                signingUrl = `${signingBase}?token=${token}`;
                 logger.info("confirm", "Guest signing link generated", {
                     recipientId: signer.id,
                     name: signer.name,
                     email: signer.email,
                     signingUrl,
                 });
-                // TODO: Send email to signer.email with the signingUrl
             } else {
                 // Known user — they'll see it on their dashboard
                 logger.debug("confirm", "Registered signer notified", {
@@ -343,9 +351,23 @@ export const actions: Actions = {
                     name: signer.name,
                     email: signer.email,
                 });
-                // TODO: Send in-app / email notification with link to
-                // the signing page (no token needed, they log in normally)
             }
+
+            // Invitation email — tokenized link for guests, plain sign link
+            // for registered users (they log in normally).
+            await sendEmail({
+                eventId: `signer-invite:${params.packageId}:${signer.id}`,
+                template: "signer-invite",
+                to: signer.email ?? "",
+                subject: signerInviteSubject(pkgInfo?.name ?? "a signing request"),
+                html: renderSignerInvite({
+                    recipientName: signer.name,
+                    senderName: locals.user.name,
+                    packageName: pkgInfo?.name ?? "your documents",
+                    signUrl: signingUrl,
+                    deadline: pkgInfo?.expirationDate?.toISOString() ?? null,
+                }),
+            });
         }
 
         logger.info("confirm", "Package finalized", {

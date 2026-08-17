@@ -12,7 +12,7 @@
 
 <nav class="flex justify-between px-8 py-3 border-b mb-4">
     <div class="flex gap-4 items-center">
-        <a class="font-bold text-xl" href={resolve("/")}>Prima</a>
+        <a class="font-bold text-xl" href={resolve("/")}>Pirma</a>
         {@render link("Features", resolve("features"))}
         {@render link("Blockchain", resolve("blockchain"))}
         {@render link("Security", resolve("security"))}

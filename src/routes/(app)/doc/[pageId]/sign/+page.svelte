@@ -6,7 +6,7 @@
     // import { registerPublicKey } from "#lib/client/archive/crypto.js"; // archived — superseded by SW key system
     import { authClient } from "#lib/client/auth/auth-client.js";
     import { setupDeviceKeys } from "#lib/client/crypto/setup-device-keys.js";
-    import { sign, loadKeys } from "#lib/client/crypto/sw-key.js";
+    import { sign, loadKeys, getKeyForLevel } from "#lib/client/crypto/sw-key.js";
     import { buildSigningPayload } from "#lib/shared/signing-payload.js";
     import { page } from "$app/state";
     import { SvelteMap } from "svelte/reactivity";
@@ -16,63 +16,107 @@
     // Extract guest token from URL (if present)
     let guestToken = $derived(data.isGuest ? (page.url.searchParams.get("token") ?? "") : "");
 
-    // Ensure a signing key is available in memory and registered on the server
+    // ── Guest email OTP sign-in ──────────────────────────────────
+    // First-time guests must prove ownership of the recipient's inbox
+    // (email OTP) before their anonymous session is linked and they can sign.
+    let otpStep = $state<"preparing" | "idle" | "sent" | "done">("preparing");
+    let otpEmail = $state(data.guestEmail ?? "");
+    let otpCode = $state("");
+    let otpSending = $state(false);
+    let otpVerifying = $state(false);
+    let otpError = $state<string | null>(null);
+    let otpMessage = $state<string | null>(null);
+    let anonUserId = $state<string | null>(null);
+
+    // Once OTP completes (or this isn't a first-time guest), show the sign UI.
+    let otpGatePassed = $derived(!data.needsAnonymousSignIn || otpStep === "done");
+
     $effect(() => {
-        if (data.isGuest && data.needsAnonymousSignIn) {
-            setupGuestSession();
+        if (data.isGuest && data.needsAnonymousSignIn && otpStep === "preparing") {
+            ensureGuestSession();
         }
     });
 
-    async function setupGuestSession() {
+    // 1. Create the anonymous Better Auth session the OTP verify step links to.
+    async function ensureGuestSession() {
         try {
-            console.log("[sign] Guest session setup started");
-
-            // 1. Create an anonymous Better Auth session
+            console.log("[sign] Starting guest session for OTP flow");
             const anonResult = await authClient.signIn.anonymous();
             const anonUser = anonResult?.data?.user;
             if (!anonUser?.id) {
                 console.error("Anonymous sign-in did not return a user", anonResult);
+                otpError = "Could not start a guest session. Please try again.";
+                otpStep = "idle";
                 return;
             }
+            anonUserId = anonUser.id;
+            otpStep = "idle";
+        } catch (err) {
+            console.error("Failed to start guest session", err);
+            otpError = "Could not start a guest session. Please try again.";
+            otpStep = "idle";
+        }
+    }
 
-            // 2. Link the anonymous user to this package recipient
-            const token = page.url.searchParams.get("token");
-            if (!token) {
-                console.error("No guest token found in URL");
-                return;
-            }
-
-            const linkRes = await fetch("/api/guest/link", {
+    // 2. Send a one-time code to the recipient's email.
+    async function sendOtpCode() {
+        if (!guestToken) return;
+        otpSending = true;
+        otpError = null;
+        otpMessage = null;
+        try {
+            const res = await fetch("/api/guest/otp/request", {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ token }),
+                body: JSON.stringify({ token: guestToken, email: otpEmail.trim() }),
             });
-
-            if (!linkRes.ok) {
-                const errBody = await linkRes.json().catch(() => ({}));
-                console.error(
-                    "Failed to link anonymous user to recipient",
-                    linkRes.status,
-                    errBody,
-                );
-                return; // Don't reload — let the user retry
-            }
-
-            // 3. Set up a level-1 session key (no password needed for guests).
-            //    The key lives only in SW memory and is discarded when the
-            //    session ends.
-            const accepted = await setupDeviceKeys(anonUser.id, undefined, true);
-            if (accepted === 0) {
-                console.error("[sign] Guest key setup failed — cannot sign documents");
+            const body = await res.json().catch(() => ({}));
+            if (!res.ok) {
+                otpError = (body as { error?: string })?.error ?? "Failed to send code.";
                 return;
             }
-            console.log("[sign] Guest keys set up successfully", { accepted });
+            otpStep = "sent";
+            otpMessage = "We sent a 6-digit code to your inbox. It expires in 10 minutes.";
+        } catch (err) {
+            console.error("Failed to send OTP", err);
+            otpError = "Failed to send code. Please try again.";
+        } finally {
+            otpSending = false;
+        }
+    }
 
-            // 4. Reload — the server will now see the anonymous session
-            //    and match it to the linked recipient.
+    // 3. Verify the code, link the anonymous user, and enter the signing flow.
+    async function verifyOtpCode() {
+        if (!guestToken) return;
+        otpVerifying = true;
+        otpError = null;
+        try {
+            const res = await fetch("/api/guest/otp/verify", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ token: guestToken, code: otpCode.trim() }),
+            });
+            const body = await res.json().catch(() => ({}));
+            if (!res.ok) {
+                otpError = (body as { error?: string })?.error ?? "Invalid code. Try again.";
+                return;
+            }
+
+            // Set up a level-1 session key (no password needed for guests).
+            if (anonUserId) {
+                const accepted = await setupDeviceKeys(anonUserId, undefined, true);
+                if (accepted === 0) {
+                    console.error("[sign] Guest key setup failed — cannot sign documents");
+                }
+            }
+
+            otpStep = "done";
             window.location.reload();
         } catch (err) {
-            console.error("Failed to set up guest session", err);
+            console.error("Failed to verify OTP", err);
+            otpError = "Something went wrong. Please try again.";
+        } finally {
+            otpVerifying = false;
         }
     }
 
@@ -161,36 +205,96 @@
         showRejectModal = false;
     }
 
+    // ── Level-2 (2FA) password prompt ─────────────────────────────
+    let showMfaPrompt = $state(false);
+    let mfaPassword = $state("");
+    let mfaError = $state<string | null>(null);
+    let mfaResolver = $state<((password: string | null) => void) | null>(null);
+
+    function promptForMfaPassword(initialError: string | null = null): Promise<string | null> {
+        mfaPassword = "";
+        mfaError = initialError;
+        showMfaPrompt = true;
+        return new Promise((resolve) => {
+            mfaResolver = resolve;
+        });
+    }
+
+    function submitMfaPassword() {
+        if (!mfaPassword) {
+            mfaError = "Password is required";
+            return;
+        }
+        showMfaPrompt = false;
+        mfaResolver?.(mfaPassword);
+        mfaResolver = null;
+    }
+
+    function cancelMfaPrompt() {
+        showMfaPrompt = false;
+        mfaResolver?.(null);
+        mfaResolver = null;
+    }
+
     async function handleFinalize(retried = false) {
         finalizing = true;
         try {
-            // 1. Ensure a level-1 session key is loaded in the SW's keyStore.
-            //    If the SW restarted, the in-memory key is gone — regenerate lazily.
-            console.log("[sign] Loading keys for signing", { userId: data.user.id });
-            let keys = await loadKeys(data.user.id);
-            if (keys.loaded === 0) {
-                console.warn("[sign] No session key — generating level-1 key on the fly", {
-                    userId: data.user.id,
-                });
-                await setupDeviceKeys(data.user.id);
-                keys = await loadKeys(data.user.id);
-            }
-            if (keys.loaded === 0) {
-                console.error("[sign] No keys available for signing — cannot finalize", {
-                    userId: data.user.id,
-                });
-                finalizing = false;
-                return;
-            }
-            console.log("[sign] Keys loaded", { loaded: keys.loaded, skipped: keys.skipped });
+            // 1. Load a signing key of the required tier.
+            //    mfaRequired packages require a level-2 (password-bound) key.
+            const requiredLevel = data.pkg.mfaRequired ? 2 : 1;
+            console.log("[sign] Loading keys for signing", {
+                userId: data.user.id,
+                requiredLevel,
+            });
 
-            // Use the first available kid (level 1 — session key held in SW memory)
-            const kid = keys.kids[0];
+            let kid: string | null = null;
+
+            if (requiredLevel === 1) {
+                let keys = await loadKeys(data.user.id);
+                if (keys.loaded === 0) {
+                    console.warn("[sign] No session key — generating level-1 key on the fly", {
+                        userId: data.user.id,
+                    });
+                    await setupDeviceKeys(data.user.id);
+                    keys = await loadKeys(data.user.id);
+                }
+                if (keys.loaded === 0) {
+                    console.error("[sign] No keys available for signing — cannot finalize", {
+                        userId: data.user.id,
+                    });
+                    finalizing = false;
+                    return;
+                }
+                console.log("[sign] Keys loaded", { loaded: keys.loaded, skipped: keys.skipped });
+                kid = keys.kids[0] ?? null;
+            } else {
+                // Level-2: unlock the password-bound persistent key.
+                let attempt = 0;
+                while (!kid) {
+                    const password = await promptForMfaPassword(
+                        attempt > 0
+                            ? "Incorrect password, or no 2FA key on this device yet. Try again."
+                            : null,
+                    );
+                    if (!password) {
+                        console.warn("[sign] Level-2 unlock cancelled");
+                        finalizing = false;
+                        return;
+                    }
+                    await loadKeys(data.user.id, password);
+                    kid = await getKeyForLevel(data.user.id, 2);
+                    if (!kid) {
+                        // No level-2 key exists yet — generate + upload one with this password.
+                        await setupDeviceKeys(data.user.id, password);
+                        kid = await getKeyForLevel(data.user.id, 2);
+                    }
+                    attempt++;
+                }
+                console.log("[sign] Level-2 key ready", { kid });
+            }
+
             if (!kid) {
-                console.error("[sign] No kid returned after loading keys", {
-                    loaded: keys.loaded,
-                    kids: keys.kids,
-                });
+                console.error("[sign] No kid available for signing", { requiredLevel });
                 finalizing = false;
                 return;
             }
@@ -236,9 +340,15 @@
                 group.fieldIds.push(fieldId);
             }
 
-            for (const [, group] of docGroups) {
-                const payload = buildSigningPayload(group.docHash, group.fieldIds.length);
-                const sig = await sign(kid, payload, 1);
+            for (const [docId, group] of docGroups) {
+                const payload = buildSigningPayload({
+                    packageId: data.pkg.id,
+                    documentId: docId,
+                    documentHash: group.docHash,
+                    fieldIds: group.fieldIds,
+                    signerUserId: data.user.id,
+                });
+                const sig = await sign(kid, payload, requiredLevel);
                 // All fields in this document share the same signature
                 for (const fieldId of group.fieldIds) {
                     signatures[fieldId] = sig;
@@ -255,7 +365,7 @@
             body.append("signedFields", JSON.stringify(fieldIds));
             body.append("signatures", JSON.stringify(signatures));
             body.append("kid", kid);
-            body.append("keyLevel", "1");
+            body.append("keyLevel", String(requiredLevel));
 
             if (guestToken) {
                 body.append("guestToken", guestToken);
@@ -274,17 +384,28 @@
                     error: errMsg,
                     signedCount: fieldIds.length,
                 });
-                // Session key was revoked server-side (e.g. a newer login on
-                // another device, or rotation). Regenerate the level-1 key and
-                // retry once.
+                // Session key was revoked/rotated server-side. Regenerate the
+                // appropriate tier and retry once.
                 if (
                     !retried &&
                     (errMsg.includes("revoked") ||
                         errMsg.includes("not found") ||
-                        errMsg.includes("no matching active key"))
+                        errMsg.includes("no matching active key") ||
+                        errMsg.includes("rotation"))
                 ) {
-                    console.warn("[sign] Regenerating level-1 session key and retrying once");
-                    await setupDeviceKeys(data.user.id, undefined, true);
+                    console.warn("[sign] Regenerating signing key and retrying once");
+                    if (requiredLevel === 2) {
+                        const password = await promptForMfaPassword(
+                            "Your signing key needs to be rotated. Enter your password to create a new key.",
+                        );
+                        if (!password) {
+                            finalizing = false;
+                            return;
+                        }
+                        await setupDeviceKeys(data.user.id, password, true);
+                    } else {
+                        await setupDeviceKeys(data.user.id, undefined, true);
+                    }
                     finalizing = false;
                     return handleFinalize(true);
                 }
@@ -389,6 +510,80 @@
         showSignatureSetup = false;
     }
 </script>
+
+{#if !otpGatePassed}
+    <!-- Guest email OTP gate — covers the page until the guest verifies -->
+    <div class="fixed inset-0 z-50 flex items-center justify-center bg-white dark:bg-neutral-950">
+        <div
+            class="mx-4 w-full max-w-sm rounded-lg border border-neutral-200 dark:border-neutral-800 p-6"
+        >
+            <h2 class="mb-1 text-lg font-semibold">Verify your email</h2>
+            <p class="mb-4 text-sm text-neutral-500">
+                To sign this document, confirm you're the right person by entering the code we
+                send to your email.
+            </p>
+
+            <div class="flex flex-col gap-4">
+                <div class="flex flex-col gap-1">
+                    <label for="otpEmail" class="text-sm font-bold tracking-wider"> Email </label>
+                    <input
+                        type="email"
+                        id="otpEmail"
+                        bind:value={otpEmail}
+                        class="rounded-md text-primary-900"
+                        disabled={otpStep === "sent"}
+                    />
+                </div>
+
+                {#if otpStep === "idle"}
+                    <button
+                        class="tracking-wider rounded-md bg-secondary-200 py-3 font-bold text-primary-900 disabled:opacity-50"
+                        disabled={otpSending || !otpEmail.trim()}
+                        onclick={sendOtpCode}
+                    >
+                        {otpSending ? "Sending..." : "Send code"}
+                    </button>
+                {:else if otpStep === "sent"}
+                    <div class="flex flex-col gap-1">
+                        <label for="otpCode" class="text-sm font-bold tracking-wider"> Code </label>
+                        <input
+                            type="text"
+                            id="otpCode"
+                            bind:value={otpCode}
+                            inputmode="numeric"
+                            autocomplete="one-time-code"
+                            maxlength="6"
+                            placeholder="6-digit code"
+                            class="rounded-md text-primary-900 tracking-[0.4em]"
+                        />
+                    </div>
+                    <button
+                        class="tracking-wider rounded-md bg-secondary-200 py-3 font-bold text-primary-900 disabled:opacity-50"
+                        disabled={otpVerifying || otpCode.trim().length !== 6}
+                        onclick={verifyOtpCode}
+                    >
+                        {otpVerifying ? "Verifying..." : "Verify"}
+                    </button>
+                    <button
+                        type="button"
+                        class="text-sm text-neutral-500 underline disabled:opacity-50"
+                        disabled={otpSending}
+                        onclick={sendOtpCode}
+                    >
+                        Resend code
+                    </button>
+                {/if}
+
+                {#if otpMessage}
+                    <p class="text-sm text-emerald-600">{otpMessage}</p>
+                {/if}
+                {#if otpError}
+                    <p class="text-sm text-red-600">{otpError}</p>
+                {/if}
+            </div>
+        </div>
+    </div>
+{/if}
 
 {#if showSignatureSetup}
     <!-- svelte-ignore a11y_no_static_element_interactions -->
@@ -543,6 +738,67 @@
         </div>
     </div>
 </div>
+
+{#if showMfaPrompt}
+    <!-- svelte-ignore a11y_no_static_element_interactions -->
+    <div
+        class="fixed inset-0 z-50 flex items-center justify-center bg-black/50"
+        onclick={cancelMfaPrompt}
+        onkeydown={(e) => e.key === "Escape" && cancelMfaPrompt()}
+        role="dialog"
+        tabindex="-1"
+    >
+        <!-- svelte-ignore a11y_click_events_have_key_events -->
+        <div
+            class="mx-4 w-full max-w-sm rounded-lg bg-white dark:bg-neutral-900 p-6"
+            onclick={(e) => e.stopPropagation()}
+        >
+            <h2 class="mb-1 text-lg font-semibold">Confirm your password</h2>
+            <p class="mb-4 text-sm text-neutral-500">
+                This document requires two-factor authentication. Enter your password to unlock
+                your signing key.
+            </p>
+            <form
+                onsubmit={(e) => {
+                    e.preventDefault();
+                    submitMfaPassword();
+                }}
+                class="flex flex-col gap-4"
+            >
+                <div class="flex flex-col gap-1">
+                    <label for="mfaPassword" class="text-sm font-bold tracking-wider">
+                        Password
+                    </label>
+                    <input
+                        type="password"
+                        id="mfaPassword"
+                        bind:value={mfaPassword}
+                        class="rounded-md text-primary-900"
+                        required
+                    />
+                </div>
+                {#if mfaError}
+                    <p class="text-sm text-red-600">{mfaError}</p>
+                {/if}
+                <div class="flex justify-end gap-2">
+                    <button
+                        type="button"
+                        class="rounded-md border border-neutral-300 px-4 py-2 text-sm"
+                        onclick={cancelMfaPrompt}
+                    >
+                        Cancel
+                    </button>
+                    <button
+                        type="submit"
+                        class="rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white"
+                    >
+                        Unlock
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+{/if}
 
 {#if showRejectModal}
     <!-- svelte-ignore a11y_no_static_element_interactions -->

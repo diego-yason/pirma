@@ -2,6 +2,9 @@
 
 > Status: **Draft — plan for review, not implemented**
 > Created: 2026-08-16
+>
+> **PAdES-BASELINE-T detailed spec**: `docs/ai/pdfa/pades-baseline-t-spec.md` (2026-08-16).
+> Decisions locked: self-signed signer certs + TSA timestamp; in-process (WASM/Node) first cut.
 > Repo: `diego-yason/pirma`
 > Related:
 > - `docs/ai/keys/recommendations.md` — signing-key architecture (level-1 session / level-2 persistent)
@@ -129,10 +132,10 @@ flowchart LR
 - Record per-document artifact path + artifact hash.
 
 ### Phase 3 — Signature system (embedded + detached)
-- **PAdES (recommended):** embed a PAdES-BASELINE-B signature (CMS/PKCS#7, ECDSA-SHA256 or
-  RSA-SHA256) per signer via `@signpdf/signpdf` (or mupdf). Add a TSA timestamp for
-  PAdES-T. This requires a **signing certificate (X.509)** — decide: self-signed per user, or
-  a platform CA. **Open decision** (see §10).
+- **PAdES (recommended):** embed a PAdES-BASELINE-T signature (CMS/PKCS#7, ECDSA-SHA256)
+  per signer via `@signpdf/signpdf` + `@peculiar/x509`/`@peculiar/cms`, with an RFC 3161
+  timestamp. Cert strategy resolved: **self-signed per signer + trusted TSA timestamp**.
+  See `docs/ai/pdfa/pades-baseline-t-spec.md` for the full flow and phased steps.
 - **Detached (fallback/compat):** keep the existing ECDSA system but sign the **final
   artifact hash** (Phase 2 output) instead of the pre-flattened `documents.hash`. Update
   `buildSigningPayload` to bind the artifact hash + sorted field IDs (§9 keys doc).
@@ -191,10 +194,11 @@ documentArtifacts = pgTable("document_artifacts", {
 
 ## 9. Risks & open questions
 
-1. **Signing certificate for PAdES** — self-signed per user vs. platform CA vs. external TSP.
-   PAdES with a raw ECDSA key is not standard; a certificate is required. **Decision needed.**
-2. **Where conversion runs** — in-process WASM (serverless) vs. document microservice
-   (production). Affects DOCX fidelity and validation tooling.
+1. **Signing certificate for PAdES** — ✅ resolved: **self-signed per signer + trusted TSA
+   timestamp** (see `pades-baseline-t-spec.md`). A raw ECDSA key alone is not PAdES; a
+   certificate is still required and will be self-issued per signer key.
+2. **Where conversion runs** — ✅ resolved: **in-process (WASM/Node) for the first cut**;
+   document microservice remains the production path. DOCX fidelity is the main tradeoff.
 3. **DOCX/JPG/PNG support** — convert at upload, or reject non-PDF inputs in Phase 1?
 4. **PDF/A level** — A-2b (recommended) vs A-3b (attachments).
 5. **Re-conversion risk** — flattening via pdf-lib may break PDF/A; a re-pass (mupdf/Ghostscript)
@@ -206,7 +210,7 @@ documentArtifacts = pgTable("document_artifacts", {
 
 ## 10. Implementation checklist
 
-- [ ] Confirm PAdES signing-cert strategy (§9.1) and conversion architecture (§9.2).
+- [x] Confirm PAdES signing-cert strategy (§9.1) and conversion architecture (§9.2).
 - [ ] Pick PDF/A level (default A-2b) and DOCX/image policy (§9.3).
 - [ ] Add `pdfAVersion`, `pdfACompliant`, `convertedAt`, artifact fields to schema; migration.
 - [ ] Implement ingestion conversion in `doc/new/+page.server.ts` (or doc-service).

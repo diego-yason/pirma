@@ -87,6 +87,8 @@ export const signaturesStatus = pgEnum("signature_status", [
 
 export const recipientRoleEnum = pgEnum("recipient_role", ["signer", "viewer"]);
 
+export const emailStatusEnum = pgEnum("email_status", ["queued", "sent", "failed"]);
+
 export const packageRecipients = pgTable(
     "package_recipients",
     {
@@ -100,6 +102,8 @@ export const packageRecipients = pgTable(
         role: recipientRoleEnum("role").notNull().default("signer"),
         recipientId: integer("recipient_id"),
         signingGroup: integer("signing_group"),
+        rejectedAt: timestamp("rejected_at"),
+        rejectionReason: text("rejection_reason"),
         createdAt: timestamp("created_at").notNull().defaultNow(),
     },
     (table) => [
@@ -280,6 +284,50 @@ export const guestTokens = pgTable(
         index("guest_tokens_token_idx").on(table.token),
         index("guest_tokens_recipient_id_idx").on(table.recipientId),
     ],
+).enableRLS();
+
+// ── Guest OTPs (email OTP for guest sign-in) ─────────────────────
+// A short-lived, hashed one-time code bound to a recipient's email.
+export const guestOtps = pgTable(
+    "guest_otps",
+    {
+        id: uuid("id").primaryKey().defaultRandom(),
+        recipientId: uuid("recipient_id")
+            .notNull()
+            .references(() => packageRecipients.id),
+        packageId: uuid("package_id")
+            .notNull()
+            .references(() => packages.id),
+        email: text("email").notNull(),
+        codeHash: text("code_hash").notNull(),
+        expiresAt: timestamp("expires_at").notNull(),
+        attempts: integer("attempts").notNull().default(0),
+        consumedAt: timestamp("consumed_at"),
+        createdAt: timestamp("created_at").notNull().defaultNow(),
+    },
+    (table) => [
+        index("guest_otps_recipient_id_idx").on(table.recipientId),
+        index("guest_otps_package_id_idx").on(table.packageId),
+    ],
+).enableRLS();
+
+// ── Email events (transactional email audit / idempotency) ───────
+// One row per email send attempt, keyed by a unique `eventId` so retries
+// don't double-send. Also serves as an audit trail of who was contacted.
+export const emailEvents = pgTable(
+    "email_events",
+    {
+        id: uuid("id").primaryKey().defaultRandom(),
+        eventId: text("event_id").notNull().unique(),
+        to: text("to").notNull(),
+        template: text("template").notNull(),
+        subject: text("subject"),
+        status: emailStatusEnum("status").notNull().default("queued"),
+        error: text("error"),
+        sentAt: timestamp("sent_at"),
+        createdAt: timestamp("created_at").notNull().defaultNow(),
+    },
+    (table) => [index("email_events_event_id_idx").on(table.eventId)],
 ).enableRLS();
 
 export * from "./auth.schema";

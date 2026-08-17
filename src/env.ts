@@ -13,4 +13,9 @@ export const variables = defineEnvVars({
     KEY_MAX_IDLE_DAYS: { static: true },
     KEY_MAX_SIGNATURES: { static: true },
     OPAQUE_SERVER_KEY: { static: true },
+    EMAIL_PROVIDER: { static: true },
+    EMAIL_FROM: { static: true },
+    RESEND_API_KEY: { static: true },
+    EMAIL_REMIND_DAYS: { static: true },
+    CRON_SECRET: { static: true },
 });

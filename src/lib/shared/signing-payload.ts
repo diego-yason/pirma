@@ -6,11 +6,27 @@
  * signature. The server verifies the signature once per document and
  * reuses it for every field record in that document.
  *
- * Format: "${documentHash}:${fieldCount}"
+ * The payload binds the package, document, document hash, the exact (sorted)
+ * set of field IDs, and the signer — so a signature cannot be replayed across
+ * packages/documents/fields or attributed to a different signer.
  *
- * @param documentHash — the document's content hash (from documents.hash)
- * @param fieldCount   — number of signed fields being finalized in THIS document
+ * Format: `${packageId}:${documentId}:${documentHash}:${sortedFieldIds}:${signerUserId}`
  */
-export function buildSigningPayload(documentHash: string, fieldCount: number): string {
-    return `${documentHash}:${fieldCount}`;
+export interface SigningPayloadInput {
+    packageId: string;
+    documentId: string;
+    documentHash: string;
+    fieldIds: string[];
+    signerUserId: string;
+}
+
+export function buildSigningPayload(input: SigningPayloadInput): string {
+    const fieldIds = [...new Set(input.fieldIds)].sort().join(",");
+    return [
+        input.packageId,
+        input.documentId,
+        input.documentHash,
+        fieldIds,
+        input.signerUserId,
+    ].join(":");
 }

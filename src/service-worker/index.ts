@@ -504,6 +504,26 @@ sw.addEventListener("message", (event: ExtendableMessageEvent) => {
                 });
             break;
         }
+        case "getKeyForLevel": {
+            const { userId, keyLevel } = (msg.payload ?? {}) as {
+                userId?: string;
+                keyLevel?: number;
+            };
+            if (!userId || keyLevel == null) {
+                respond({ success: false, error: "userId and keyLevel are required" });
+                break;
+            }
+            let kid: string | null = null;
+            for (const [k, rec] of keyStore) {
+                if (rec.userId === userId && rec.keyLevel === keyLevel) {
+                    kid = k;
+                    break;
+                }
+            }
+            console.log("[SW] getKeyForLevel", { userId, keyLevel, kid });
+            respond({ success: true, data: { kid } });
+            break;
+        }
         default:
             console.warn("[SW] Unknown message type", { type: msg.type });
             respond({ success: false, error: `Unknown message type: ${msg.type}` });

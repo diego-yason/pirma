@@ -6,6 +6,7 @@ import {
     documents,
     documentAssignments,
     packageRecipients,
+    packageViewers,
     signatures,
     cryptoKeys,
     userSignatures,
@@ -53,7 +54,18 @@ export const load: PageServerLoad = async ({ params, locals }) => {
         )
         .limit(1);
 
-    if (!isOwner && !recipientRow) {
+    const [viewerRow] = await db
+        .select({ id: packageViewers.id })
+        .from(packageViewers)
+        .where(
+            and(
+                eq(packageViewers.packageId, packageId),
+                eq(packageViewers.userId, locals.user.id),
+            ),
+        )
+        .limit(1);
+
+    if (!isOwner && !recipientRow && !viewerRow) {
         redirect(302, "/doc/list");
     }
 

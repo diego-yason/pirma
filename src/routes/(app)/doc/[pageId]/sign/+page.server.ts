@@ -11,13 +11,24 @@ import {
     userSignatures,
     user,
 } from "#lib/server/db/schema.js";
-import { eq, and, isNull, inArray } from "drizzle-orm";
+import { eq, and, isNull, inArray, lt } from "drizzle-orm";
 import { supabaseAdmin } from "#lib/server/storage/supabase.js";
 import { getSignedUrl, setSignedUrl } from "#lib/server/storage/url-cache.js";
 import { verifyGuestToken } from "#lib/server/auth/guest-token.js";
 import { logger } from "#lib/server/logger.js";
 import { verifyEcdsaSignature } from "#lib/server/crypto/verify-signature.js";
+import { checkKeyPolicy, checkKeyUsage } from "#lib/server/crypto/key-rotation.js";
 import { buildSigningPayload } from "#lib/shared/signing-payload.js";
+import { ORIGIN } from "$app/env/private";
+import { sendEmail } from "#lib/server/email/index.js";
+import {
+    renderRejected,
+    rejectedSubject,
+    renderSigned,
+    signedSubject,
+    renderExecuted,
+    executedSubject,
+} from "#lib/server/email/templates/index.js";
 import type { PlacedRect } from "#lib/client/types/SignatureBoxTypes";
 
 export const load: PageServerLoad = async ({ params, locals, url }) => {
@@ -143,6 +154,7 @@ export const load: PageServerLoad = async ({ params, locals, url }) => {
             name: packages.name,
             owner: packages.owner,
             signingOrderEnabled: packages.signingOrderEnabled,
+            mfaRequired: packages.mfaRequired,
             expirationDate: packages.expirationDate,
         })
         .from(packages)
@@ -474,6 +486,7 @@ export const load: PageServerLoad = async ({ params, locals, url }) => {
             id: pkg.id,
             name: pkg.name,
             signingOrderEnabled: pkg.signingOrderEnabled,
+            mfaRequired: pkg.mfaRequired,
             expirationDate: pkg.expirationDate?.toISOString() ?? null,
         },
         documents: docsWithAllFields,
@@ -518,6 +531,7 @@ async function handleGuestLoad(
             id: packages.id,
             name: packages.name,
             signingOrderEnabled: packages.signingOrderEnabled,
+            mfaRequired: packages.mfaRequired,
             expirationDate: packages.expirationDate,
         })
         .from(packages)
@@ -642,6 +656,7 @@ async function handleGuestLoad(
             id: pkg.id,
             name: pkg.name,
             signingOrderEnabled: pkg.signingOrderEnabled,
+            mfaRequired: pkg.mfaRequired,
             expirationDate: pkg.expirationDate?.toISOString() ?? null,
         },
         documents: docList,
@@ -758,11 +773,61 @@ export const actions: Actions = {
             return fail(400, { error: "Guest finalize not yet supported" });
         }
 
+        // ── Authorize: the user must be a signer of this package, or the
+        //    owner signing fields assigned to "me". Field ownership is
+        //    enforced against the package documents below.
+        const [signatoryRecipient] = await db
+            .select({
+                id: packageRecipients.id,
+                recipientId: packageRecipients.recipientId,
+                signingGroup: packageRecipients.signingGroup,
+            })
+            .from(packageRecipients)
+            .where(
+                and(
+                    eq(packageRecipients.packageId, packageId),
+                    eq(packageRecipients.userId, party.userId),
+                    eq(packageRecipients.role, "signer"),
+                ),
+            )
+            .limit(1);
+
+        const [pkgOwnerRow] = await db
+            .select({
+                owner: packages.owner,
+                signingOrderEnabled: packages.signingOrderEnabled,
+                mfaRequired: packages.mfaRequired,
+            })
+            .from(packages)
+            .where(eq(packages.id, packageId))
+            .limit(1);
+        const isOwnerSigner = pkgOwnerRow?.owner === party.userId;
+
+        if (!signatoryRecipient && !isOwnerSigner) {
+            logger.warn("sign", "Finalize — user is not a signatory of this package", {
+                packageId,
+                userId: party.userId,
+            });
+            return fail(403, { error: "You are not a signatory of this package" });
+        }
+
         // Read crypto signature data from form
         const signaturesRaw = formData.get("signatures") as string | null;
         const kid = formData.get("kid") as string | null;
         const keyLevelRaw = formData.get("keyLevel") as string | null;
         const keyLevel = keyLevelRaw ? Number(keyLevelRaw) : 1;
+
+        // MFA / Tier-2 enforcement: mfaRequired packages must be signed with a
+        // level-2 (password-bound) key. The kid/keyLevel match below then also
+        // verifies the key is actually level 2.
+        if (pkgOwnerRow?.mfaRequired && keyLevel !== 2) {
+            logger.warn("sign", "Finalize — mfaRequired package requires a level-2 key", {
+                packageId,
+                userId: party.userId,
+                keyLevel,
+            });
+            return fail(403, { error: "This document requires two-factor authentication" });
+        }
 
         if (!signaturesRaw || !kid) {
             logger.warn("sign", "Finalize — missing signatures or kid", { packageId });
@@ -782,6 +847,9 @@ export const actions: Actions = {
                 id: cryptoKeys.id,
                 pubkey: cryptoKeys.pubkey,
                 keyLevel: cryptoKeys.keyLevel,
+                createdAt: cryptoKeys.createdAt,
+                lastUsedAt: cryptoKeys.lastUsedAt,
+                algorithm: cryptoKeys.algorithm,
             })
             .from(cryptoKeys)
             .where(
@@ -816,6 +884,27 @@ export const actions: Actions = {
             return fail(400, { error: "Signing key level mismatch" });
         }
 
+        // Enforce rotation policy at signing time (age / idle / algorithm + usage count).
+        const rotationPolicy = checkKeyPolicy({
+            createdAt: activeKey.createdAt,
+            lastUsedAt: activeKey.lastUsedAt,
+            algorithm: activeKey.algorithm,
+        });
+        const rotationUsage = await checkKeyUsage(activeKey.id);
+
+        if (rotationPolicy.needsRotation || rotationUsage.needsRotation) {
+            const reason = rotationPolicy.needsRotation
+                ? rotationPolicy.reason
+                : rotationUsage.reason;
+            logger.warn("sign", "Finalize — signing key requires rotation", {
+                packageId,
+                userId: party.userId,
+                kid,
+                reason,
+            });
+            return fail(400, { error: `Your signing key requires rotation: ${reason ?? "policy"}` });
+        }
+
         // Fetch documents to get hashes and placement fields
         const packageDocs = await db
             .select({
@@ -828,6 +917,96 @@ export const actions: Actions = {
             .where(eq(documentAssignments.packageId, packageId));
 
         const docMap = new Map(packageDocs.map((d) => [d.id, d]));
+
+        // ── Field ownership: every submitted field must be assigned to this
+        //    signatory (recipient id / person number, or "me" for the owner).
+        const allowedFieldIds = new Set<string>();
+        for (const doc of packageDocs) {
+            const fields = (doc.placementFields ?? []) as Array<{ id: string; assignedTo?: string }>;
+            for (const f of fields) {
+                if (!f.id) continue;
+                if (signatoryRecipient?.id && f.assignedTo === signatoryRecipient.id) {
+                    allowedFieldIds.add(f.id);
+                } else if (
+                    signatoryRecipient?.recipientId != null &&
+                    f.assignedTo === String(signatoryRecipient.recipientId)
+                ) {
+                    allowedFieldIds.add(f.id);
+                } else if (isOwnerSigner && f.assignedTo === "me") {
+                    allowedFieldIds.add(f.id);
+                }
+            }
+        }
+
+        const unauthorizedFields = signedFieldIds.filter((id) => !allowedFieldIds.has(id));
+        if (unauthorizedFields.length > 0) {
+            logger.warn("sign", "Finalize — fields not assigned to this signer", {
+                packageId,
+                userId: party.userId,
+                unauthorizedCount: unauthorizedFields.length,
+                firstUnauthorized: unauthorizedFields[0],
+            });
+            return fail(403, { error: "You are not authorized to sign one or more of these fields" });
+        }
+
+        // ── Sequential signing: reject if earlier signing groups are incomplete.
+        const signingGroup = signatoryRecipient?.signingGroup ?? null;
+        if (pkgOwnerRow?.signingOrderEnabled && signingGroup != null && signingGroup > 1) {
+            const myGroup = signingGroup;
+            const docIds = packageDocs.map((d) => d.id);
+
+            const earlierRows = await db
+                .select({ userId: packageRecipients.userId })
+                .from(packageRecipients)
+                .where(
+                    and(
+                        eq(packageRecipients.packageId, packageId),
+                        eq(packageRecipients.role, "signer"),
+                        lt(packageRecipients.signingGroup, myGroup),
+                    ),
+                );
+            const earlierUserIds = earlierRows
+                .map((r) => r.userId)
+                .filter((id): id is string => !!id);
+
+            const earlierSigs =
+                earlierUserIds.length > 0 && docIds.length > 0
+                    ? await db
+                          .select({
+                              signerUserId: signatures.signerUserId,
+                              documentId: signatures.documentId,
+                          })
+                          .from(signatures)
+                          .where(
+                              and(
+                                  inArray(signatures.signerUserId, earlierUserIds),
+                                  inArray(signatures.documentId, docIds),
+                                  inArray(signatures.status, ["signed", "anchored"]),
+                              ),
+                          )
+                    : [];
+
+            const signedByUser = new Map<string, Set<string>>();
+            for (const s of earlierSigs) {
+                const set = signedByUser.get(s.signerUserId) ?? new Set();
+                set.add(s.documentId);
+                signedByUser.set(s.signerUserId, set);
+            }
+
+            const incompleteEarlier = earlierUserIds.some(
+                (uid) => (signedByUser.get(uid)?.size ?? 0) < docIds.length,
+            );
+            if (incompleteEarlier) {
+                logger.warn("sign", "Finalize — earlier signing groups not complete", {
+                    packageId,
+                    myGroup,
+                });
+                return fail(403, {
+                    error: "Previous signers must complete their signatures before you can sign",
+                });
+            }
+        }
+
         const allFieldIds = new Set(signedFieldIds);
         const sigFieldDoc = new Map<string, string>(); // fieldId → documentId
 
@@ -873,7 +1052,13 @@ export const actions: Actions = {
             const doc = docMap.get(docId)!;
             const sigB64 = sigMap[group.fieldIds[0]]!; // all fields share same sig
 
-            const payload = buildSigningPayload(doc.hash, group.fieldIds.length);
+            const payload = buildSigningPayload({
+                packageId,
+                documentId: docId,
+                documentHash: doc.hash,
+                fieldIds: group.fieldIds,
+                signerUserId: party.userId,
+            });
 
             if (!verifyEcdsaSignature(activeKey.pubkey, payload, sigB64)) {
                 logger.warn("sign", "Finalize — signature verification failed", {
@@ -934,9 +1119,168 @@ export const actions: Actions = {
                 userId: party.userId,
                 count: sigInserts.length,
             });
+
+            // Notify the package owner that this signer completed.
+            try {
+                const [pkgRow] = await db
+                    .select({ name: packages.name, owner: packages.owner })
+                    .from(packages)
+                    .where(eq(packages.id, packageId))
+                    .limit(1);
+
+                if (pkgRow) {
+                    const [ownerRow] = await db
+                        .select({ email: user.email })
+                        .from(user)
+                        .where(eq(user.id, pkgRow.owner))
+                        .limit(1);
+
+                    if (ownerRow?.email) {
+                        await sendEmail({
+                            eventId: `signed:${packageId}:${party.userId}`,
+                            template: "signed",
+                            to: ownerRow.email,
+                            subject: signedSubject(pkgRow.name),
+                            html: renderSigned({
+                                signerName: locals.user?.name ?? null,
+                                signerEmail: locals.user?.email ?? null,
+                                packageName: pkgRow.name,
+                                documentCount: sigInserts.length,
+                                dashboardUrl: `${ORIGIN}/dashboard`,
+                            }),
+                        });
+                    }
+                }
+            } catch (err) {
+                logger.error("sign", "Failed to notify owner of signed document", {
+                    packageId,
+                    error: err,
+                });
+            }
         }
 
-        // TODO: check if all signers are done → mark documents as executed
+        // Check if all signers are done → mark documents as executed + notify.
+        try {
+            const assignedDocs = await db
+                .select({ documentId: documentAssignments.documentId })
+                .from(documentAssignments)
+                .where(eq(documentAssignments.packageId, packageId));
+            const docIds = assignedDocs.map((d) => d.documentId);
+
+            if (docIds.length > 0) {
+                const allSigners = await db
+                    .select({
+                        id: packageRecipients.id,
+                        name: packageRecipients.name,
+                        email: packageRecipients.email,
+                        userId: packageRecipients.userId,
+                    })
+                    .from(packageRecipients)
+                    .where(
+                        and(
+                            eq(packageRecipients.packageId, packageId),
+                            eq(packageRecipients.role, "signer"),
+                        ),
+                    );
+
+                // Collect per-user signed document ids (status signed/anchored).
+                const signedRows = await db
+                    .select({
+                        documentId: signatures.documentId,
+                        signerUserId: signatures.signerUserId,
+                    })
+                    .from(signatures)
+                    .where(
+                        and(
+                            inArray(signatures.documentId, docIds),
+                            inArray(signatures.status, ["signed", "anchored"]),
+                        ),
+                    );
+                const signedByUser = new Map<string, Set<string>>();
+                for (const row of signedRows) {
+                    let set = signedByUser.get(row.signerUserId);
+                    if (!set) {
+                        set = new Set();
+                        signedByUser.set(row.signerUserId, set);
+                    }
+                    set.add(row.documentId);
+                }
+
+                // Every signer must have signed every document in the package.
+                const allDone =
+                    allSigners.length > 0 &&
+                    allSigners.every((s) => {
+                        if (!s.userId) return false;
+                        return (signedByUser.get(s.userId)?.size ?? 0) === docIds.length;
+                    });
+
+                if (allDone) {
+                    await db
+                        .update(documents)
+                        .set({ status: "executed", updatedAt: new Date() })
+                        .where(inArray(documents.id, docIds));
+
+                    logger.info(
+                        "sign",
+                        "Finalize — all signers done, documents executed",
+                        { packageId, documentCount: docIds.length },
+                    );
+
+                    // Executed summary emails (owner + signers).
+                    const [pkgInfo] = await db
+                        .select({ name: packages.name, owner: packages.owner })
+                        .from(packages)
+                        .where(eq(packages.id, packageId))
+                        .limit(1);
+                    const dashboardUrl = `${ORIGIN}/dashboard`;
+
+                    if (pkgInfo) {
+                        const [ownerRow] = await db
+                            .select({ email: user.email })
+                            .from(user)
+                            .where(eq(user.id, pkgInfo.owner))
+                            .limit(1);
+
+                        if (ownerRow?.email) {
+                            await sendEmail({
+                                eventId: `executed:${packageId}:owner`,
+                                template: "executed",
+                                to: ownerRow.email,
+                                subject: executedSubject(pkgInfo.name),
+                                html: renderExecuted({
+                                    role: "owner",
+                                    packageName: pkgInfo.name,
+                                    documentCount: docIds.length,
+                                    dashboardUrl,
+                                }),
+                            });
+                        }
+
+                        for (const s of allSigners) {
+                            if (!s.email) continue;
+                            await sendEmail({
+                                eventId: `executed:${packageId}:signer:${s.id}`,
+                                template: "executed",
+                                to: s.email,
+                                subject: executedSubject(pkgInfo.name),
+                                html: renderExecuted({
+                                    role: "signer",
+                                    recipientName: s.name,
+                                    packageName: pkgInfo.name,
+                                    documentCount: docIds.length,
+                                    dashboardUrl,
+                                }),
+                            });
+                        }
+                    }
+                }
+            }
+        } catch (err) {
+            logger.error("sign", "Failed to mark documents executed / notify", {
+                packageId,
+                error: err,
+            });
+        }
 
         logger.info("sign", "Finalize completed successfully", {
             packageId,
@@ -964,19 +1308,110 @@ export const actions: Actions = {
             hasReason: !!reason,
         });
 
-        // TODO: verify the user is a signatory of this package
+        // Resolve the signatory recipient for this party and verify they're a signer.
+        let recipientId: string | null = null;
+        if (party.type === "user") {
+            const [recipient] = await db
+                .select({ id: packageRecipients.id })
+                .from(packageRecipients)
+                .where(
+                    and(
+                        eq(packageRecipients.packageId, packageId),
+                        eq(packageRecipients.userId, party.userId),
+                        eq(packageRecipients.role, "signer"),
+                    ),
+                )
+                .limit(1);
+            recipientId = recipient?.id ?? null;
+        } else {
+            recipientId = party.recipientId;
+        }
 
-        // ── Your logic here ─────────────────────────────────────
-        // e.g. mark signatures as rejected, store rejection reason,
-        //      notify document owner, optionally cancel the package
-        // ─────────────────────────────────────────────────────────
+        if (!recipientId) {
+            logger.warn("sign", "Reject — party is not a signatory of this package", {
+                packageId,
+                partyType: party.type,
+            });
+            return fail(403, { error: "You are not a signatory of this package" });
+        }
 
-        // TODO: mark signatures as rejected in the database
-        // TODO: store reason if provided
+        const [recipient] = await db
+            .select({ name: packageRecipients.name, email: packageRecipients.email })
+            .from(packageRecipients)
+            .where(eq(packageRecipients.id, recipientId))
+            .limit(1);
+
+        const now = new Date();
+
+        // Mark the recipient as rejected + store the reason.
+        await db
+            .update(packageRecipients)
+            .set({ rejectedAt: now, rejectionReason: reason })
+            .where(eq(packageRecipients.id, recipientId));
+
+        // Flip any existing signature rows for this user/package to rejected.
+        if (party.type === "user") {
+            const assignedDocIds = await db
+                .select({ documentId: documentAssignments.documentId })
+                .from(documentAssignments)
+                .where(eq(documentAssignments.packageId, packageId));
+            const docIds = assignedDocIds.map((d) => d.documentId);
+            if (docIds.length > 0) {
+                await db
+                    .update(signatures)
+                    .set({ status: "rejected" })
+                    .where(
+                        and(
+                            eq(signatures.signerUserId, party.userId),
+                            inArray(signatures.documentId, docIds),
+                        ),
+                    );
+            }
+        }
+
+        // Notify the package owner with the rejection reason.
+        try {
+            const [pkgRow] = await db
+                .select({ name: packages.name, owner: packages.owner })
+                .from(packages)
+                .where(eq(packages.id, packageId))
+                .limit(1);
+
+            if (pkgRow) {
+                const [ownerRow] = await db
+                    .select({ email: user.email })
+                    .from(user)
+                    .where(eq(user.id, pkgRow.owner))
+                    .limit(1);
+
+                if (ownerRow?.email) {
+                    await sendEmail({
+                        eventId: `rejected:${packageId}:${recipientId}`,
+                        template: "rejected",
+                        to: ownerRow.email,
+                        subject: rejectedSubject(pkgRow.name),
+                        html: renderRejected({
+                            signerName: recipient?.name ?? null,
+                            signerEmail: recipient?.email ?? null,
+                            packageName: pkgRow.name,
+                            reason,
+                            dashboardUrl: `${ORIGIN}/dashboard`,
+                        }),
+                    });
+                }
+            }
+        } catch (err) {
+            logger.error("sign", "Failed to notify owner of rejection", {
+                packageId,
+                error: err,
+            });
+        }
 
         logger.info("sign", "Reject completed successfully", {
             packageId,
             partyType: party.type,
+            recipientId,
+            hasReason: !!reason,
         });
         return { success: true };
     },
