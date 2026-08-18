@@ -74,6 +74,7 @@
 | **P3** | Feature | Public `/verify` page + API | 🔲 | §2 |
 | **P3** | Feature | Failed-anchor banner + manual re-submit | 🔲 | §2 |
 | **P3** | Feature | Anchoring targets artifact hash + every certificate hash | 🔲 | §2 / §3 |
+| **P3** | Security | PQC post-quantum Merkle-root anchoring (supplementary to ECDSA; regular signing + notary) | 🔲 | §2 / `docs/ai/pqc-post-quantum.md` |
 | **P3** | Feature | PDF/A Phase 2 — signed artifact generation (flatten + XMP + re-convert) | 🔲 | §3 |
 | **P3** | Feature | PAdES embedded signatures (party / notary / platform) | 🔲 | §3 |
 | **P3** | Feature | Detached ECDSA over final artifact hash (Phase 3 fallback) | 🔲 | §3 |
@@ -155,6 +156,7 @@ Sources: `docs/ai/blockchain-integration.md`, `docs/ai/blockchain-microservice/`
 | Public `/verify` page + API | 🔲 | |
 | Failed-anchor banner + manual re-submit | 🔲 | |
 | **Anchoring targets artifact hash + every certificate hash** | 🔲 | See `pdfa/document-flows.md` |
+| **PQC post-quantum Merkle-root anchoring** (all final hashes → Merkle root signed by PQC key → anchored on public chain) | 🔲 | Note: `docs/ai/pqc-post-quantum.md` |
 
 ---
 
