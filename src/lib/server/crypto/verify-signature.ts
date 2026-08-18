@@ -9,16 +9,21 @@ import { createVerify } from "node:crypto";
  * @returns true if the signature is valid
  */
 export function verifyEcdsaSignature(pubkey: string, data: string, signature: string): boolean {
-    const sigBuf = Buffer.from(signature, "base64");
+    try {
+        const sigBuf = Buffer.from(signature, "base64");
 
-    // Convert IEEE P1363 (r||s, 64 bytes) to DER if needed
-    const derBuf: Buffer = sigBuf.length === 64 ? p1363ToDer(sigBuf) : sigBuf;
+        // Convert IEEE P1363 (r||s, 64 bytes) to DER if needed
+        const derBuf: Buffer = sigBuf.length === 64 ? p1363ToDer(sigBuf) : sigBuf;
 
-    const verify = createVerify("SHA256");
-    verify.update(data);
-    verify.end();
+        const verify = createVerify("SHA256");
+        verify.update(data);
+        verify.end();
 
-    return verify.verify(pubkey, derBuf);
+        return verify.verify(pubkey, derBuf);
+    } catch {
+        // Fail closed: malformed key/signature input must never throw (→ 500).
+        return false;
+    }
 }
 
 // ── P1363 → DER conversion ──────────────────────────────────────

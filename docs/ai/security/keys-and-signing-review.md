@@ -1,8 +1,9 @@
 # Keys & Signing — Security Review
 
 > Status: **Review (2026-08-16)** — fixed since review: KSR-01 (finalize authz), KSR-02 (payload
-> binding), KSR-07 (sequential order), plus tier-2/MFA enforcement and rotation/revocation at
-> signing time + `POST /api/keys/revoke`. Open: KSR-03/04/05/06/08.
+> binding), KSR-07 (sequential order), KSR-08 (fail-closed verification, 2026-08-19), plus
+> tier-2/MFA enforcement and rotation/revocation at signing time + `POST /api/keys/revoke`.
+> Open: KSR-03/04/05/06.
 > Scope: `/api/keys/*`, `src/lib/server/crypto/*`, `sign/+page.server.ts` `finalize`,
 > `signing-payload.ts`, `setup-device-keys.ts` (client).
 >
@@ -26,7 +27,7 @@ binding of the signed payload** — i.e. what a signature actually proves.
 | KSR-05 | **Low** | WebAuthn `register` stores pubkey/credential without attestation/challenge | `/api/keys/register` |
 | KSR-06 | **Low** | Challenges held in an in-memory Map (multi-instance + no rate limit) | `crypto/key-challenge.ts`, `/api/keys/challenge` |
 | KSR-07 | **Low** | Sequential signing order not enforced server-side | `sign/+page.server.ts` `finalize` |
-| KSR-08 | **Low** | `verifyEcdsaSignature` can throw on malformed input → 500 | `crypto/verify-signature.ts` |
+| KSR-08 | **Low** | `verifyEcdsaSignature` can throw on malformed input → 500 (✅ Fixed 2026-08-19) | `crypto/verify-signature.ts` |
 
 ---
 
@@ -155,6 +156,11 @@ the signer is in a later group whose earlier groups haven't all signed every doc
 
 **Recommendation** — wrap verification in try/catch and return `false` on malformed input; enforce
 the expected signature length (64-byte P1363 or valid DER).
+
+**Status (2026-08-19)** — ✅ **Fixed.** `verifyEcdsaSignature` now wraps verification in a
+`try/catch` and returns `false` on any error — fail-closed, no throw → no 500. Covered by
+`src/lib/server/crypto/verify-signature.spec.ts` (empty/garbage/truncated signature, invalid
+public key all return `false`).
 
 ---
 
