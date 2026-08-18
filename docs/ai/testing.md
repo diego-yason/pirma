@@ -1,0 +1,210 @@
+# Testing — Strategy, Setup, Patterns & Coverage
+
+> Status: **Active — growing incrementally (2026-08-19)**
+> Repo: `diego-yason/pirma` · Branch: `dev`
+> Related:
+> - `vite.config.ts` — Vitest config (3 projects)
+> - `playwright.config.ts` — E2E config (build + preview, `**/*.e2e.{ts,js}`)
+> - `.env.test` — committed test-only env (mock values)
+> - `src/lib/server/crypto/verify-signature.ts`, `key-rotation.ts`, `src/lib/shared/signing-payload.ts`
+> - `docs/ai/security/keys-and-signing-review.md` (KSR-08 fixed, verified by tests)
+
+Home of the **general testing strategy** (§0) plus the working unit-test setup, patterns, and
+coverage. §0 is the plan (layers, journeys, thresholds, CI); §1+ record what exists and how.
+Not a finished spec — coverage grows module by module.
+
+---
+
+## 0. General testing strategy (plan)
+
+### 0.1 Layers & priorities
+
+| Layer | Tooling | State | Priority |
+|---|---|---|---|
+| **Unit** (node) | Vitest `server` | ✅ active (34 tests) | P0 — security-critical crypto/logic first |
+| **Component/browser** | Vitest `client` (Playwright) | 🔲 scaffold example only | P1 |
+| **E2E** | Playwright | 🔲 1 smoke test (`demo/playwright`) | P1 — happy-path journeys |
+| **Storybook** | `@storybook/addon-vitest` | 🟡 scaffold stories only | P2 |
+| **Coverage enforcement** | `@vitest/coverage-v8` | 🔲 no thresholds configured | P2 |
+| **Integration / DB** | Drizzle test DB or mocks (TBD) | 🔲 none | P2 |
+| **CI** | GitHub Actions (plan) | 🔲 none today | P1 |
+
+### 0.2 What to test, by feature area
+
+| Feature area | Unit | Component | E2E |
+|---|---|---|---|
+| Auth (login/register/guest/MFA) | `guest-token`, auth helpers | login/register forms | register → login → guest sign |
+| Signing & keys | `signing-payload`, `verify-signature`, `key-rotation` | sign-page field assignment | create package → sign → finalize |
+| Notary (future) | journal hash-chain logic | notary step | notarize flow |
+| Email | providers (injectable), templates | — | invite email (mock provider) |
+| Blockchain / PQC (future) | `anchor-client`, Merkle root | — | `/verify` page |
+
+### 0.3 E2E journeys (planned)
+
+1. **A — core signing loop:** register → upload doc → create package → signer signs → owner
+   notified → document `executed`.
+2. **B — guest flow:** invite email → tokenized link → sign → finalize (guest OTP).
+3. **C — MFA / tier-2:** `mfaRequired` package requires password-unlocked level-2 key.
+4. **D — reject flow:** signer rejects with reason → owner alerted.
+5. **E — notary ION** (when notary ships).
+
+Seed from the existing `demo/playwright` smoke test; run against `build + preview` per
+`playwright.config.ts`.
+
+### 0.4 Coverage thresholds (to configure in `vite.config.ts`)
+
+- Start: floor on `src/lib/server/crypto/**` + `src/lib/shared/**` (e.g. 80% lines).
+- Raise over time as more of the codebase is covered; don't gate the whole repo until the
+  baseline is meaningful.
+
+### 0.5 CI wiring (to add — GitHub Actions)
+
+1. pnpm install → `vitest run` (server + client projects).
+2. Playwright E2E (`test:e2e` — builds + previews).
+3. Storybook tests.
+4. Coverage report upload.
+
+Note: `npm run check`/eslint are currently broken (§6) — gate CI on **tests** first, fix
+`check` separately.
+
+### 0.6 Out of scope (for now)
+
+- Visual regression (no tooling installed).
+- Load / performance testing.
+- Notary RON + full notary E2E until the notary feature ships.
+- PQC / Merkle-root E2E until that feature is implemented.
+
+### 0.7 Relationship to the roadmap
+
+`docs/ai/roadmap.md` has no dedicated QA/testing rows yet. When it makes sense, add rows
+pointing here (e.g. "Enforce coverage thresholds (§0.4)", "E2E journey suite (§0.3)", "CI
+workflow (§0.5)").
+
+---
+
+## 1. Infrastructure (Vitest)
+
+`vite.config.ts` defines **three Vitest projects**:
+
+| Project | Environment | Picks up |
+|---|---|---|
+| `client` | browser (Playwright/Chromium, headless) | `src/**/*.svelte.{test,spec}.{js,ts}` |
+| `server` | node | `src/**/*.{test,spec}.{js,ts}` (excludes `.svelte.*`) |
+| `storybook` | browser | Storybook stories (`@storybook/addon-vitest`) |
+
+Config notes:
+- `expect.requireAssertions: true` — every test must contain at least one assertion.
+- Package manager is **pnpm** (npm fails on the `link:` dep in `plugins/better-auth-opaque`).
+
+### Running
+
+```sh
+# one spec, server project
+pnpm exec vitest run --project server src/lib/shared/signing-payload.spec.ts
+
+# full server project
+pnpm exec vitest run --project server
+```
+
+Current status (2026-08-19): **34 tests / 4 files, all passing** (server project).
+
+---
+
+## 2. The `.env.test` pattern (verified 2026-08-19)
+
+Committed test env at repo root (already whitelisted in `.gitignore` as `!.env.test`).
+Contains **mock / non-secret values only**:
+
+```
+DATABASE_URL=postgres://mock:mock@localhost:5432/mock
+BETTER_AUTH_SECRET=test-only-better-auth-secret-not-real
+KEY_ALLOWED_ALGORITHMS=ECDSA-P256,ECDSA-P384
+KEY_MAX_AGE_DAYS=180
+KEY_MAX_IDLE_DAYS=90
+KEY_MAX_SIGNATURES=500
+```
+
+**Why it works:** Vitest runs with mode `"test"` by default. The SvelteKit plugin calls
+`vite.loadEnv("test", …)` at config time, and `$app/env/private` is a **virtual module** whose
+static values are baked from that result. So tests importing `$app/env/private` (or modules that
+transitively do, e.g. `#lib/server/db/index.js`) see `.env.test` values **with no `vi.mock`**.
+
+Rules of thumb:
+- Keep `.env.test` **non-secret** — it's committed. Real secrets stay in gitignored `.env`/`.env.local`.
+- `.env.test.local` (gitignored) overrides `.env.test` for local-only tweaks.
+- This only feeds `$app/env/*`; code reading `process.env.X` directly won't see it.
+
+---
+
+## 3. DB mocking pattern
+
+For modules that call the real `db` (e.g. `checkKeyUsage`, `checkKeyRotation`), stub the DB module
+so no real connection is attempted. Pattern used in `key-rotation.spec.ts`:
+
+```ts
+const { db, makeQuery } = vi.hoisted(() => {
+    const db = { select: vi.fn() };
+
+    function makeQuery(finalResult: unknown) {
+        const query = {
+            from: vi.fn(() => query),
+            where: vi.fn(() => query),
+            limit: vi.fn(() => Promise.resolve(finalResult)),
+            // thenable so `await … .where()` resolves the final result
+            then: (onFulfilled: (v: unknown) => unknown) =>
+                Promise.resolve(finalResult).then(onFulfilled),
+        };
+        return query;
+    }
+
+    return { db, makeQuery };
+});
+
+vi.mock("#lib/server/db/index.js", () => ({ db }));
+```
+
+Notes:
+- The alias specifier `#lib/server/db/index.js` resolves correctly in the mock.
+- Use `vi.resetAllMocks()` in `beforeEach` to avoid `mockReturnValueOnce` leaks between tests.
+- Configure per test: `db.select.mockReturnValue(makeQuery([...]))` or
+  `mockReturnValueOnce(...).mockReturnValueOnce(...)` for multi-query flows.
+
+---
+
+## 4. Coverage so far
+
+| Module | Spec | Tests | Covers |
+|---|---|---|---|
+| `src/lib/shared/signing-payload.ts` | `signing-payload.spec.ts` | 6 | Payload format, field-ID sort, dedup, empty list, determinism, lexicographic (string) sort of numeric-looking IDs |
+| `src/lib/server/crypto/verify-signature.ts` | `verify-signature.spec.ts` | 9 | Accepts DER + IEEE P1363 (64-byte) sigs; rejects wrong data/key/tampered; **fail-closed** on empty/garbage/truncated sig and invalid pubkey |
+| `src/lib/server/crypto/key-rotation.ts` | `key-rotation.spec.ts` | 18 | `checkKeyPolicy` (age/idle/algorithm + precedence); `checkKeyUsage` (0/499/500/1200); `checkKeyRotation` (no key → null, short-circuit on policy, usage over max, `.limit(1)`) |
+| example | `src/lib/vitest-examples/greet.spec.ts` | 1 | Scaffold example |
+
+### Finding surfaced by tests (KSR-08 — fixed)
+
+`verifyEcdsaSignature` previously could throw on malformed input (→ 500). Tests confirmed Node
+fail-closes for empty/garbage/truncated inputs, but an invalid public key **throws**. Hardened
+2026-08-19: whole verification wrapped in `try/catch` returning `false` — fail-closed, no 500.
+Security review updated (`docs/ai/security/keys-and-signing-review.md`, KSR-08 marked fixed).
+
+---
+
+## 5. Next candidates
+
+- `src/lib/server/auth/guest-token.ts` — `createGuestToken`/`verifyGuestToken` (HMAC-SHA256,
+  expiry, tamper). `BETTER_AUTH_SECRET` already in `.env.test` → no mock needed.
+- `src/lib/client/crypto/device-fingerprint.ts` — client-side fingerprint builder (browser project).
+- `src/lib/server/email/` — providers (injectable) + templates.
+- `src/lib/server/logger.ts` — pino structured logging / redaction behavior.
+- `src/lib/server/package-guard.ts` — package-level guard logic (TBD).
+
+---
+
+## 6. Gotchas
+
+- `npm run check` and `eslint` are **pre-existing broken** in this env (unrelated to tests):
+  tsconfig `$app/tsconfig` unresolvable; `eslint.config.js` can't resolve `@sveltejs/load-config`.
+  Use `pnpm exec vitest run` directly to validate.
+- `svelte-kit sync` runs `prepare` — `$app` modules are resolved by the SvelteKit Vite plugin at
+  test time; no manual sync needed before running Vitest.
+- Browser (`client`) project tests need Playwright Chromium installed (`pnpm exec playwright install`).
