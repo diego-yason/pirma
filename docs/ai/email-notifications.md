@@ -34,6 +34,8 @@ notification / activity feed** is a separate future item (roadmap §8.3 / §6).
 
 - **Recommended default: Resend** (simple API, good deliverability, no SMTP config).
 - Alternatives: **Postmark**, **SendGrid**, or plain **SMTP** (self-hosted).
+- ✅ **SMTP implemented 2026-08-21** — `EMAIL_PROVIDER=smtp` sends via nodemailer to any
+  SMTP server (self-hosted, Postmark, SendGrid, Gmail, etc.). See Config below.
 - Open decision: pick one; everything below is provider-agnostic behind a thin module.
 
 ## Architecture
@@ -50,10 +52,16 @@ flowchart LR
 
 - `sendEmail({ to, subject, html, text?, eventId, template })` — provider-agnostic send
   (`src/lib/server/email/index.ts`).
-- `providers.ts` — thin adapters: **Resend** (REST via `fetch`, no dep) + **console**
-  (logs instead of sending; default so dev works without a key). Selected by `EMAIL_PROVIDER`.
+- `providers.ts` — thin adapters: **Resend** (REST via `fetch`, no dep), **SMTP** (nodemailer,
+  per-send transport), + **console** (logs instead of sending; default so dev works without a
+  key). Selected by `EMAIL_PROVIDER`.
 - `templates/` — function-based HTML renderers with a shared shell (`templates/shell.ts`):
   `signer-invite`, `signed`, `rejected`. Preview at `(dev)/email/request`.
+- **Dev tooling**: `(dev)/email/request` (static preview of the signer-invite template) and
+  `(dev)/email/trigger` (manual trigger — pick any template, fill its data, preview, or send
+  a real email through `sendEmail` with the active provider). Both are dev-only (gated by
+  `(dev)/+layout.ts`). Note the `(dev)` group adds no URL segment → URLs are `/email/request`
+  and `/email/trigger`.
 - **Idempotency/logging**: `email_events` table (migration `0001`) — `eventId`, `to`,
   `template`, `status: queued|sent|failed`, `error`, `sentAt`; unique `eventId` so retries
   don't double-send, and an audit trail of who was contacted.
@@ -112,8 +120,17 @@ flowchart LR
 ## Config
 
 ```
-EMAIL_PROVIDER=resend            # resend | postmark | sendgrid | smtp
-RESEND_API_KEY=                  # or provider-specific keys
+EMAIL_PROVIDER=resend            # resend | smtp | console (default)
+RESEND_API_KEY=                  # for resend
+
+# SMTP (used when EMAIL_PROVIDER=smtp) — all SMTP_* optional; SMTP_HOST required for smtp
+SMTP_HOST=                       # e.g. smtp.example.com
+SMTP_PORT=587                    # 587 STARTTLS (default) | 465 implicit TLS
+SMTP_SECURE=false                # "true" for implicit TLS on 465
+SMTP_USER=
+SMTP_PASS=
+SMTP_IGNORE_TLS=false            # "true" to skip TLS (local dev relays)
+
 EMAIL_FROM="Pirma <noreply@…>"
 EMAIL_REMIND_DAYS=3,7            # reminder schedule
 PUBLIC_ORIGIN=                   # base URL for signing links (matches app origin)
@@ -121,7 +138,8 @@ PUBLIC_ORIGIN=                   # base URL for signing links (matches app origi
 
 ## Open decisions
 
-1. **Provider** — Resend (recommended) vs Postmark/SendGrid/SMTP.
+1. ~~**Provider** — Resend vs SMTP~~ **SMTP implemented 2026-08-21** (`providers.ts`).
+   Remaining: pick the default for production deployment.
 2. Template styling/branding (white-label) — reuse default for v1.
 3. Reminder schedule + hard vs. soft deadline.
 4. Whether to add a DB-backed `notifications` table now (for the future activity feed) or

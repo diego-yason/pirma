@@ -1,7 +1,12 @@
+import { logger } from "#lib/server/logger.js";
 import { renderSignerInvite, signerInviteSubject } from "#lib/server/email/templates/index.js";
 
 /** Dev-only preview of the signer-invite email template. */
 export const load = () => {
+    logger.debug("devEmail", "Static email preview page loaded", {
+        template: "signer-invite",
+    });
+
     const sample = {
         recipientName: "Juan Dela Cruz",
         senderName: "Acme Corporation",
