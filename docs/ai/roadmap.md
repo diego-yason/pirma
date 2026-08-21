@@ -139,6 +139,7 @@ Source: `docs/ai/keys/recommendations.md`
 | Persist challenges (DB/Redis) + rate-limit `/api/keys/challenge` | 🔲 | Currently in-memory `Map` |
 | Strengthen signing payload (bind field IDs / package / version) | ✅ | Now `packageId:documentId:docHash:sortedFieldIds:signerUserId` (2026-08-16) |
 | **MFA-required / Tier-2 enforcement** (`mfaRequired` → require level-2 signature) | ✅ | Enforced 2026-08-16: server rejects level-1 keys on `mfaRequired`; sign page unlocks level-2 key w/ password |
+| **Tier model revision** — tier-1 keys single-use (one packet), valid within the same hour of the signed payload, **never written to disk** (memory-only: no IndexedDB, no `cryptoKeys` row); tier-2 `keyLevel` flag retained + validated; **T2 wrap password = account password (OPAQUE-compatible)**; T2 registration proof = session stamped `passwordVerifiedAt` at OPAQUE `completeLogin` (no Better Auth API, no stored hash); **T3 = hardware keys (WebAuthn, attestation-verified)**; challenge + device info exchanged with the pubkey; **OAuth removed** (password/OPAQUE only) | 📐 | Design (2026-08-22) — `docs/ai/keys/recommendations.md` § "Tier model revision" + `docs/ai/keys/payloads.md`. Not yet implemented |
 
 ---
 

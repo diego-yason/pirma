@@ -3,7 +3,9 @@
 > Status: **Review (2026-08-16)** — fixed since review: KSR-01 (finalize authz), KSR-02 (payload
 > binding), KSR-07 (sequential order), KSR-08 (fail-closed verification, 2026-08-19), plus
 > tier-2/MFA enforcement and rotation/revocation at signing time + `POST /api/keys/revoke`.
-> Open: KSR-03/04/05/06.
+> 2026-08-22: KSR-03 **partially addressed** by the tier-model revision (tier-1 keys become
+> single-use/never-stored; tier-2 flag validated at signing) — see `docs/ai/keys/recommendations.md`.
+> Open: KSR-04/05/06 (and a server-verifiable password proof for tier-2 uploads).
 > Scope: `/api/keys/*`, `src/lib/server/crypto/*`, `sign/+page.server.ts` `finalize`,
 > `signing-payload.ts`, `setup-device-keys.ts` (client).
 >
@@ -98,9 +100,27 @@ password — the client simply declares the level. A compromised session could r
 self-chosen level-2 key. Today the impact is limited because `mfaRequired` is not enforced
 (KSR/roadmap), but it undermines the tiering model.
 
-**Recommendation** — derive level-2 registration from a server-verifiable password proof (e.g.
-sign a challenge with a password-derived key, or tie level-2 to the existing Better Auth password
-verification) before accepting `keyLevel: 2`.
+**Recommendation** — prove the T2 key is password-bound using the **OPAQUE login challenge itself**,
+not a stored hash. When a user completes an OPAQUE login (`completeLogin`), the server stamps the
+session as password-authenticated (a short-lived `passwordVerifiedAt` capability). `POST
+/api/keys/upload` requires that marker before accepting `keyLevel: 2`, in addition to the existing
+key-possession challenge. This is the **"auth for identity, signature for device"** trust model:
+the session proves *who* (password-authenticated user), the challenge signature proves *which
+device/key*. Do **not** rely on Better Auth's `verifyPassword`/`signInEmail` (they require a
+`providerId: "credential"` account with a stored hash that OPAQUE accounts don't have), and do
+**not** accept a client-supplied password-derived signature as proof (the server can't verify which
+password was used without a verifier, and storing one defeats OPAQUE).
+
+**Status (2026-08-22)** — **Partially addressed by the tier-model revision**
+(`docs/ai/keys/recommendations.md` § "Tier model revision"). Tier is no longer trusted from
+metadata for tier-1 keys — they are single-use, hour-bounded, and never written to disk, so there
+is no stored tier-1 metadata to forge. For tier-2, the `keyLevel` flag is retained but **must be
+validated** against the stored row at signing time (already enforced in `finalize` via the
+`kid`/`keyLevel` match). **Open:** stamping the session `passwordVerifiedAt` at OPAQUE
+`completeLogin` and requiring it for T2 upload (per the recommendation above) — the strongest
+remaining fix for the persistent tier. Note: the T2 key-wrapping password is the user's account
+password (compatible with OPAQUE — see `docs/ai/keys/recommendations.md` §4), and OAuth sign-in is
+slated for removal.
 
 ## KSR-04 — Legacy ECDSA `register` has no possession proof (Low)
 
