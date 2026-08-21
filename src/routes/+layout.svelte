@@ -8,6 +8,8 @@
     import favicon from "#lib/assets/favicon.svg";
     import { dev } from "$app/env";
 
+    import Fingerprint from "#lib/client/fingerprint/index.svelte";
+
     let { children } = $props();
 
     let isDarkMode = $state(false);
@@ -59,6 +61,7 @@
 </script>
 
 <svelte:head><link rel="icon" href={favicon} /></svelte:head>
+<Fingerprint></Fingerprint>
 
 {#if dev}
     <div
