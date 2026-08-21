@@ -131,12 +131,16 @@
     }
 </script>
 
-<div class="flex h-screen overflow-hidden bg-neutral-950 text-neutral-100">
+<div
+    class="flex h-screen overflow-hidden bg-neutral-50 text-neutral-900 dark:bg-neutral-950 dark:text-neutral-100"
+>
     <aside
-        class="flex w-64 shrink-0 flex-col border-r border-neutral-800 bg-neutral-900/40"
+        class="flex w-64 shrink-0 flex-col border-r border-neutral-200 bg-white/70 dark:border-neutral-800 dark:bg-neutral-900/40"
     >
         <!-- Brand -->
-        <div class="flex h-16 shrink-0 items-center border-b border-neutral-800 px-5">
+        <div
+            class="flex h-16 shrink-0 items-center border-b border-neutral-200 px-5 dark:border-neutral-800"
+        >
             <a href={resolve("/")} class="inline-flex items-center gap-2.5">
                 <span
                     class="grid h-9 w-9 place-items-center rounded-lg bg-linear-to-br from-secondary-500 to-primary-700 text-base font-black text-white shadow-md shadow-primary-900/20"
@@ -144,26 +148,36 @@
                 >
                     P
                 </span>
-                <span class="text-lg font-bold tracking-tight text-neutral-50">Pirma</span>
+                <span class="text-lg font-bold tracking-tight text-neutral-900 dark:text-neutral-50"
+                    >Pirma</span
+                >
             </a>
         </div>
 
         <!-- User card -->
-        <div class="mx-4 mt-4 rounded-xl border border-neutral-800 bg-neutral-900 p-3.5">
+        <div
+            class="mx-4 mt-4 rounded-xl border border-neutral-200 bg-white p-3.5 dark:border-neutral-800 dark:bg-neutral-900"
+        >
             <div class="flex items-center gap-3">
                 <span
-                    class="grid h-9 w-9 shrink-0 place-items-center rounded-full bg-secondary-500/15 text-sm font-bold text-secondary-300"
+                    class="grid h-9 w-9 shrink-0 place-items-center rounded-full bg-secondary-500/15 text-sm font-bold text-secondary-600 dark:text-secondary-300"
                     aria-hidden="true"
                 >
                     {displayInitial}
                 </span>
                 <div class="min-w-0 flex-1">
-                    <p class="truncate text-sm font-semibold text-neutral-50">{displayName}</p>
-                    <p class="truncate text-xs text-neutral-400">{data.user.email}</p>
+                    <p class="truncate text-sm font-semibold text-neutral-900 dark:text-neutral-50">
+                        {displayName}
+                    </p>
+                    <p class="truncate text-xs text-neutral-500 dark:text-neutral-400">
+                        {data.user.email}
+                    </p>
                 </div>
             </div>
             {#if data.isAnonymous}
-                <p class="mt-2 flex items-center gap-1.5 text-xs text-amber-400">
+                <p
+                    class="mt-2 flex items-center gap-1.5 text-xs text-amber-600 dark:text-amber-400"
+                >
                     <span class="inline-block size-1.5 rounded-full bg-amber-500"></span>
                     Guest account
                 </p>
@@ -180,7 +194,9 @@
                 {/if}
             </div>
 
-            <div class="flex flex-col gap-2 border-t border-neutral-800 px-4 pt-3">
+            <div
+                class="flex flex-col gap-2 border-t border-neutral-200 px-4 pt-3 dark:border-neutral-800"
+            >
                 {#if data.isAnonymous}
                     <a
                         class="flex items-center gap-2 rounded-lg bg-amber-600 px-3 py-2.5 text-sm font-medium text-white transition hover:bg-amber-700"
@@ -204,9 +220,15 @@
                 {:else}
                     <a
                         href={resolve("logout")}
-                        class="flex items-center gap-2 rounded-lg px-3 py-2 text-sm font-medium text-neutral-400 transition hover:bg-neutral-800 hover:text-neutral-100"
+                        class="flex items-center gap-2 rounded-lg px-3 py-2 text-sm font-medium text-neutral-500 transition hover:bg-neutral-100 hover:text-neutral-900 dark:text-neutral-400 dark:hover:bg-neutral-800 dark:hover:text-neutral-100"
                     >
-                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="size-4 shrink-0">
+                        <svg
+                            viewBox="0 0 24 24"
+                            fill="none"
+                            stroke="currentColor"
+                            stroke-width="2"
+                            class="size-4 shrink-0"
+                        >
                             <path
                                 stroke-linecap="round"
                                 stroke-linejoin="round"
@@ -220,13 +242,13 @@
                 <div class="flex flex-col gap-1 pb-2">
                     <a
                         href={resolve("settings")}
-                        class="rounded-lg px-3 py-1.5 text-xs font-medium text-neutral-500 transition hover:bg-neutral-800 hover:text-neutral-200"
+                        class="rounded-lg px-3 py-1.5 text-xs font-medium text-neutral-500 transition hover:bg-neutral-100 hover:text-neutral-700 dark:text-neutral-500 dark:hover:bg-neutral-800 dark:hover:text-neutral-200"
                     >
                         Security
                     </a>
                     <a
                         href={resolve("settings")}
-                        class="rounded-lg px-3 py-1.5 text-xs font-medium text-neutral-500 transition hover:bg-neutral-800 hover:text-neutral-200"
+                        class="rounded-lg px-3 py-1.5 text-xs font-medium text-neutral-500 transition hover:bg-neutral-100 hover:text-neutral-700 dark:text-neutral-500 dark:hover:bg-neutral-800 dark:hover:text-neutral-200"
                     >
                         Support
                     </a>
@@ -234,7 +256,7 @@
             </div>
         </nav>
     </aside>
-    <div class="flex-1 overflow-y-auto min-h-0">
+    <div class="min-h-0 flex-1 overflow-y-auto">
         {@render children()}
     </div>
 </div>
@@ -246,25 +268,33 @@
             class="flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition
                 {active
                 ? 'bg-linear-to-r from-secondary-600 to-primary-700 text-white shadow-sm'
-                : 'text-neutral-300 hover:bg-neutral-800 hover:text-white'}"
+                : 'text-neutral-600 hover:bg-neutral-100 hover:text-neutral-900 dark:text-neutral-300 dark:hover:bg-neutral-800 dark:hover:text-white'}"
             href={resolve(item.href)}
         >
             {#if item.icon}
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="size-4 shrink-0">
+                <svg
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="2"
+                    class="size-4 shrink-0"
+                >
                     <path stroke-linecap="round" stroke-linejoin="round" d={item.icon}></path>
                 </svg>
             {/if}
             {item.label}
         </a>
         {#if item.children && active}
-            <div class="ml-4 mt-1 flex flex-col gap-1 border-l border-neutral-700 pl-3">
+            <div
+                class="mt-1 ml-4 flex flex-col gap-1 border-l border-neutral-200 pl-3 dark:border-neutral-700"
+            >
                 {#each item.children as child (child.label)}
                     {@const childActive = isActive(child)}
                     <a
                         class="flex items-center gap-2 rounded-lg px-3 py-2 text-sm transition
                             {childActive
-                            ? 'bg-secondary-500/20 text-secondary-300'
-                            : 'text-neutral-400 hover:bg-neutral-800 hover:text-white'}"
+                            ? 'bg-secondary-500/20 text-secondary-700 dark:text-secondary-300'
+                            : 'text-neutral-500 hover:bg-neutral-100 hover:text-neutral-900 dark:text-neutral-400 dark:hover:bg-neutral-800 dark:hover:text-white'}"
                         href={resolve(child.href)}
                     >
                         {child.label}
@@ -285,13 +315,13 @@
     >
         <!-- svelte-ignore a11y_click_events_have_key_events -->
         <div
-            class="bg-white dark:bg-neutral-900 rounded-lg shadow-xl w-full max-w-md mx-4 p-6"
+            class="mx-4 w-full max-w-md rounded-lg bg-white p-6 shadow-xl dark:bg-neutral-900"
             onclick={(e) => e.stopPropagation()}
         >
-            <h2 class="text-lg font-semibold mb-1">
+            <h2 class="mb-1 text-lg font-semibold">
                 {#if keySetupReason}Rotate Signing Keys{:else}Set Up Device Keys{/if}
             </h2>
-            <p class="text-sm text-neutral-500 mb-4">
+            <p class="mb-4 text-sm text-neutral-500">
                 {#if keySetupReason}
                     {keySetupReason}. Enter your password to generate a fresh key pair.
                 {:else}
@@ -299,12 +329,12 @@
                 {/if}
             </p>
 
-            <label for="layout-key-pw" class="block text-sm font-medium mb-1">Password</label>
+            <label for="layout-key-pw" class="mb-1 block text-sm font-medium">Password</label>
             <input
                 id="layout-key-pw"
                 type="password"
                 bind:value={keyPassword}
-                class="w-full rounded-md border border-neutral-300 dark:border-neutral-600 dark:bg-neutral-800 px-3 py-2.5 text-sm"
+                class="w-full rounded-md border border-neutral-300 px-3 py-2.5 text-sm dark:border-neutral-600 dark:bg-neutral-800"
                 placeholder="Enter your password"
                 onkeydown={(e) => e.key === "Enter" && handleKeySetup()}
             />
@@ -313,17 +343,17 @@
                 <p class="mt-2 text-sm text-red-600">{keyError}</p>
             {/if}
 
-            <div class="flex gap-3 mt-4">
+            <div class="mt-4 flex gap-3">
                 <div class="flex-1"></div>
                 <button
                     type="button"
-                    class="rounded-md border border-neutral-300 dark:border-neutral-600 px-4 py-2.5 text-sm font-medium text-neutral-700 dark:text-neutral-300 transition hover:bg-neutral-100 dark:hover:bg-neutral-800"
+                    class="rounded-md border border-neutral-300 px-4 py-2.5 text-sm font-medium text-neutral-700 transition hover:bg-neutral-100 dark:border-neutral-600 dark:text-neutral-300 dark:hover:bg-neutral-800"
                     onclick={() => (showKeySetup = false)}>Skip</button
                 >
 
                 <button
                     type="button"
-                    class="rounded-md bg-blue-600 px-4 py-2.5 text-sm font-medium text-white transition hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
+                    class="rounded-md bg-blue-600 px-4 py-2.5 text-sm font-medium text-white transition hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-50"
                     disabled={keyLoading || !keyPassword.trim()}
                     onclick={handleKeySetup}
                 >

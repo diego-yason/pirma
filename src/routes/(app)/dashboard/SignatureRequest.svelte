@@ -8,6 +8,7 @@
         fromEmail?: string;
         dueDate?: string;
         docCount?: number;
+        href?: string;
     }
 
     let {
@@ -17,12 +18,25 @@
         fromEmail = "legal@example.com",
         dueDate = undefined,
         docCount = 1,
+        href = undefined,
     }: Props = $props();
 
-    const flagConfig: Record<Flag, { label: string; bg: string; text: string }> = {
-        urgent: { label: "URGENT", bg: "bg-red-200", text: "text-red-800" },
-        important: { label: "IMPORTANT", bg: "bg-amber-200", text: "text-amber-800/80" },
-        "due-soon": { label: "DUE SOON", bg: "bg-blue-200", text: "text-blue-800" },
+    const flagConfig: Record<Flag, { label: string; chip: string; dot: string }> = {
+        urgent: {
+            label: "URGENT",
+            chip: "bg-red-500/15 text-red-600 dark:text-red-300",
+            dot: "bg-red-500 dark:bg-red-400",
+        },
+        important: {
+            label: "IMPORTANT",
+            chip: "bg-amber-500/15 text-amber-600 dark:text-amber-300",
+            dot: "bg-amber-500 dark:bg-amber-400",
+        },
+        "due-soon": {
+            label: "DUE SOON",
+            chip: "bg-secondary-500/15 text-secondary-600 dark:text-secondary-300",
+            dot: "bg-secondary-500 dark:bg-secondary-400",
+        },
     };
 
     // Canonical display order — always show flags in this sequence
@@ -32,48 +46,90 @@
     );
 
     const cardColor: Record<Flag, string> = {
-        urgent: "border-red-800",
-        important: "border-amber-800/80",
-        "due-soon": "border-blue-800",
+        urgent: "border-red-500/60",
+        important: "border-amber-500/60",
+        "due-soon": "border-secondary-500/60",
     };
 
     const leftBorder = $derived(
-        sortedFlags.length > 0 ? cardColor[sortedFlags[0]] : "border-neutral-300",
+        sortedFlags.length > 0
+            ? cardColor[sortedFlags[0]]
+            : "border-neutral-300 dark:border-neutral-700",
     );
+
+    const primaryFlag = $derived(sortedFlags[0]);
 </script>
 
 <div
-    class="flex gap-4 rounded-l-sm rounded-r-md justify-between items-center-safe px-5 py-5 border-l-4 {leftBorder}"
-    class:border={sortedFlags.includes("urgent")}
+    class="group flex items-center gap-4 rounded-xl border border-l-4 border-neutral-200 bg-white px-5 py-5 transition hover:border-neutral-300 hover:bg-neutral-50 {leftBorder} dark:border-neutral-800 dark:bg-neutral-900/60 dark:hover:border-neutral-700 dark:hover:bg-neutral-900"
 >
-    <p
-        class="h-15 rounded-md content-center aspect-square {flagConfig[sortedFlags[0]]?.bg ||
-            'bg-gray-200'} font-extrabold text-4xl {flagConfig[sortedFlags[0]]?.text ||
-            'text-gray-800'} text-center"
+    <span
+        class="grid size-11 shrink-0 place-items-center rounded-lg {primaryFlag
+            ? flagConfig[primaryFlag].chip
+            : 'bg-neutral-100 text-neutral-500 dark:bg-neutral-800 dark:text-neutral-400'} font-extrabold"
+        aria-hidden="true"
     >
         !
-    </p>
-    <div class="grow">
-        <div class="flex gap-3 items-center flex-wrap">
-            <p class="text-xl font-bold">{title}</p>
+    </span>
+
+    <div class="min-w-0 grow">
+        <div class="flex flex-wrap items-center gap-2.5">
+            <p class="truncate text-lg font-semibold text-neutral-900 dark:text-neutral-50">
+                {title}
+            </p>
             {#each sortedFlags as flag (flag)}
                 <span
-                    class="text-sm py-1 px-2 rounded-md {flagConfig[flag].bg} {flagConfig[flag]
-                        .text} font-semibold"
+                    class="inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-xs font-semibold {flagConfig[
+                        flag
+                    ].chip}"
                 >
+                    <span class="size-1.5 rounded-full {flagConfig[flag].dot}"></span>
                     {flagConfig[flag].label}
                 </span>
             {/each}
         </div>
-        <p>From: <span class="font-medium">{from}</span> &lt;{fromEmail}&gt;</p>
-        <div class="flex gap-3">
+        <p class="mt-1 truncate text-sm text-neutral-500 dark:text-neutral-400">
+            From: <span class="font-medium text-neutral-700 dark:text-neutral-200">{from}</span>
+            {#if fromEmail}&lt;{fromEmail}&gt;{/if}
+        </p>
+        <div
+            class="mt-1.5 flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-neutral-600 dark:text-neutral-500"
+        >
             {#if dueDate}
-                <p>Due {dueDate}</p>
+                <span class="inline-flex items-center gap-1.5">
+                    <svg
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        stroke-width="2"
+                        class="size-3.5"
+                    >
+                        <path
+                            stroke-linecap="round"
+                            stroke-linejoin="round"
+                            d="M6.75 3v2.25M17.25 3v2.25M3 18.75V7.5a2.25 2.25 0 0 1 2.25-2.25h13.5A2.25 2.25 0 0 1 21 7.5v11.25m-18 0A2.25 2.25 0 0 0 5.25 21h13.5A2.25 2.25 0 0 0 21 18.75m-18 0v-7.5A2.25 2.25 0 0 1 5.25 9h13.5A2.25 2.25 0 0 1 21 11.25v7.5"
+                        ></path>
+                    </svg>
+                    Due {dueDate}
+                </span>
             {/if}
-            <p>{docCount} Document{docCount !== 1 ? "s" : ""}</p>
+            <span>{docCount} Document{docCount !== 1 ? "s" : ""}</span>
         </div>
     </div>
-    <button class="bg-secondary-600 text-primary-50 px-8 py-3 rounded-md cursor-pointer"
-        >Review & Sign</button
-    >
+
+    {#if href}
+        <a
+            {href}
+            class="shrink-0 rounded-lg bg-linear-to-r from-secondary-600 to-primary-700 px-5 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:from-secondary-500 hover:to-primary-600"
+        >
+            Review &amp; Sign
+        </a>
+    {:else}
+        <button
+            type="button"
+            class="shrink-0 cursor-pointer rounded-lg bg-linear-to-r from-secondary-600 to-primary-700 px-5 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:from-secondary-500 hover:to-primary-600"
+        >
+            Review &amp; Sign
+        </button>
+    {/if}
 </div>
