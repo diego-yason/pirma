@@ -106,7 +106,7 @@ pnpm exec vitest run --project server src/lib/shared/signing-payload.spec.ts
 pnpm exec vitest run --project server
 ```
 
-Current status (2026-08-19): **34 tests / 4 files, all passing** (server project).
+Current status (2026-08-21): **110 tests / 9 files, all passing** (server project) + **6 tests / 2 files** (client/browser project).
 
 ---
 
@@ -178,6 +178,12 @@ Notes:
 | `src/lib/shared/signing-payload.ts` | `signing-payload.spec.ts` | 6 | Payload format, field-ID sort, dedup, empty list, determinism, lexicographic (string) sort of numeric-looking IDs |
 | `src/lib/server/crypto/verify-signature.ts` | `verify-signature.spec.ts` | 9 | Accepts DER + IEEE P1363 (64-byte) sigs; rejects wrong data/key/tampered; **fail-closed** on empty/garbage/truncated sig and invalid pubkey |
 | `src/lib/server/crypto/key-rotation.ts` | `key-rotation.spec.ts` | 18 | `checkKeyPolicy` (age/idle/algorithm + precedence); `checkKeyUsage` (0/499/500/1200); `checkKeyRotation` (no key → null, short-circuit on policy, usage over max, `.limit(1)`) |
+| `src/lib/server/auth/guest-token.ts` | `guest-token.spec.ts` | 13 | Token format (base64url pair); embeds recipient/package/~7-day expiry; **tamper/fail-closed** (payload, sig, wrong secret, no delimiter, garbage, non-JSON); expired vs not-yet-expired |
+| `src/lib/server/logger.ts` | `logger.spec.ts` | 8 | Structured fields (action, object spread, `err` for Error, `argN` for primitives); level routing; merge order; **redaction config** (tokens, codes, nonces, passwords, signatures, auth/cookie headers, apiKey; censor `[REDACTED]`) |
+| `src/lib/server/email/templates/*` | `templates.spec.ts` | 21 | `escapeHtml`; `emailShell` (title/body/footer + title escaping); all renderers (signer-invite, guest-otp, signed, rejected, executed, password-reset, reminder) incl. XSS-escape checks, name fallbacks, singular/plural docs, optional deadline/reason/dashboardUrl; all subjects |
+| `src/lib/server/email/providers.ts` | `providers.spec.ts` | 17 | `getProvider` (console default, unknown → console + warn, resend, smtp); **console provider logs metadata only — never html/text body (EMR-01)**; resend: throws w/o key, POSTs auth header + payload, throws on non-OK; **smtp: throws w/o SMTP_HOST, nodemailer transport config (host/port/secure/ignoreTLS/auth), sendMail payload, closes transport** |
+| `src/lib/server/package-guard.ts` | `package-guard.spec.ts` | 6 | `requirePackageOwnership`: owned → pkg, not-owned/missing → null + warn, `.where()` id+owner, `.limit(1)`, DB error re-throws + logs |
+| `src/lib/client/crypto/device-fingerprint.ts` | `device-fingerprint.svelte.spec.ts` (client/browser) | 5 | Real SHA-256 64-hex hash; deterministic; label has browser + OS; browser name present; stable across parallel calls |
 | example | `src/lib/vitest-examples/greet.spec.ts` | 1 | Scaffold example |
 
 ### Finding surfaced by tests (KSR-08 — fixed)
@@ -191,12 +197,18 @@ Security review updated (`docs/ai/security/keys-and-signing-review.md`, KSR-08 m
 
 ## 5. Next candidates
 
-- `src/lib/server/auth/guest-token.ts` — `createGuestToken`/`verifyGuestToken` (HMAC-SHA256,
-  expiry, tamper). `BETTER_AUTH_SECRET` already in `.env.test` → no mock needed.
-- `src/lib/client/crypto/device-fingerprint.ts` — client-side fingerprint builder (browser project).
-- `src/lib/server/email/` — providers (injectable) + templates.
-- `src/lib/server/logger.ts` — pino structured logging / redaction behavior.
-- `src/lib/server/package-guard.ts` — package-level guard logic (TBD).
+- ✅ `src/lib/server/auth/guest-token.ts` — done 2026-08-21 (13 tests).
+- ✅ `src/lib/server/logger.ts` — done 2026-08-21 (8 tests; redaction config via mocked pino).
+- ✅ `src/lib/server/email/templates/` — done 2026-08-21 (21 tests).
+- ✅ `src/lib/server/email/providers.ts` — done 2026-08-21 (8 tests; incl. EMR-01 no-body logging).
+- ✅ `src/lib/server/package-guard.ts` — done 2026-08-21 (6 tests; `requirePackageOwnership` only — module is small).
+- ✅ `src/lib/client/crypto/device-fingerprint.ts` — done 2026-08-21 (5 tests, browser project).
+- `src/lib/server/email/reminders.ts` — `sendDueReminders` (multi-query flow; DB mock with
+  `mockReturnValueOnce` chains).
+- `src/lib/server/email/index.ts` — `sendEmail` (idempotency by eventId, queued→sent/failed,
+  never-throws).
+- Browser project (`client`) now runs in this env (Chromium v1228 installed 2026-08-21 via
+  `pnpm exec playwright install chromium`).
 
 ---
 
@@ -207,4 +219,7 @@ Security review updated (`docs/ai/security/keys-and-signing-review.md`, KSR-08 m
   Use `pnpm exec vitest run` directly to validate.
 - `svelte-kit sync` runs `prepare` — `$app` modules are resolved by the SvelteKit Vite plugin at
   test time; no manual sync needed before running Vitest.
-- Browser (`client`) project tests need Playwright Chromium installed (`pnpm exec playwright install`).
+- Browser (`client`) project tests need a matching Playwright Chromium installed
+  (`pnpm exec playwright install chromium`). If launch fails with "Executable doesn't exist at
+  …chromium_headless_shell-<rev>…", the installed browsers are out of date — re-run the install.
+  Verified working 2026-08-21 (Chromium v1228).
