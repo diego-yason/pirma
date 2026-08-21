@@ -127,6 +127,75 @@ export const actions: Actions = {
         }
     },
 
+    removeFile: async ({ request, locals }) => {
+        if (!locals.user) {
+            logger.warn("removeFile", "Rejected: not authenticated");
+            return fail(401, { error: "You must be signed in to remove documents" });
+        }
+
+        const formData = await request.formData();
+        const docId = (formData.get("docId") as string | null)?.trim();
+
+        if (!docId) {
+            logger.warn("removeFile", "Rejected: missing docId");
+            return fail(400, { error: "Document id is required" });
+        }
+
+        // Load the document and verify ownership
+        const [doc] = await db
+            .select({
+                id: documents.id,
+                title: documents.title,
+                storagePath: documents.storagePath,
+            })
+            .from(documents)
+            .where(and(eq(documents.id, docId), eq(documents.owner, locals.user.id)))
+            .limit(1);
+
+        if (!doc) {
+            logger.warn("removeFile", "Rejected: document not found or not owned", { docId });
+            return fail(404, { error: "Document not found" });
+        }
+
+        // Only "unused" documents (not yet assigned to a package) can be removed here.
+        const [assignment] = await db
+            .select({ id: documentAssignments.id })
+            .from(documentAssignments)
+            .where(eq(documentAssignments.documentId, docId))
+            .limit(1);
+
+        if (assignment) {
+            logger.warn("removeFile", "Rejected: document already in a package", { docId });
+            return fail(400, {
+                error: "Document is already part of a package and cannot be removed here",
+            });
+        }
+
+        // Best-effort storage cleanup — never block DB removal on storage errors.
+        if (doc.storagePath) {
+            const { error: removeError } = await supabaseAdmin.storage
+                .from("drafts")
+                .remove([doc.storagePath]);
+            if (removeError) {
+                logger.warn("removeFile", "Storage removal failed (continuing)", {
+                    docId,
+                    path: doc.storagePath,
+                    error: removeError,
+                });
+            }
+        }
+
+        // Delete the DB row so it no longer lingers as an unused orphan.
+        await db.delete(documents).where(eq(documents.id, docId));
+
+        logger.info("removeFile", "Document removed", {
+            documentId: docId,
+            title: doc.title,
+        });
+
+        return { ok: true, documentId: docId };
+    },
+
     createPackage: async ({ request, locals }) => {
         if (!locals.user) {
             logger.warn("createPackage", "Rejected: not authenticated");

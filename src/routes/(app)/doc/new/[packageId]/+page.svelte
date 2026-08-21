@@ -176,12 +176,14 @@
     );
 </script>
 
-<div class="ml-5 mt-8 flex gap-4 h-[calc(100vh-16rem)] min-h-0 pr-5">
+<div class="mt-8 ml-5 flex h-[calc(100vh-16rem)] min-h-0 gap-4 pr-5">
     <DocumentSelector {documents} bind:selected={selectedDocIndex} />
 
-    <div class="flex-2 overflow-y-auto">
+    <div
+        class="flex-1 overflow-y-auto rounded-xl border border-neutral-200 bg-white/50 dark:border-neutral-800 dark:bg-neutral-900/20"
+    >
         {#if !selectedDoc}
-            <p class="text-neutral-500 text-sm px-2">No document selected.</p>
+            <p class="px-2 text-sm text-neutral-500 dark:text-neutral-400">No document selected.</p>
         {:else}
             <PDFViewer
                 pdfUrl={selectedDoc}
@@ -197,35 +199,90 @@
             />
         {/if}
     </div>
-    <div class="flex-1 flex flex-col min-h-0">
-        <div class="shrink-0">
-            <h2 class="text-xl font-semibold uppercase tracking-widest mb-4">Field Tools</h2>
-            <div class="flex flex-col gap-2">
-                <div class="flex gap-6 px-3">
-                    <button
-                        class="flex-1 border rounded-md py-4 transition"
-                        class:border-blue-500={activeTool === "signature"}
-                        class:bg-blue-50={activeTool === "signature"}
-                        class:dark:bg-blue-950={activeTool === "signature"}
-                        onclick={() => activateTool("signature")}
+    <div
+        class="flex min-h-0 flex-1 flex-col border-l border-neutral-200 bg-white/70 dark:border-neutral-800 dark:bg-neutral-900/40"
+    >
+        <!-- Field Tools -->
+        <div class="shrink-0 border-b border-neutral-200 px-4 py-4 dark:border-neutral-800">
+            <div class="mb-3 flex items-center gap-1.5">
+                <svg
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="2"
+                    class="size-4 text-secondary-600 dark:text-secondary-400"
+                >
+                    <path
+                        stroke-linecap="round"
+                        stroke-linejoin="round"
+                        d="M11 4a2 2 0 1 1 4 0 2 2 0 0 1-4 0ZM18.4 6.6a2 2 0 0 1 2.8 2.8l-9 9-3.5.7.7-3.5 9-9Z"
+                    ></path>
+                </svg>
+                <h2 class="text-sm font-semibold text-neutral-900 dark:text-neutral-50">
+                    Field Tools
+                </h2>
+            </div>
+
+            <div class="grid grid-cols-2 gap-2">
+                <button
+                    type="button"
+                    class="flex flex-col items-center gap-1.5 rounded-lg border px-3 py-3 text-sm font-medium transition
+                        {activeTool === 'signature'
+                        ? 'border-secondary-500 bg-secondary-500/10 text-secondary-700 dark:bg-secondary-500/15 dark:text-secondary-300'
+                        : 'border-neutral-200 bg-white text-neutral-600 hover:border-secondary-500/50 hover:bg-neutral-50 hover:text-neutral-900 dark:border-neutral-700 dark:bg-neutral-900 dark:text-neutral-300 dark:hover:border-secondary-500/50 dark:hover:bg-neutral-800 dark:hover:text-white'}"
+                    onclick={() => activateTool("signature")}
+                >
+                    <svg
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        stroke-width="1.5"
+                        class="size-5"
                     >
-                        Add Signature
-                    </button>
-                    <button
-                        class="flex-1 border rounded-md py-4 transition"
-                        class:border-blue-500={activeTool === "text"}
-                        class:bg-blue-50={activeTool === "text"}
-                        class:dark:bg-blue-950={activeTool === "text"}
-                        onclick={() => activateTool("text")}
+                        <path
+                            stroke-linecap="round"
+                            stroke-linejoin="round"
+                            d="M3 17c3.5-2 6-2.5 8-2.5 2 0 2.5 1 5 .5 2-.4 4-2 4-2m-9 3.5c2.5 0 3.5 1.5 6 1.5 1.5 0 3-.5 3-.5"
+                        ></path>
+                    </svg>
+                    Signature
+                </button>
+                <button
+                    type="button"
+                    class="flex flex-col items-center gap-1.5 rounded-lg border px-3 py-3 text-sm font-medium transition
+                        {activeTool === 'text'
+                        ? 'border-secondary-500 bg-secondary-500/10 text-secondary-700 dark:bg-secondary-500/15 dark:text-secondary-300'
+                        : 'border-neutral-200 bg-white text-neutral-600 hover:border-secondary-500/50 hover:bg-neutral-50 hover:text-neutral-900 dark:border-neutral-700 dark:bg-neutral-900 dark:text-neutral-300 dark:hover:border-secondary-500/50 dark:hover:bg-neutral-800 dark:hover:text-white'}"
+                    onclick={() => activateTool("text")}
+                >
+                    <svg
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        stroke-width="1.5"
+                        class="size-5"
                     >
-                        Add Text Field
-                    </button>
-                </div>
-                <!-- dropdown -->
-                <label for="assignedTo" class="text-sm">Assigned to:</label>
+                        <path
+                            stroke-linecap="round"
+                            stroke-linejoin="round"
+                            d="M4 6h16M4 12h16M4 18h10"
+                        ></path>
+                    </svg>
+                    Text Field
+                </button>
+            </div>
+
+            <!-- dropdown -->
+            <div class="mt-3">
+                <label
+                    for="assignedTo"
+                    class="mb-1 block text-xs font-medium text-neutral-500 dark:text-neutral-400"
+                >
+                    Assign fields to
+                </label>
                 <select
                     id="assignedTo"
-                    class="rounded border border-neutral-300 px-2 py-1 text-sm dark:border-neutral-600 dark:bg-neutral-800"
+                    class="w-full rounded-lg border border-neutral-300 bg-white px-3 py-2 text-sm text-neutral-900 transition focus:border-secondary-500 focus:ring-2 focus:ring-secondary-500/20 dark:border-neutral-700 dark:bg-neutral-900 dark:text-neutral-100"
                     bind:value={assignedTo}
                     onchange={handleAssignChange}
                 >
@@ -240,88 +297,135 @@
                 </select>
             </div>
         </div>
-        <h2 class="text-xl font-semibold uppercase tracking-widest mt-6 mb-3 shrink-0">
-            Recipients
-        </h2>
-        <div class="flex-1 min-h-0 overflow-y-auto pr-2" bind:this={recipientsContainer}>
-            {#if recipients.length > 0}
-                <div class="flex flex-col gap-2 mb-3">
-                    {#each recipients as r (r.id)}
-                        <div
-                            class="flex flex-col gap-2 rounded-lg border border-neutral-200 bg-neutral-50 px-3 py-2 dark:border-neutral-700 dark:bg-neutral-900"
-                        >
-                            <input
-                                type="text"
-                                placeholder="Person {r.personNum}"
-                                class="flex-1 rounded border border-neutral-300 px-3 py-1.5 text-sm dark:border-neutral-600 dark:bg-neutral-800"
-                                bind:value={r.name}
-                                oninput={onRecipientChange}
-                            />
-                            <input
-                                type="email"
-                                placeholder="Email"
-                                class="flex-1 rounded border border-neutral-300 px-3 py-1.5 text-sm dark:border-neutral-600 dark:bg-neutral-800"
-                                bind:value={r.email}
-                                oninput={onRecipientChange}
-                            />
-                            <div class="flex justify-between">
-                                <div
-                                    class="inline-flex rounded border border-neutral-300 text-xs dark:border-neutral-600"
-                                >
+
+        <!-- Recipients -->
+        <div class="flex min-h-0 flex-1 flex-col px-4 py-4">
+            <div class="mb-3 flex items-center justify-between">
+                <h2 class="text-sm font-semibold text-neutral-900 dark:text-neutral-50">
+                    Recipients
+                </h2>
+                {#if recipients.length > 0}
+                    <span
+                        class="rounded-full bg-secondary-500/15 px-2 py-0.5 text-[10px] font-semibold text-secondary-600 dark:text-secondary-300"
+                    >
+                        {recipients.length}
+                    </span>
+                {/if}
+            </div>
+
+            <div class="min-h-0 flex-1 overflow-y-auto pr-2" bind:this={recipientsContainer}>
+                {#if recipients.length > 0}
+                    <div class="mb-3 flex flex-col gap-2">
+                        {#each recipients as r (r.id)}
+                            <div
+                                class="flex flex-col gap-2 rounded-lg border border-neutral-200 bg-white px-3 py-2.5 dark:border-neutral-800 dark:bg-neutral-900/60"
+                            >
+                                <div class="flex items-center gap-2">
+                                    <span
+                                        class="grid size-7 shrink-0 place-items-center rounded-full bg-secondary-500/15 text-xs font-bold text-secondary-600 dark:text-secondary-300"
+                                    >
+                                        {r.personNum}
+                                    </span>
+                                    <input
+                                        type="text"
+                                        placeholder="Person {r.personNum}"
+                                        class="min-w-0 flex-1 rounded-lg border border-neutral-300 bg-white px-3 py-1.5 text-sm text-neutral-900 placeholder:text-neutral-400 focus:border-secondary-500 focus:ring-2 focus:ring-secondary-500/20 dark:border-neutral-700 dark:bg-neutral-900 dark:text-neutral-100 dark:placeholder:text-neutral-500"
+                                        bind:value={r.name}
+                                        oninput={onRecipientChange}
+                                    />
+                                </div>
+                                <input
+                                    type="email"
+                                    placeholder="Email"
+                                    class="flex-1 rounded-lg border border-neutral-300 bg-white px-3 py-1.5 text-sm text-neutral-900 placeholder:text-neutral-400 focus:border-secondary-500 focus:ring-2 focus:ring-secondary-500/20 dark:border-neutral-700 dark:bg-neutral-900 dark:text-neutral-100 dark:placeholder:text-neutral-500"
+                                    bind:value={r.email}
+                                    oninput={onRecipientChange}
+                                />
+                                <div class="flex items-center justify-between">
+                                    <div
+                                        class="inline-flex overflow-hidden rounded-lg border border-neutral-300 text-xs dark:border-neutral-700"
+                                    >
+                                        <button
+                                            type="button"
+                                            class="px-3 py-1.5 font-medium transition
+                                                {r.role === 'signer'
+                                                ? 'bg-linear-to-r from-secondary-600 to-primary-700 text-white'
+                                                : 'bg-white text-neutral-500 hover:bg-neutral-50 dark:bg-neutral-900 dark:text-neutral-400 dark:hover:bg-neutral-800'}"
+                                            onclick={() => toggleRole(r, "signer")}
+                                        >
+                                            Signer
+                                        </button>
+                                        <button
+                                            type="button"
+                                            class="px-3 py-1.5 font-medium transition
+                                                {r.role === 'viewer'
+                                                ? 'bg-linear-to-r from-secondary-600 to-primary-700 text-white'
+                                                : 'bg-white text-neutral-500 hover:bg-neutral-50 dark:bg-neutral-900 dark:text-neutral-400 dark:hover:bg-neutral-800'}"
+                                            onclick={() => toggleRole(r, "viewer")}
+                                        >
+                                            Viewer
+                                        </button>
+                                    </div>
                                     <button
                                         type="button"
-                                        class="rounded-l px-3 py-1 transition"
-                                        class:bg-blue-600={r.role === "signer"}
-                                        class:text-white={r.role === "signer"}
-                                        class:text-neutral-500={r.role !== "signer"}
-                                        class:dark:text-neutral-400={r.role !== "signer"}
-                                        onclick={() => toggleRole(r, "signer")}
+                                        class="shrink-0 rounded-lg px-2 py-1 text-xs font-medium text-red-600 transition hover:bg-red-50 dark:text-red-400 dark:hover:bg-red-950"
+                                        onclick={() => removeRecipient(r.id)}
                                     >
-                                        Signer
-                                    </button>
-                                    <button
-                                        type="button"
-                                        class="rounded-r px-3 py-1 transition"
-                                        class:bg-blue-600={r.role === "viewer"}
-                                        class:text-white={r.role === "viewer"}
-                                        class:text-neutral-500={r.role !== "viewer"}
-                                        class:dark:text-neutral-400={r.role !== "viewer"}
-                                        onclick={() => toggleRole(r, "viewer")}
-                                    >
-                                        Viewer
+                                        Remove
                                     </button>
                                 </div>
-                                <button
-                                    type="button"
-                                    class="shrink-0 rounded px-2 py-1 text-xs text-red-600 transition hover:bg-red-50 dark:text-red-400 dark:hover:bg-red-950"
-                                    onclick={() => removeRecipient(r.id)}
-                                >
-                                    ✕
-                                </button>
                             </div>
-                        </div>
-                    {/each}
-                </div>
-            {/if}
+                        {/each}
+                    </div>
+                {/if}
 
-            {#if recipients.length < MAX_RECIPIENTS}
-                <button
-                    type="button"
-                    class="rounded border border-neutral-300 px-3 py-1.5 text-sm transition hover:bg-neutral-100 dark:border-neutral-600 dark:hover:bg-neutral-700"
-                    onclick={addRecipientAndScroll}
+                {#if recipients.length < MAX_RECIPIENTS}
+                    <button
+                        type="button"
+                        class="flex w-full items-center justify-center gap-1.5 rounded-lg border border-dashed border-neutral-300 px-3 py-2 text-sm font-medium text-neutral-600 transition hover:border-secondary-500/60 hover:bg-secondary-500/5 hover:text-secondary-700 dark:border-neutral-700 dark:text-neutral-300 dark:hover:border-secondary-500/60 dark:hover:bg-secondary-500/10 dark:hover:text-secondary-300"
+                        onclick={addRecipientAndScroll}
+                    >
+                        <svg
+                            viewBox="0 0 24 24"
+                            fill="none"
+                            stroke="currentColor"
+                            stroke-width="2"
+                            class="size-4"
+                        >
+                            <path
+                                stroke-linecap="round"
+                                stroke-linejoin="round"
+                                d="M12 5v14M5 12h14"
+                            ></path>
+                        </svg>
+                        Add Recipient
+                    </button>
+                {:else}
+                    <p class="text-xs text-neutral-500 dark:text-neutral-400">
+                        Maximum {MAX_RECIPIENTS} recipients reached.
+                    </p>
+                {/if}
+
+                <a
+                    href={resolve(`doc/new/${data.packageId}/confirm`)}
+                    class="mt-4 flex w-full items-center justify-center gap-2 rounded-lg bg-linear-to-r from-secondary-600 to-primary-700 px-4 py-2.5 text-center text-sm font-semibold text-white shadow-sm transition hover:from-secondary-500 hover:to-primary-600"
                 >
-                    + Add Recipient
-                </button>
-            {:else}
-                <p class="text-xs text-neutral-500">Maximum {MAX_RECIPIENTS} recipients reached.</p>
-            {/if}
-
-            <a
-                href={resolve(`doc/new/${data.packageId}/confirm`)}
-                class="mt-4 block w-full rounded-md bg-blue-600 px-4 py-2.5 text-center text-sm font-medium text-white transition hover:bg-blue-700"
-            >
-                Next
-            </a>
+                    Next
+                    <svg
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        stroke-width="2"
+                        class="size-4"
+                    >
+                        <path
+                            stroke-linecap="round"
+                            stroke-linejoin="round"
+                            d="M13 5l7 7-7 7M5 12h15"
+                        ></path>
+                    </svg>
+                </a>
+            </div>
         </div>
     </div>
 </div>

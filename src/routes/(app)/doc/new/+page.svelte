@@ -111,8 +111,31 @@
         }
     }
 
-    function removeFile(id: string) {
-        files = files.filter((f) => f.id !== id);
+    async function removeFile(id: string) {
+        const f = files.find((x) => x.id === id);
+
+        // If the file was successfully uploaded (has a real document id), delete it
+        // server-side too so it doesn't linger as an unused orphan in the database.
+        if (f?.uploaded && f.id) {
+            try {
+                const res = await fetch("/doc/new?/removeFile", {
+                    method: "POST",
+                    headers: { "x-sveltekit-action": "true" },
+                    body: new URLSearchParams({ docId: f.id }),
+                });
+                const result = await res.json();
+                const payload = JSON.parse(result.data ?? "{}");
+                if (!result.type || result.type !== "success" || payload.error) {
+                    console.warn("[docNew] removeFile failed", payload.error);
+                    return; // keep the row; server-side removal failed
+                }
+            } catch (err) {
+                console.warn("[docNew] removeFile error", err);
+                return;
+            }
+        }
+
+        files = files.filter((x) => x.id !== id);
     }
 
     function addRecentDoc(doc: {
@@ -165,29 +188,32 @@
 </script>
 
 <!-- Upload and Template Selection -->
-<div class="flex gap-6 w-3/4 ml-5">
+<div class="ml-5 flex w-3/4 gap-6">
     <!-- Upload area -->
     <div
-        class="flex-1 rounded-xl border-2 border-dashed p-8 text-center transition-colors"
-        class:border-blue-400={isDragOver}
-        class:bg-blue-50={isDragOver}
-        class:dark:bg-blue-950={isDragOver}
-        class:border-neutral-300={!isDragOver}
-        class:dark:border-neutral-700={!isDragOver}
+        class="flex-1 rounded-xl border-2 border-dashed p-8 text-center transition-colors {isDragOver
+            ? 'border-secondary-500 bg-secondary-500/5 dark:bg-secondary-500/10'
+            : 'border-neutral-300 bg-white dark:border-neutral-700 dark:bg-neutral-900/40'}"
         role="region"
         aria-label="File drop zone"
         ondragover={onDragOver}
         ondragleave={onDragLeave}
         ondrop={onDrop}
     >
-        <p class="text-3xl mb-2">📄</p>
-        <h2 class="text-lg font-semibold mb-1">Upload Files</h2>
-        <p class="text-sm text-neutral-500 dark:text-neutral-400 mb-3">
+        <span
+            class="mx-auto grid size-14 place-items-center rounded-2xl bg-linear-to-br from-secondary-500/15 to-primary-700/15 text-3xl"
+        >
+            📄
+        </span>
+        <h2 class="mt-4 text-lg font-semibold text-neutral-900 dark:text-neutral-50">
+            Upload Files
+        </h2>
+        <p class="mt-1 text-sm text-neutral-500 dark:text-neutral-400">
             PDF, DOCX, JPG, or PNG files
         </p>
         <button
             type="button"
-            class="inline-block rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white transition hover:bg-blue-700"
+            class="mt-5 inline-flex items-center gap-2 rounded-lg bg-linear-to-r from-secondary-600 to-primary-700 px-5 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:from-secondary-500 hover:to-primary-600"
             onclick={(e) => {
                 e.stopPropagation();
                 document.getElementById("fileInput")?.click();
@@ -197,7 +223,7 @@
         </button>
         <button
             type="button"
-            class="mt-2 text-sm text-blue-600 underline transition hover:text-blue-700 dark:text-blue-400 dark:hover:text-blue-300"
+            class="mt-3 text-sm font-medium text-secondary-600 underline underline-offset-2 transition hover:text-secondary-500 dark:text-secondary-400 dark:hover:text-secondary-300"
             onmouseenter={() => (prefetchRecent = true)}
             onclick={(e) => {
                 e.stopPropagation();
@@ -218,14 +244,22 @@
 
     <!-- Template -->
     <div
-        class="flex-1 rounded-xl flex items-center flex-col border border-neutral-300 p-8 dark:border-neutral-700"
+        class="flex flex-1 flex-col items-center rounded-xl border border-neutral-200 bg-white p-8 dark:border-neutral-800 dark:bg-neutral-900/60"
     >
-        <p class="text-3xl mb-2">📄</p>
-        <h2 class="text-lg font-semibold mb-1">Use Template</h2>
-        <p class="text-sm text-neutral-500 dark:text-neutral-400 mb-4">Standardized contracts</p>
+        <span
+            class="grid size-14 place-items-center rounded-2xl bg-neutral-100 text-3xl dark:bg-neutral-800"
+        >
+            📄
+        </span>
+        <h2 class="mt-4 text-lg font-semibold text-neutral-900 dark:text-neutral-50">
+            Use Template
+        </h2>
+        <p class="mt-1 mb-4 text-sm text-neutral-500 dark:text-neutral-400">
+            Standardized contracts
+        </p>
         <button
             type="button"
-            class="rounded-lg border border-neutral-300 bg-white px-4 py-2 text-sm font-medium transition hover:bg-neutral-100 dark:border-neutral-700 dark:bg-neutral-900 dark:hover:bg-neutral-800"
+            class="rounded-lg border border-neutral-300 bg-white px-5 py-2.5 text-sm font-medium text-neutral-700 transition hover:bg-neutral-50 dark:border-neutral-700 dark:bg-neutral-900 dark:text-neutral-200 dark:hover:bg-neutral-800"
         >
             Select Template
         </button>
@@ -233,34 +267,61 @@
 </div>
 
 <!-- Uploaded files list -->
-<div class="mt-6 border rounded-md px-8 py-5 ml-5 w-3/4">
-    <h2 class="text-lg font-semibold mb-3">Uploaded Files ({files.length})</h2>
+<div
+    class="mt-6 ml-5 w-3/4 rounded-xl border border-neutral-200 bg-white px-6 py-5 dark:border-neutral-800 dark:bg-neutral-900/40"
+>
+    <div class="mb-3 flex items-center justify-between">
+        <h2 class="text-lg font-semibold text-neutral-900 dark:text-neutral-50">
+            Uploaded Files ({files.length})
+        </h2>
+        {#if files.length > 0}
+            <span
+                class="rounded-full bg-secondary-500/15 px-2.5 py-0.5 text-xs font-semibold text-secondary-600 dark:text-secondary-300"
+            >
+                {files.filter((f) => f.uploaded).length} ready
+            </span>
+        {/if}
+    </div>
     {#if files.length > 0}
         <div class="flex flex-col gap-2">
             {#each files as f (f.id)}
                 <div
-                    class="flex items-center justify-between rounded-lg border border-neutral-200 bg-neutral-50 px-4 py-3 dark:border-neutral-700 dark:bg-neutral-900"
+                    class="flex items-center justify-between gap-3 rounded-lg border border-neutral-200 bg-neutral-50 px-4 py-3 dark:border-neutral-700 dark:bg-neutral-900"
                 >
-                    <div class="flex items-center gap-3">
-                        <span class="text-xl">
+                    <div class="flex min-w-0 items-center gap-3">
+                        <span
+                            class="grid size-10 shrink-0 place-items-center rounded-lg bg-secondary-500/15 text-xl"
+                        >
                             {f.type?.startsWith("image") ? "🖼️" : "📄"}
                         </span>
-                        <div>
-                            <p class="text-sm font-medium">{f.name}</p>
+                        <div class="min-w-0">
+                            <p
+                                class="truncate text-sm font-semibold text-neutral-900 dark:text-neutral-50"
+                            >
+                                {f.name}
+                            </p>
                             <p class="text-xs text-neutral-500 dark:text-neutral-400">
                                 {f.size} &middot; {f.pageCount != null
                                     ? `${f.pageCount} page${f.pageCount !== 1 ? "s" : ""}`
                                     : f.type}
                                 {#if f.uploading}
-                                    &middot; Uploading…
+                                    &middot; <span class="text-amber-600 dark:text-amber-400"
+                                        >Uploading…</span
+                                    >
                                 {:else if f.error}
-                                    &middot; <span class="text-red-500">{f.error}</span>
+                                    &middot; <span class="text-red-600 dark:text-red-400"
+                                        >{f.error}</span
+                                    >
                                 {:else if f.uploaded}
-                                    &middot; <span class="text-green-500">Uploaded</span>
+                                    &middot; <span class="text-emerald-600 dark:text-emerald-400"
+                                        >Uploaded</span
+                                    >
                                 {/if}
                             </p>
                             {#if f.storagePath}
-                                <p class="text-xs text-neutral-500 dark:text-neutral-400 font-mono">
+                                <p
+                                    class="truncate font-mono text-xs text-neutral-500 dark:text-neutral-400"
+                                >
                                     {f.storagePath}
                                 </p>
                             {/if}
@@ -268,7 +329,7 @@
                     </div>
                     <button
                         type="button"
-                        class="rounded-lg px-3 py-1 text-xs font-medium text-red-600 transition hover:bg-red-50 dark:text-red-400 dark:hover:bg-red-950"
+                        class="shrink-0 rounded-lg px-3 py-1 text-xs font-medium text-red-600 transition hover:bg-red-50 dark:text-red-400 dark:hover:bg-red-950"
                         onclick={() => removeFile(f.id)}
                     >
                         Remove
@@ -278,26 +339,49 @@
         </div>
 
         {#if files.some((f) => f.storagePath)}
-            <form method="POST" action="?/createPackage" class="mt-4">
+            <form method="POST" action="?/createPackage" class="mt-4 flex justify-end">
                 {#each files.filter((f) => f.storagePath) as f (f.id)}
                     <input type="hidden" name="docId" value={f.id} />
                 {/each}
                 <button
                     type="submit"
-                    class="rounded-lg bg-blue-600 px-6 py-2 text-sm font-medium text-white transition hover:bg-blue-700"
+                    class="inline-flex items-center gap-2 rounded-lg bg-linear-to-r from-secondary-600 to-primary-700 px-6 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:from-secondary-500 hover:to-primary-600"
                 >
-                    Next →
+                    Next
+                    <svg
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        stroke-width="2"
+                        class="size-4"
+                    >
+                        <path
+                            stroke-linecap="round"
+                            stroke-linejoin="round"
+                            d="M13 5l7 7-7 7M5 12h15"
+                        ></path>
+                    </svg>
                 </button>
             </form>
         {/if}
     {:else}
-        <p class="text-sm text-neutral-400 dark:text-neutral-500">No files uploaded yet.</p>
+        <div
+            class="rounded-xl border border-dashed border-neutral-300 bg-neutral-100/50 px-6 py-10 text-center dark:border-neutral-800 dark:bg-neutral-900/30"
+        >
+            <p class="text-2xl">📄</p>
+            <p class="mt-2 text-sm font-medium text-neutral-700 dark:text-neutral-300">
+                No files uploaded yet
+            </p>
+            <p class="mt-1 text-sm text-neutral-600 dark:text-neutral-500">
+                Drop files above or browse to get started.
+            </p>
+        </div>
     {/if}
 </div>
 
 <!-- Recently Uploaded Popup -->
 <div
-    class="fixed inset-0 z-50 flex items-center justify-center bg-black/40"
+    class="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4"
     class:hidden={!showRecentPopup}
     onclick={() => (showRecentPopup = false)}
     onkeydown={(e) => {
@@ -310,19 +394,21 @@
 >
     <!-- svelte-ignore a11y_no_static_element_interactions -->
     <div
-        class="relative w-full max-w-md rounded-xl bg-white p-6 shadow-xl dark:bg-neutral-900"
+        class="relative w-full max-w-lg rounded-xl border border-neutral-200 bg-white p-6 shadow-xl dark:border-neutral-800 dark:bg-neutral-900"
         onclick={(e) => e.stopPropagation()}
         onkeydown={(e) => e.stopPropagation()}
     >
         <button
             type="button"
-            class="absolute right-4 top-4 text-neutral-400 transition hover:text-neutral-600 dark:hover:text-neutral-300"
+            class="absolute top-4 right-4 grid size-8 place-items-center rounded-lg text-neutral-400 transition hover:bg-neutral-100 hover:text-neutral-600 dark:hover:bg-neutral-800 dark:hover:text-neutral-300"
             onclick={() => (showRecentPopup = false)}
             aria-label="Close"
         >
             ✕
         </button>
-        <h2 class="mb-4 text-lg font-semibold">Recently Uploaded</h2>
+        <h2 class="mb-4 text-lg font-semibold text-neutral-900 dark:text-neutral-50">
+            Recently Uploaded
+        </h2>
         <RecentlyUploaded active={prefetchRecent || showRecentPopup} onselect={addRecentDoc} />
     </div>
 </div>
