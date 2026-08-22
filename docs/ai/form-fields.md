@@ -63,9 +63,10 @@ interface PlacementField extends PlacedRect {
 
 - Field **definitions** (kind + config) stay in `documents.placementFields` (`placement_fields`,
   JSONB) — already implemented; richer objects persist without a schema change.
-- Field **values** per signer per document → `signatures.field_values` (JSONB, migration
-  `0003`). Stored value semantics: `text`/`phone`/`choices` → string (typed / selected value),
-  `radio` → the id of the checked radio box, `checkbox` → boolean:
+- Field **values** per signer per document → `signatures.field_values` (JSONB, column added to
+  the runtime schema — migration to be generated/applied). Stored value semantics:
+  `text`/`phone`/`choices` → string (typed / selected value), `radio` → the id of the checked
+  radio box, `checkbox` → boolean:
 
   ```jsonc
   {
@@ -101,6 +102,12 @@ payload = "${packageId}:${documentId}:${documentHash}:${sortedFieldIds}:${signer
 - Implemented in `src/lib/shared/signing-payload.ts` (`canonicalFieldValues` + `sha256Hex`);
   the client signs it and the server recomputes it from the submitted values and verifies.
 - This is the payload-strengthening flagged in `keys/recommendations.md` §9.
+- **Compliance requirement: the signature payload is PAdES-compliant.** The electronic
+  signature must be an embedded **PAdES-BASELINE-T** (ETSI EN 319 142-1) signature in the PDF/A
+  artifact. **Decision (Option B, 2026-08-23): PAdES replaces the custom text payload above
+  entirely** — no detached ECDSA is produced for new documents; the values it bound are
+  flattened into the artifact, so the PAdES ByteRange digest covers them. See
+  `docs/ai/pdfa/pades-baseline-t-spec.md`.
 
 ## Rendering & flattening
 
@@ -115,7 +122,8 @@ payload = "${packageId}:${documentId}:${documentHash}:${sortedFieldIds}:${signer
 ## Schema changes
 
 - `documents.placementFields` — richer objects (no column change; works).
-- `signatures.field_values` — **new `jsonb` column** (migration `0003_field_values`). ✅
+- `signatures.field_values` — **new `jsonb` column** (added to the runtime schema; migration
+  pending). ✅
 - `user_signatures.type` — planned `enum("signature" | "initials")` for the initials kind.
 
 ## Open decisions

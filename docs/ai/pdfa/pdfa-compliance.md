@@ -21,10 +21,12 @@ produce artifacts that are verifiable against the PDF/A standard:
 1. Convert arbitrary uploads (PDF, DOCX, JPG, PNG) to a **PDF/A** document at ingestion.
 2. When a document is signed, produce a **flattened signed PDF/A artifact** (signature images
    burned in, metadata/XMP updated) that is also **PDF/A compliant**.
-3. Embed the electronic signature into the artifact as a **PAdES** signature (or, at minimum,
-   keep the detached ECDSA signature but sign the *final artifact hash* so it stays meaningful).
-4. Provide a **verification path**: PDF/A conformance + PAdES validity + ECDSA detached
-   signature + blockchain anchor.
+3. Embed the electronic signature into the artifact as a **PAdES** signature — the signature
+   payload requirement is **PAdES compliance** (ETSI EN 319 142-1). **Option B (2026-08-23):
+   PAdES replaces the custom text payload `finalize` currently signs/stores** — no detached
+   ECDSA signature for new documents; the anchor targets the artifact hash.
+4. Provide a **verification path**: PDF/A conformance + PAdES validity (ECDSA verified inside
+   the CMS) + blockchain anchor on the artifact hash.
 
 ## 2. Current state (what exists today)
 
@@ -131,23 +133,21 @@ flowchart LR
      re-pass), then store the artifact (e.g., `executed/` bucket) with a fresh hash.
 - Record per-document artifact path + artifact hash.
 
-### Phase 3 — Signature system (embedded + detached)
-- **PAdES (recommended):** embed a PAdES-BASELINE-T signature (CMS/PKCS#7, ECDSA-SHA256)
-  per signer via `@signpdf/signpdf` + `@peculiar/x509`/`@peculiar/cms`, with an RFC 3161
-  timestamp. Cert strategy resolved: **self-signed per signer + trusted TSA timestamp**.
-  See `docs/ai/pdfa/pades-baseline-t-spec.md` for the full flow and phased steps.
-- **Detached (fallback/compat):** keep the existing ECDSA system but sign the **final
-  artifact hash** (Phase 2 output) instead of the pre-flattened `documents.hash`. Update
-  `buildSigningPayload` to bind the artifact hash + sorted field IDs (§9 keys doc).
+### Phase 3 — Signature system (embedded PAdES; Option B)
+- **PAdES:** embed a PAdES-BASELINE-T signature (CMS/PKCS#7, ECDSA-SHA256) per signer via
+  `@signpdf/signpdf` + `@peculiar/x509`/`@peculiar/cms`, with an RFC 3161 timestamp. Cert
+  strategy resolved: **self-signed per signer + trusted TSA timestamp**. See
+  `docs/ai/pdfa/pades-baseline-t-spec.md` for the full flow and phased steps.
+- **No detached ECDSA (Option B, 2026-08-23):** the custom text-payload signature
+  (`signaturePayload` / `buildSigningPayload`) is retired; the artifact is signed once, by PAdES.
 - `signatures` gains: `padesSignatureBytes`, `signatureFieldName`, `padesValidated`,
-  `artifactHash`, `flattenedAt`.
+  `artifactHash`, `flattenedAt`; **`signaturePayload` / `signatureAlgorithm` are dropped/legacy**.
 
 ### Phase 4 — Verification
 - New verification endpoint/page (`/verify`, `GET /api/verify/...`):
   1. PDF/A conformance (veraPDF/pdfcpu) — stored result or on-demand.
-  2. PAdES signature validity + cert chain.
-  3. Detached ECDSA over artifact hash.
-  4. Blockchain anchor status (existing spec).
+2. PAdES signature validity + cert chain (signer's ECDSA verified inside the CMS).
+3. Blockchain anchor status (existing spec; anchored hash = artifact hash).
 - Store `proofJson`/validation results with the artifact.
 
 ### Phase 5 — Config, schema, tests
@@ -168,7 +168,7 @@ convertedAt: timestamp("converted_at"),
 artifactStoragePath: text("artifact_storage_path"), // flattened signed PDF/A
 artifactHash: text("artifact_hash"),
 
-// signatures — additions
+// signatures — additions (Option B: signaturePayload / signatureAlgorithm retired — dropped)
 artifactHash: text("artifact_hash"),          // hash of the signed PDF/A artifact
 padesSignatureBytes: text("pades_signature_bytes"), // base64 CMS signature / field ref
 signatureFieldName: text("signature_field_name"),   // PDF AcroForm field per signer
@@ -189,8 +189,9 @@ documentArtifacts = pgTable("document_artifacts", {
   signing.
 - The **blockchain anchoring** should anchor the **artifact hash** (the actual delivered PDF/A
   bytes), not the raw upload hash, so the on-chain proof covers what the signer saw/signed.
-- The **signing payload** should bind the artifact hash + sorted signed field IDs (see
-  `docs/ai/keys/recommendations.md` #9).
+- **Option B:** the custom signing payload (`buildSigningPayload`) is retired. The PAdES CMS
+  binds the artifact hash (via the ByteRange digest), and the signed fields/values are flattened
+  into the artifact. `buildSigningPayload` remains only for legacy verification of pre-PAdES rows.
 
 ## 9. Risks & open questions
 
@@ -204,9 +205,10 @@ documentArtifacts = pgTable("document_artifacts", {
 5. **Re-conversion risk** — flattening via pdf-lib may break PDF/A; a re-pass (mupdf/Ghostscript)
    after flattening is needed. Budget for it.
 6. **Validation tooling in serverless** — veraPDF is Java; may only run in the microservice.
-7. **Hash stability** — converting/flattening changes bytes; all consumers of `documents.hash`
-   (signing payload, blockchain payload) must point at the final artifact hash.
+7. **Hash stability** — converting/flattening changes bytes; the blockchain anchor must point at
+   the final artifact hash (`documents.signedArtifactHash`), not the raw upload hash.
 8. **Existing documents** — backfill: convert already-uploaded docs on demand vs. only new ones.
+   No real users today, so new-only is acceptable (Option B).
 
 ## 10. Implementation checklist
 
@@ -216,9 +218,9 @@ documentArtifacts = pgTable("document_artifacts", {
 - [ ] Implement ingestion conversion in `doc/new/+page.server.ts` (or doc-service).
 - [ ] Recompute hash post-conversion; store PDF/A bytes; set XMP/`pdfaid`.
 - [ ] Implement flattening in `finalize` + artifact generation + re-convert to PDF/A.
-- [ ] Implement PAdES embedding (or detached sig over artifact hash) per decision.
-- [ ] Update `buildSigningPayload` to bind artifact hash + sorted field IDs.
-- [ ] Update blockchain anchoring to use the artifact hash.
-- [ ] Add `/verify` endpoint + page (PDF/A + PAdES + ECDSA + anchor).
+- [ ] Implement PAdES embedding (Option B — PAdES is the only signature; no detached ECDSA).
+- [ ] Retire `buildSigningPayload` / `signaturePayload` (keep only for legacy verification).
+- [ ] Update blockchain anchoring to use the artifact hash (`documents.signedArtifactHash`).
+- [ ] Add `/verify` endpoint + page (PDF/A + PAdES + anchor).
 - [ ] Backfill policy for existing documents (§9.8).
 - [ ] Tests: conversion determinism, PDF/A validation, signature round-trip, hash stability.

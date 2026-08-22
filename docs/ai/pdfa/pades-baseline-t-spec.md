@@ -15,13 +15,22 @@
 | Architecture | **In-process** (WASM/Node libraries; serverless-friendly) — document microservice deferred |
 | PDF/A level | **A-2b** (allows transparency + embedded digital signatures) |
 | Signing key | The signer's **existing ECDSA P-256 key** (`user_keys.pubkey`, SPKI) |
+| Signature model | **PAdES-only (Option B, 2026-08-23)** — replaces the custom text-payload detached signature; the anchor targets the artifact hash |
 
 ## 1. Scope
 
 Produce, for each executed document, a **flattened PDF/A-2b artifact** whose signature is an
 **embedded PAdES-BASELINE-T** CMS signature, made with a **self-signed signer certificate** and
-backed by a **trusted timestamp**. The existing **detached ECDSA signature** stays as
-complementary evidence for the blockchain anchor (it is *not* the PAdES signature).
+backed by a **trusted timestamp**.
+
+> **Decision (2026-08-23) — Option B: PAdES replaces the custom text-payload signature.**
+> The document's electronic signature is a standards-based **PAdES** (ETSI EN 319 142-1)
+> signature embedded in the PDF/A artifact — **only**. No detached ECDSA over the custom text
+> payload (`signatures.signature_payload`, `buildSigningPayload`) is produced for new documents;
+> that payload is retired (the values it bound are flattened into the artifact, so the PAdES
+> ByteRange digest covers them). The blockchain anchor targets the **artifact hash**
+> (`documents.signedArtifactHash`). Pre-PAdES rows (none in production — no real users) verify
+> via their stored detached signature.
 
 Out of scope for this first cut:
 
@@ -52,8 +61,11 @@ Out of scope for this first cut:
   `certificatePem text`, `certificateSerial text`, `certificateIssuedAt timestamp`,
   `certificateExpiresAt timestamp`.
 - `documents`: add `signedArtifactPath text`, `signedArtifactHash text` (the flattened,
-  PAdES-signed PDF/A), `signedAt timestamp`.
-- Keep `signatures` (detached ECDSA + `documentHash`) unchanged for the anchor path.
+  PAdES-signed PDF/A), `signedAt timestamp`. The anchor targets `signedArtifactHash`.
+- `signatures`: **retire `signaturePayload` / `signatureAlgorithm`** (the detached text-payload
+  signature) — Option B. The row keeps `signedFields`, `fieldValues`, `documentHash`, `status`,
+  `signedAt`, `cryptoKey`; the electronic signature lives in the artifact. No real users, so the
+  columns are dropped (or made nullable) in the migration.
 
 ## 5. Modules to build
 
@@ -63,7 +75,7 @@ Out of scope for this first cut:
 | `lib/server/pades/cms.ts` | Assemble CAdES/CMS `SignedData` around a raw ECDSA signature | `@peculiar/cms`, `pkijs` |
 | `lib/server/pades/tsa.ts` | Request/verify an RFC 3161 timestamp token | `@peculiar/tsp` or a small HTTP client |
 | `lib/server/pades/sign.ts` | Orchestrate: prepare PDF → client sign → CMS → TSA → embed | `@signpdf/signpdf` + `pdf-lib` |
-| `lib/server/pades/verify.ts` | Verify PDF/A + PAdES + detached ECDSA + anchor | `veraPDF`/`pdfcpu` + CMS verify |
+| `lib/server/pades/verify.ts` | Verify PDF/A + PAdES (ECDSA verified inside the CMS) + anchor | `veraPDF`/`pdfcpu` + CMS verify |
 
 ## 6. End-to-end signing flow (PAdES-T)
 
@@ -114,11 +126,10 @@ ByteRange digest → server assembles/embeds). This is a structural change from 
 For each executed artifact, run:
 
 1. **PDF/A-2b conformance** — `veraPDF` (or `pdfcpu validate`).
-2. **PAdES-T** — validate the CMS signature over the ByteRange, check the timestamp token and
-   its chain to the TSA root.
-3. **Detached ECDSA** — recompute `buildSigningPayload` and verify against `user_keys.pubkey`
-   (existing logic, now over the artifact hash).
-4. **Blockchain anchor** — `signatures.anchored` (roadmap §2).
+2. **PAdES-T** — validate the CMS signature over the ByteRange (the signer's ECDSA verification
+   is intrinsic to the CMS), check the timestamp token and its chain to the TSA root.
+3. **Blockchain anchor** — `signatures.anchored` on the artifact hash (roadmap §2). No detached
+   ECDSA step — retired under Option B.
 
 ## 10. Config
 
@@ -134,7 +145,7 @@ PADES_CERT_VALIDITY_DAYS=1095   # self-signed cert lifetime
 3. **CMS + TSA module** — build CAdES SignedData and request/embed the timestamp.
 4. **Two-step finalize** — server prepare → client sign ByteRange digest → server embed.
 5. **Artifact storage** — write the signed PDF/A artifact + hash to `documents` (and storage).
-6. **Verification** — veraPDF + PAdES + detached ECDSA + anchor checks.
+6. **Verification** — veraPDF + PAdES + anchor checks (no detached ECDSA — Option B).
 7. **Tests** — unit (cert/CMS/TSA) + e2e (sign → verify).
 
 ## 12. Open questions (after this spec)
@@ -151,5 +162,5 @@ PADES_CERT_VALIDITY_DAYS=1095   # self-signed cert lifetime
 - Timestamps must come from a **trusted TSA** and be validated with its certificate chain.
 - The ByteRange digest must be signed inside the SW with the persistent key; never ship the
   private key to the server.
-- Keep the detached ECDSA + anchor as independent evidence so PAdES verification failure doesn't
-  also lose the anchor trail.
+- Keep the anchor (on the artifact hash) as independent, failure-isolated evidence so a PAdES
+  verification failure doesn't also lose the trail. No detached ECDSA under Option B.

@@ -47,7 +47,7 @@
 | **P1** | Decision | Conversion architecture (in-process WASM vs. document microservice) | ✅ | §6 → resolved: in-process first cut, microservice later |
 | **P2** | Feature | `signature_anchors` table + `anchor_status` enum | 🔲 | §2 |
 | **P2** | Feature | `anchor-client` (submit / status / verify + retries) | 🔲 | §2 |
-| **P2** | Feature | Auto-anchor on finalize (idempotent by `payloadHash`) | 🔲 | §2 |
+| **P2** | Feature | Auto-anchor on finalize (idempotent by **artifact hash**) | 🔲 | §2 |
 | **P2** | Feature | Confirmation: polling job + webhook route | 🔲 | §2 |
 | **P2** | Feature | `signed → anchored` + `documents → executed` transition | 🔲 | §2 |
 | **P2** | Feature | PDF/A Phase 1 — ingestion conversion (PDF/DOCX/JPG/PNG → PDF/A-2b) | 🔲 | §3 |
@@ -76,9 +76,9 @@
 | **P3** | Feature | Anchoring targets artifact hash + every certificate hash | 🔲 | §2 / §3 |
 | **P3** | Security | PQC post-quantum Merkle-root anchoring (supplementary to ECDSA; regular signing + notary) | 🔲 | §2 / `docs/ai/pqc-post-quantum.md` |
 | **P3** | Feature | PDF/A Phase 2 — signed artifact generation (flatten + XMP + re-convert) | 🔲 | §3 |
-| **P3** | Feature | PAdES embedded signatures (party / notary / platform) | 🔲 | §3 |
-| **P3** | Feature | Detached ECDSA over final artifact hash (Phase 3 fallback) | 🔲 | §3 |
-| **P3** | Feature | PDF/A Phase 4 — verification (veraPDF/pdfcpu + PAdES + ECDSA + anchor) | 🔲 | §3 |
+| **P3** | Feature | PAdES-compliant signature — embedded PAdES-BASELINE-T replaces the custom `finalize` text payload (**Option B 2026-08-23: PAdES is the only signature**) | 🔲 | §3 |
+| **P3** | Feature | ~~Detached ECDSA over final artifact hash~~ — **dropped (Option B 2026-08-23)** | ~~🔲~~ | §3 |
+| **P3** | Feature | PDF/A Phase 4 — verification (veraPDF/pdfcpu + PAdES + anchor) | 🔲 | §3 |
 | **P3** | Feature | Certificate artifacts (party / notary / platform) + audit pages | 🔲 | §3 |
 | **P3** | Feature | Notary flow (v1.x revision, notary step, no audit pages) | 🔲 | §3 |
 | **P3** | Feature | Certificate → blockchain transmission | 🔲 | §3 |
@@ -151,7 +151,7 @@ Sources: `docs/ai/blockchain-integration.md`, `docs/ai/blockchain-microservice/`
 |---|---|---|
 | `signature_anchors` table + `anchor_status` enum | 🔲 | Spec'd, not built |
 | `anchor-client` (submit / status / verify + retries) | 🔲 | Spec'd |
-| Auto-anchor on finalize (idempotent by `payloadHash`) | 🔲 | `anchored` never set today |
+| Auto-anchor on finalize (idempotent by **artifact hash** = `documents.signedArtifactHash`) | 🔲 | `anchored` never set today |
 | Confirmation: polling job + webhook route | 🔲 | Webhook = reverse flow |
 | `signed → anchored` + `documents → executed` transition | 🔲 | Resolves an existing TODO |
 | Public `/verify` page + API | 🔲 | |
@@ -169,9 +169,9 @@ Sources: `docs/ai/pdfa/pdfa-compliance.md`, `docs/ai/pdfa/document-flows.md`
 |---|---|---|
 | Ingestion conversion (PDF/DOCX/JPG/PNG → PDF/A-2b) | 🔲 | Phase 1 |
 | Signed artifact generation (flatten + XMP + re-convert to PDF/A) | 🔲 | Phase 2 |
-| PAdES embedded signatures (party / notary / platform) | 🔲 | Phase 3; **needs cert strategy decision** |
-| Detached ECDSA over final artifact hash | 🔲 | Phase 3 fallback |
-| Verification (veraPDF/pdfcpu + PAdES + ECDSA + anchor) | 🔲 | Phase 4 |
+| PAdES embedded signatures (party / notary / platform) | 🔲 | Phase 3; cert strategy resolved (self-signed + TSA). **Option B (2026-08-23): replaces the custom `finalize` text payload — PAdES is the only signature** |
+| Detached ECDSA over final artifact hash | 🔲 | **Superseded — Option B (2026-08-23): dropped; no detached ECDSA** |
+| Verification (veraPDF/pdfcpu + PAdES + anchor) | 🔲 | Phase 4; ECDSA verified inside the CMS |
 | Certificate artifacts (party / notary / platform) + audit pages | 🔲 | `document-flows.md` |
 | Notary flow (v1.x revision, notary step, no audit pages) | 🔲 | `document-flows.md` |
 | Certificate → blockchain transmission | 🔲 | `document-flows.md` |

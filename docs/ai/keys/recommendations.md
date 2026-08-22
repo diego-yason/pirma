@@ -125,7 +125,10 @@ force: true)` regenerates + re-uploads keys on every visit, leaving orphaned key
 4. **Enforce rotation/revocation at signing time + add a revoke endpoint.**
 5. **Consolidate the SW RPC layer** (single message handler, unique IDs).
 6. **Persist challenges** (DB/Redis) and add rate limiting.
-7. **Strengthen the signing payload** (include field IDs / package / version).
+7. **Strengthen the signing payload** (include field IDs / package / version) — ✅ done for the
+   interim payload, but **Option B (2026-08-23) retires it**: the compliance end-state is a
+   **PAdES-compliant** signature (embedded PAdES-BASELINE-T in the PDF/A artifact, replacing the
+   custom text payload — no detached ECDSA; see `docs/ai/pdfa/pades-baseline-t-spec.md`).
 8. **Add a verification endpoint** and wire up `anchored`/`executed` per the blockchain spec.
 9. **Delete the archived key system** and the dead WebAuthn branch.
 

@@ -141,8 +141,12 @@ and persists automatically.
 
 > ✅ **Implemented 2026-08-23:** sign-time value collection + validation + payload binding.
 > Value widgets render in sign mode (text/phone input, choices select, checkbox toggle, radio
-> group), `finalize` validates and stores values on `signatures.field_values` (migration
-> `0003`), and their hash is bound into the signed payload (`canonicalFieldValues` + `sha256Hex`
-> in `signing-payload.ts`). Remaining: PDF/A flattening + `date`/`initials` kinds.
+> group), `finalize` validates and stores values on `signatures.field_values` (column added to
+> the runtime schema), and their hash is bound into the signed payload (`canonicalFieldValues`
+> + `sha256Hex` in `signing-payload.ts`). The **signature payload compliance target is PAdES**
+> (embedded PAdES-BASELINE-T in the PDF/A artifact, see
+> `docs/ai/pdfa/pades-baseline-t-spec.md`). **Option B (2026-08-23): PAdES replaces the custom
+> text payload** — values are flattened into the artifact, so the PAdES ByteRange digest covers
+> them; no detached ECDSA. Remaining: PDF/A flattening + `date`/`initials` kinds.
 
 - Implemented kinds: `signature`, `text`, `choices`, `phone`, `checkbox`, `radio`; date/initials are planned.

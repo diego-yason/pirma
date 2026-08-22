@@ -9,7 +9,9 @@
 
 Immutable, timestamped proof that a document was signed at a point in time, provided by an **external blockchain service** reached over HTTP. Pirma does not run any blockchain node or write to a chain directly — it only:
 
-1. Computes a deterministic **payload hash** per document.
+1. Computes a deterministic **artifact hash** per document — SHA-256 of the signed PDF/A
+   artifact (`documents.signedArtifactHash`; Option B — the anchor covers exactly what the
+   signers signed, including all embedded PAdES signatures).
 2. Submits it to the anchoring service (`POST /anchor`).
 3. Polls (or is webhook-notified) until confirmed.
 4. Stores the returned proof locally and flips status `signed → anchored`.
@@ -23,11 +25,11 @@ Currently the `signatures.status` enum already has `anchored` (`pending | signed
 | ------------------------------- | ----------------------------------- | --------------------------------------------------------------------- |
 | `documents.hash` (SHA-256)      | `documents` table                   | Computed at upload in `doc/new/+page.server.ts`                       |
 | `signatures.documentHash`       | `signatures` table                  | One row per document per signer                                       |
-| `signatures.signaturePayload`   | `signatures` table                  | ECDSA signature (base64)                                              |
-| `signatures.signatureAlgorithm` | `signatures` table                  | e.g. `ECDSA-P256-SHA256`                                              |
+| `signatures.signaturePayload`   | `signatures` table                  | **Legacy — retired under Option B** (PAdES replaces the detached text-payload signature) |
+| `signatures.signatureAlgorithm` | `signatures` table                  | **Legacy** — see above                                                |
 | `signatures.status`             | `signatures` table                  | `pending/signed/anchored/rejected`                                    |
 | `documents.status`              | `documents` table                   | `draft/finalized/executed` — `executed` TODO exists                   |
-| Signing payload format          | `src/lib/shared/signing-payload.ts` | `"${documentHash}:${fieldCount}"`                                     |
+| Anchor input (Option B)         | `documents.signedArtifactHash`      | SHA-256 of the PAdES-signed PDF/A artifact (was: signing-payload hash) |
 | "All signers done → executed"   | `sign/+page.server.ts`              | `// TODO: check if all signers are done → mark documents as executed` |
 
 ## 3. Architecture
@@ -228,9 +230,15 @@ RLS policy:
 - Public read: `id`, `payloadHash`, `txHash`, `blockNumber`, `blockHash`, `timestamp`, `status` (for verification page).
 - Owner-write; service/anon can read public proof columns only.
 
-### 6.2 No changes to `signatures` required
+### 6.2 `signatures` changes (Option B)
 
-The `signatures.status = 'anchored'` transition is derived: when an anchor confirms, update all `signatures` rows for that `documentId` where status is `signed` → `anchored`. Optionally link via a nullable `anchorId` on `signatures` if per-signature anchoring is chosen (see §8 decisions).
+- **Retire `signaturePayload` / `signatureAlgorithm`** (the detached text-payload signature).
+  PAdES embeds the signer's ECDSA signature in the PDF artifact instead; no real users, so the
+  columns are dropped (or made nullable) in the migration.
+- The `signatures.status = 'anchored'` transition is derived: when an anchor confirms, update all
+  `signatures` rows for that `documentId` where status is `signed` → `anchored`. Optionally link
+  via a nullable `anchorId` on `signatures` if per-signature anchoring is chosen (see §8
+  decisions).
 
 ## 7. State machine & workflow
 
@@ -250,7 +258,7 @@ stateDiagram-v2
 
 In `finalize` action (`sign/+page.server.ts`), after signatures are stored, check **whether the document now has all required signers signed**. If yes:
 
-1. Build `payloadHash` (see §8) for the document.
+1. Build the anchor hash (the artifact hash — see §8) for the document.
 2. Check `signature_anchors` for an existing row (idempotent — no double submit).
 3. `anchorClient.submit(payloadHash)` → insert/update `signature_anchors` row as `submitted/pending`.
 4. Kick off confirmation (polling job or rely on webhook).
@@ -272,22 +280,22 @@ In `finalize` action (`sign/+page.server.ts`), after signatures are stored, chec
 2. `signatures.status` stays `signed` (document is still signed; anchor is the only thing missing).
 3. Surface a banner to the owner (dashboard "needs anchoring") + allow manual re-submit. Do not silently drop.
 
-## 8. Payload hash spec
+## 8. Anchor hash spec (Option B)
 
 Deterministic, canonical, collision-resistant, PII-free.
 
+The anchored hash is the **artifact hash** — SHA-256 of the final PAdES-signed PDF/A bytes
+(`documents.signedArtifactHash`). It is computed once at artifact generation (after flattening +
+PAdES embedding) and reused for the anchor, so the on-chain proof covers exactly what the
+signers signed.
+
 ```ts
 // pseudo
-payloadHash = sha256(
-    canonicalJson({
-        documentHash, // documents.hash (hex)
-        signers: sortedBySignerId([
-            // stable order = reproducible hash
-            { signerUserId, signaturePayload, signedAtISO },
-        ]),
-    }),
-);
+payloadHash = sha256(signedPdfABytes); // = documents.signedArtifactHash
 ```
+
+(Previously this spec hashed a canonical JSON of `documentHash` + per-signer `signaturePayload`;
+that detached payload is retired under Option B.)
 
 Rules:
 
