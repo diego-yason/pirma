@@ -15,7 +15,7 @@
 > sign → flatten → verify* as a **PAdES-compliant PDF/A artifact**, anchored
 > on-chain, for registered users and guests.
 >
-> Gates: `docs/ai/blockers/standards-compliant-e-signing.md`
+> Gates: `docs/ai/blockers/o1-standards-compliant-e-signing.md`
 
 ---
 
@@ -62,6 +62,7 @@ assurance, with rotation/revocation and MFA.
 - **Planned:** persist signing challenges + rate-limit `/api/keys/challenge`; signer
   identity verification (SMS OTP, KYC/ID, knowledge-based).
 - **Roadmap:** §1, §6, §8.3.
+- **Gates:** `docs/ai/blockers/o2-secure-identity-and-key-management.md`
 
 ## O3 — Independent long-term verifiability (PDF/A + anchoring)  🔲
 
@@ -74,6 +75,7 @@ independent trail.
   **artifact hash** + `signed → anchored` — all 🔲 (spec'd; `anchored` never set).
 - **Post-quantum:** PQC Merkle-root anchoring (supplementary) 🔲.
 - **Roadmap:** §2, §3; `docs/ai/blockchain/blockchain-integration.md`, `docs/ai/pdfa/*`.
+- **Gates:** `docs/ai/blockers/o3-independent-long-term-verifiability.md`
 
 ## O4 — Guest & recipient journey  🚧
 
@@ -88,6 +90,7 @@ Let anyone sign — registered or not — with a smooth, supported experience.
   document templates; contacts; token-expiry self-service; guided signing ceremony;
   mobile + accessibility (WCAG).
 - **Roadmap:** §4, §5, §8.1, §8.2, §8.8.
+- **Gates:** `docs/ai/blockers/o4-guest-and-recipient-journey.md`
 
 ## O5 — Trust, audit & compliance  🔲
 
@@ -98,6 +101,7 @@ law's requirements.
   ESIGN / UETA / eIDAS disclosure & rights; storage tiering (hot → cold → arctic).
 - **Roadmap:** §8.3, §8.5; `docs/ai/identity/audit-trail.md`, `docs/ai/identity/identity-verification.md`,
   `docs/ai/compliance/compliance-and-public-api.md`, `docs/ai/platform/storage-tiering.md`.
+- **Gates:** `docs/ai/blockers/o5-trust-audit-and-compliance.md`
 
 ## O6 — E-notary expansion  🔲
 
@@ -109,6 +113,7 @@ and remote/in-person notarization.
   own private blockchain); RON + ION notarization; acknowledgment vs. jurat;
   witnesses; e-notary seal / QR validator.
 - **Roadmap:** §8.4; `docs/ai/notary/notary.md`.
+- **Gates:** `docs/ai/blockers/o6-e-notary-expansion.md`
 
 ## O7 — Platform growth (orgs, commercial, integrations, support)  🔲
 
@@ -120,6 +125,7 @@ Scale beyond single users: teams, commerce, integrations, and self-service help.
   notary support channel.
 - **Roadmap:** §8.6, §8.7, §8.8; `docs/ai/platform/organizations-and-admin.md`,
   `docs/ai/platform/integrations-upload.md`, `docs/ai/platform/support.md`.
+- **Gates:** `docs/ai/blockers/o7-platform-growth.md`
 
 ## O8 — Technical health  🔲
 
@@ -129,6 +135,7 @@ Keep the foundation clean so objectives stay buildable.
   resolve `src/env.ts` `@migration-task`; fix pre-existing build warnings
   (a11y `href=""`, `state_referenced_locally`); finish/delete `MIGRATION_TASKS.md`.
 - **Roadmap:** §7.
+- **Gates:** `docs/ai/blockers/o8-technical-health.md`
 
 ---
 
@@ -141,4 +148,4 @@ archival, identity verification). Objectives are the **stable goals**; the roadm
 is the itemized plan; `blockers/` tracks what currently blocks each objective.
 
 > Related: `docs/ai/roadmap.md` · `docs/ai/blockers/README.md` ·
-> `docs/ai/blockers/standards-compliant-e-signing.md`
+> `docs/ai/blockers/o1-standards-compliant-e-signing.md`

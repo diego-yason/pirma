@@ -1,9 +1,9 @@
-# Standards-Compliant E-Signing — Blockers
+# O1 — Standards-Compliant Electronic Signing — Blockers
 
-> **Primary objective (no explicit statement existed; defined here):** deliver
-> **standards-compliant electronic signing** — every package goes from *request →
-> sign → flatten → verify* as a **PAdES-compliant PDF/A artifact**, anchored
-> on-chain, for both registered users and guests.
+> **Objective (O1 — see `../core-objectives.md`):** deliver **standards-compliant
+> electronic signing** — every package goes from *request → sign → flatten →
+> verify* as a **PAdES-compliant PDF/A artifact**, anchored on-chain, for both
+> registered users and guests.
 >
 > This document tracks the blockers between the current state and that objective.
 > It complements `docs/ai/roadmap.md` (living plan) and
