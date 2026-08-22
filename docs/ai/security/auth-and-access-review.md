@@ -80,7 +80,7 @@ all guest tokens on rotation.
 
 **Recommendation** — on every verification, look up the `guest_tokens` row and reject when
 `revokedAt` is set; add a dedicated `GUEST_TOKEN_SECRET` with fallback (per
-`docs/ai/guest-tokens.md`). Roadmap P1.
+`docs/ai/identity/guest-tokens.md`). Roadmap P1.
 
 ## AAR-04 — Email verification, 2FA, and rate limiting not enabled (Medium)
 

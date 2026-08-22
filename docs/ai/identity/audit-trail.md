@@ -5,10 +5,10 @@
 > Repo: `diego-yason/pirma`
 > Related:
 > - `docs/ai/roadmap.md` §8.3 (identity, security & audit)
-> - `docs/ai/notary.md` §5 (notary journal / ROR — related but separate)
+> - `docs/ai/notary/notary.md` §5 (notary journal / ROR — related but separate)
 > - `docs/ai/pdfa/document-flows.md` (PDF/A **audit pages** — a rendered artifact; this is the
 >   queryable structured log, distinct from those)
-> - `docs/ai/blockchain-integration.md` (optional checkpoint anchoring)
+> - `docs/ai/blockchain/blockchain-integration.md` (optional checkpoint anchoring)
 > - `src/lib/server/logger.ts`, `src/routes/(app)/doc/[pageId]/sign/+page.server.ts`
 
 ## Purpose

@@ -5,9 +5,9 @@
 > Repo: `diego-yason/pirma`
 > Related:
 > - `docs/ai/roadmap.md` §8.1
-> - `docs/ai/email-notifications.md` (reminder emails)
+> - `docs/ai/signing/email-notifications.md` (reminder emails)
 > - `docs/ai/pdfa/pdfa-compliance.md` (artifacts, download)
-> - `docs/ai/audit-trail.md` (events for all actions below)
+> - `docs/ai/identity/audit-trail.md` (events for all actions below)
 
 ## 1. Envelope lifecycle controls
 

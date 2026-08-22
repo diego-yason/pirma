@@ -361,6 +361,6 @@ existing row first (unique constraint on `payload_hash`).
 
 ## 8. Related work
 
-- Implementation checklist: `docs/ai/blockchain-integration.md` §13.
-- Payload hash spec: `docs/ai/blockchain-integration.md` §8.
-- Anchor client + `signature_anchors` model: `docs/ai/blockchain-integration.md` §5–6.
+- Implementation checklist: `docs/ai/blockchain/blockchain-integration.md` §13.
+- Payload hash spec: `docs/ai/blockchain/blockchain-integration.md` §8.
+- Anchor client + `signature_anchors` model: `docs/ai/blockchain/blockchain-integration.md` §5–6.

@@ -5,9 +5,9 @@
 > Repo: `diego-yason/pirma`
 > Related:
 > - `docs/ai/roadmap.md` §8.3
-> - `docs/ai/guest-tokens.md` (email OTP)
-> - `docs/ai/audit-trail.md` (IP/device capture)
-> - `docs/ai/notary.md` (identity proofing for notary acts)
+> - `docs/ai/identity/guest-tokens.md` (email OTP)
+> - `docs/ai/identity/audit-trail.md` (IP/device capture)
+> - `docs/ai/notary/notary.md` (identity proofing for notary acts)
 
 ## 1. Verification levels
 

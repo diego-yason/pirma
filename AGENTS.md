@@ -6,6 +6,17 @@
 
 ---
 
+## Docs (read first)
+
+- `docs/ai/directory.md` — index of all AI/design docs (start here to find any doc)
+- `docs/ai/core-objectives.md` — platform objectives (O1–O8) and the primary objective
+- `docs/ai/roadmap.md` — living plan & feature status (P0–P3 matrix, §1–§8)
+- `docs/ai/blockers/` — what's currently blocking each objective (with unblock paths)
+
+Ground work in the platform's goals and current state before changing code.
+
+---
+
 You are able to use the Svelte MCP server, where you have access to comprehensive Svelte 5 and SvelteKit documentation. Here's how to use the available tools effectively:
 
 ## Available Svelte MCP Tools:

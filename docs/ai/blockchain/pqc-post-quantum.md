@@ -4,9 +4,9 @@
 > Created: 2026-08-19
 > Repo: `diego-yason/pirma` · Branch: `dev`
 > Related:
-> - `docs/ai/blockchain-integration.md` — existing anchoring mechanism this builds on
-> - `docs/ai/notary.md` §5 — notary journal / ROR (private chain) included in scope
-> - `docs/ai/audit-trail.md` — hash-chained event log (candidate for checkpoint roots)
+> - `docs/ai/blockchain/blockchain-integration.md` — existing anchoring mechanism this builds on
+> - `docs/ai/notary/notary.md` §5 — notary journal / ROR (private chain) included in scope
+> - `docs/ai/identity/audit-trail.md` — hash-chained event log (candidate for checkpoint roots)
 > - `docs/ai/pdfa/pades-baseline-t-spec.md` — PAdES artifacts / certificate hashes
 > - `src/lib/server/db/schema.ts` — `signature_anchors`, `notary_journal_entries` shape
 

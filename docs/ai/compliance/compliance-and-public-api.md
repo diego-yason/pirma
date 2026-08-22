@@ -5,8 +5,8 @@
 > Repo: `diego-yason/pirma`
 > Related:
 > - `docs/ai/roadmap.md` §8.5
-> - `docs/ai/audit-trail.md` (consent records)
-> - `docs/ai/email-notifications.md`
+> - `docs/ai/identity/audit-trail.md` (consent records)
+> - `docs/ai/signing/email-notifications.md`
 
 ## 1. Disclosure & rights (ESIGN / UETA / eIDAS)
 

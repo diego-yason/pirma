@@ -4,13 +4,13 @@
 > Created: 2026-08-16
 > Repo: `diego-yason/pirma`
 > Related:
-> - `docs/ai/email-notifications.md` — transactional email backbone (this doc extends its email set)
-> - `docs/ai/notary.md` — commission, journal, ION (notary support context)
-> - `docs/ai/guest-tokens.md` — guest tokens, expiry, email binding (party support context)
-> - `docs/ai/signing-ux.md` — guided ceremony, accessibility (prevention)
-> - `docs/ai/audit-trail.md` — event log for support/agent actions
+> - `docs/ai/signing/email-notifications.md` — transactional email backbone (this doc extends its email set)
+> - `docs/ai/notary/notary.md` — commission, journal, ION (notary support context)
+> - `docs/ai/identity/guest-tokens.md` — guest tokens, expiry, email binding (party support context)
+> - `docs/ai/signing/signing-ux.md` — guided ceremony, accessibility (prevention)
+> - `docs/ai/identity/audit-trail.md` — event log for support/agent actions
 > - `docs/ai/roadmap.md` §8.6 (admin console) + §8.8 (support & help)
-> - `docs/ai/compliance-and-public-api.md` — disclosures (support copy)
+> - `docs/ai/compliance/compliance-and-public-api.md` — disclosures (support copy)
 
 ## Purpose
 

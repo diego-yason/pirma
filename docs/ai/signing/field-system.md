@@ -5,7 +5,7 @@
 > Created: 2026-08-23
 > Repo: `diego-yason/pirma`
 > Related:
-> - `docs/ai/form-fields.md` — feature design & roadmap (values storage, validation, payload
+> - `docs/ai/signing/form-fields.md` — feature design & roadmap (values storage, validation, payload
 >   binding, PDF/A flattening)
 > - `src/lib/client/types/field-tools.ts` — **the field tool registry** (single source of truth)
 > - `src/lib/client/types/SignatureBoxTypes.d.ts` — `PlacedRect` / `FieldKind`
@@ -107,7 +107,7 @@ let { box, boxes = [], onchange }: {
 
 - **Sign input (future)** — the design reserves a per-kind interactive widget slot at
   `src/lib/client/ui/field-inputs/{kind}.svelte` for when sign-time value collection lands
-  (see `docs/ai/form-fields.md`).
+  (see `docs/ai/signing/form-fields.md`).
 
 ## How a field flows through the app
 

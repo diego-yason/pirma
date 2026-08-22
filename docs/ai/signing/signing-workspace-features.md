@@ -5,8 +5,8 @@
 > Repo: `diego-yason/pirma`
 > Related:
 > - `docs/ai/roadmap.md` §5 (password reset, templates, contacts, viewers enforcement, reject flow)
-> - `docs/ai/email-notifications.md` (email foundation these features depend on)
-> - `docs/ai/guest-tokens.md`
+> - `docs/ai/signing/email-notifications.md` (email foundation these features depend on)
+> - `docs/ai/identity/guest-tokens.md`
 > - `src/routes/(app)/doc/[pageId]/+page.server.ts` (viewers TODO)
 > - `src/routes/(app)/doc/[pageId]/sign/+page.server.ts` (`reject` stub)
 > - `src/routes/(app)/doc/new/+page.svelte` (template UI stub)

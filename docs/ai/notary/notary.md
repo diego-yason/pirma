@@ -5,7 +5,7 @@
 > Repo: `diego-yason/pirma`
 > Related:
 > - `docs/ai/pdfa/document-flows.md` — Flow B (notary): v1.x revision, notary step, no audit pages
-> - `docs/ai/blockchain-integration.md`, `docs/ai/blockchain-microservice/` — anchoring mechanism
+> - `docs/ai/blockchain/blockchain-integration.md`, `docs/ai/blockchain-microservice/` — anchoring mechanism
 > - `docs/ai/roadmap.md` §8.4 (notary-specific features)
 > - `docs/ai/pdfa/pdfa-compliance.md` — artifacts, PAdES, certificates
 

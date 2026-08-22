@@ -6,7 +6,7 @@
 > Related:
 >
 > - `docs/ai/blockchain-microservice/api-contract.md` — the full HTTP contract (this doc links to it)
-> - `docs/ai/blockchain-integration.md` — broader internal integration spec (state machine, data model, payload hash)
+> - `docs/ai/blockchain/blockchain-integration.md` — broader internal integration spec (state machine, data model, payload hash)
 > - `src/lib/server/db/schema.ts` (`signatures`, `documents`)
 
 ## Purpose
@@ -128,7 +128,7 @@ BLOCKCHAIN_ANCHOR_ON_FINALIZE=true
 See **[`api-contract.md`](./api-contract.md)** for request/response schemas, examples, error
 codes, idempotency, and security details for every endpoint in both flows.
 
-## Open decisions (see also `docs/ai/blockchain-integration.md` §12)
+## Open decisions (see also `docs/ai/blockchain/blockchain-integration.md` §12)
 
 1. Anchor granularity — per document (recommended) vs. per signature.
 2. Auto-anchor after last signer vs. manual owner trigger.

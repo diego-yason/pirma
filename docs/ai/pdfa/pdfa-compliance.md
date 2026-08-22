@@ -8,7 +8,7 @@
 > Repo: `diego-yason/pirma`
 > Related:
 > - `docs/ai/keys/recommendations.md` — signing-key architecture (level-1 session / level-2 persistent)
-> - `docs/ai/blockchain-integration.md`, `docs/ai/blockchain-microservice/` — hash anchoring
+> - `docs/ai/blockchain/blockchain-integration.md`, `docs/ai/blockchain-microservice/` — hash anchoring
 > - `src/routes/(app)/doc/new/+page.server.ts` — ingestion + hashing + storage
 > - `src/routes/(app)/doc/[pageId]/sign/+page.server.ts` — finalize/signature storage
 > - `src/lib/client/ui/PDFViewer.svelte`, `src/routes/(app)/doc/new/+page.svelte` — client rendering

@@ -6,7 +6,7 @@
 > Repo: `diego-yason/pirma`
 > Related:
 > - `docs/ai/roadmap.md` §5 (signer email invitations, owner notifications)
-> - `docs/ai/guest-tokens.md` (token → signing URL; OTP path)
+> - `docs/ai/identity/guest-tokens.md` (token → signing URL; OTP path)
 > - `docs/ai/pdfa/document-flows.md` (certificates / audit pages)
 > - `src/routes/(app)/doc/new/[packageId]/confirm/+page.server.ts` (TODO: send email)
 > - `src/routes/(app)/doc/[pageId]/sign/+page.server.ts` (`finalize`, `reject`)

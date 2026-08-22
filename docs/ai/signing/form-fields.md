@@ -6,7 +6,7 @@
 > Created: 2026-08-16 (updated 2026-08-23)
 > Repo: `diego-yason/pirma`
 > Related:
-> - `docs/ai/field-system.md` — **implemented architecture** + how to add a field type
+> - `docs/ai/signing/field-system.md` — **implemented architecture** + how to add a field type
 > - `docs/ai/roadmap.md` §8.1 (form fields)
 > - `docs/ai/keys/recommendations.md` §9 (signing payload strengthening)
 > - `docs/ai/pdfa/pdfa-compliance.md` Phase 2 (flattening)
@@ -57,7 +57,7 @@ interface PlacementField extends PlacedRect {
 
 > Originally specced as `dropdown` with `options?: string[]`. Renamed to **`choices`** with
 > `choices?: string[]` — the user-facing concept is a *list of choices*, which may be rendered
-> as a literal dropdown later. `docs/ai/field-system.md` documents the registry.
+> as a literal dropdown later. `docs/ai/signing/field-system.md` documents the registry.
 
 ## Values storage
 
@@ -129,7 +129,7 @@ payload = "${packageId}:${documentId}:${documentHash}:${sortedFieldIds}:${signer
 ## Open decisions
 
 1. **v1 field set** — `text`, `choices`, `phone`, `checkbox`, `radio` implemented; ship
-   `date`/`initials` next (easy via the registry, see `docs/ai/field-system.md`).
+   `date`/`initials` next (easy via the registry, see `docs/ai/signing/field-system.md`).
 2. **Value binding** — ✅ done: the field-values hash is part of the signed payload.
 3. Validation strictness — required + type (done) vs. custom formats (`format`) if needed.
 4. Model: value fields are filled, signature fields are signed; at least one signature per

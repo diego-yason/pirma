@@ -74,7 +74,7 @@
 | **P3** | Feature | Public `/verify` page + API | 🔲 | §2 |
 | **P3** | Feature | Failed-anchor banner + manual re-submit | 🔲 | §2 |
 | **P3** | Feature | Anchoring targets artifact hash + every certificate hash | 🔲 | §2 / §3 |
-| **P3** | Security | PQC post-quantum Merkle-root anchoring (supplementary to ECDSA; regular signing + notary) | 🔲 | §2 / `docs/ai/pqc-post-quantum.md` |
+| **P3** | Security | PQC post-quantum Merkle-root anchoring (supplementary to ECDSA; regular signing + notary) | 🔲 | §2 / `docs/ai/blockchain/pqc-post-quantum.md` |
 | **P3** | Feature | PDF/A Phase 2 — signed artifact generation (flatten + XMP + re-convert) | 🔲 | §3 |
 | **P3** | Feature | PAdES-compliant signature — embedded PAdES-BASELINE-T replaces the custom `finalize` text payload (**Option B 2026-08-23: PAdES is the only signature**) | 🔲 | §3 |
 | **P3** | Feature | ~~Detached ECDSA over final artifact hash~~ — **dropped (Option B 2026-08-23)** | ~~🔲~~ | §3 |
@@ -145,7 +145,7 @@ Source: `docs/ai/keys/recommendations.md`
 
 ## 2. Blockchain anchoring
 
-Sources: `docs/ai/blockchain-integration.md`, `docs/ai/blockchain-microservice/`
+Sources: `docs/ai/blockchain/blockchain-integration.md`, `docs/ai/blockchain-microservice/`
 
 | Feature | Status | Notes |
 |---|---|---|
@@ -157,7 +157,7 @@ Sources: `docs/ai/blockchain-integration.md`, `docs/ai/blockchain-microservice/`
 | Public `/verify` page + API | 🔲 | |
 | Failed-anchor banner + manual re-submit | 🔲 | |
 | **Anchoring targets artifact hash + every certificate hash** | 🔲 | See `pdfa/document-flows.md` |
-| **PQC post-quantum Merkle-root anchoring** (all final hashes → Merkle root signed by PQC key → anchored on public chain) | 🔲 | Note: `docs/ai/pqc-post-quantum.md` |
+| **PQC post-quantum Merkle-root anchoring** (all final hashes → Merkle root signed by PQC key → anchored on public chain) | 🔲 | Note: `docs/ai/blockchain/pqc-post-quantum.md` |
 
 ---
 
@@ -180,7 +180,7 @@ Sources: `docs/ai/pdfa/pdfa-compliance.md`, `docs/ai/pdfa/document-flows.md`
 
 ## 4. Guest tokens
 
-Source: `docs/ai/guest-tokens.md`
+Source: `docs/ai/identity/guest-tokens.md`
 
 | Feature | Status | Notes |
 |---|---|---|
@@ -197,13 +197,13 @@ These exist as stubs/TODOs and are **not** in any `docs/ai` file other than this
 
 | Feature | Status | Where | Notes |
 |---|---|---|---|
-| **Signer email invitations & notifications** | � | `doc/new/[packageId]/confirm/+page.server.ts` | Invite email sent (tokenized URL for guests, plain sign link for registered users). Email module + `email_events` built. In-app/activity feed still pending. Design: `docs/ai/email-notifications.md` |
-| Owner notifications on sign / reject | ✅ | `sign/+page.server.ts` `finalize` / `reject` | Owner emailed on sign and on reject (with reason). No in-app notifications (separate P3 item). Design: `docs/ai/email-notifications.md` |
+| **Signer email invitations & notifications** | � | `doc/new/[packageId]/confirm/+page.server.ts` | Invite email sent (tokenized URL for guests, plain sign link for registered users). Email module + `email_events` built. In-app/activity feed still pending. Design: `docs/ai/signing/email-notifications.md` |
+| Owner notifications on sign / reject | ✅ | `sign/+page.server.ts` `finalize` / `reject` | Owner emailed on sign and on reject (with reason). No in-app notifications (separate P3 item). Design: `docs/ai/signing/email-notifications.md` |
 | **Password reset** | ✅ | `/forgot-password` + `/reset-password` routes | Better Auth `sendResetPassword` hook + `requestPasswordReset`/`resetPassword` wired; login "Forgot password?" links to the flow. |
-| **Document templates** | 🔲 | `doc/new/+page.svelte` + nav "Templates" → `/` | UI stub, no handler. Design: `docs/ai/signing-workspace-features.md` |
-| **Contacts** | 🔲 | nav "Contacts" → `/` | Placeholder only. Design: `docs/ai/signing-workspace-features.md` |
+| **Document templates** | 🔲 | `doc/new/+page.svelte` + nav "Templates" → `/` | UI stub, no handler. Design: `docs/ai/signing/signing-workspace-features.md` |
+| **Contacts** | 🔲 | nav "Contacts" → `/` | Placeholder only. Design: `docs/ai/signing/signing-workspace-features.md` |
 | **Package viewers permission enforcement** | ✅ | `doc/[pageId]/+page.server.ts` + `view/+page.server.ts` now check `package_viewers` (2026-08-16) |
-| **Reject flow completion** | � | `sign/+page.server.ts` `reject` action | Signatory verified, recipient marked (`package_recipients.rejectedAt`/`rejectionReason`), existing signature rows → `rejected`, owner notified. Client confirmation dialog still TODO. Design: `docs/ai/signing-workspace-features.md` |
+| **Reject flow completion** | � | `sign/+page.server.ts` `reject` action | Signatory verified, recipient marked (`package_recipients.rejectedAt`/`rejectionReason`), existing signature rows → `rejected`, owner notified. Client confirmation dialog still TODO. Design: `docs/ai/signing/signing-workspace-features.md` |
 
 ---
 
@@ -241,72 +241,72 @@ These exist as stubs/TODOs and are **not** in any `docs/ai` file other than this
 > ✅ **Done 2026-08-23 — field values are enforced at signing and bound into the signed payload.**
 > Signers fill per-kind widgets, `finalize` validates + stores values on `signatures.field_values`,
 > and their hash is part of the signed payload. Remaining: PDF/A flattening + `date`/`initials`
-> kinds. Design: `docs/ai/form-fields.md`; implementation: `docs/ai/field-system.md`.
+> kinds. Design: `docs/ai/signing/form-fields.md`; implementation: `docs/ai/signing/field-system.md`.
 
 | Feature | Status | Notes |
 |---|---|---|
-| Fillable form fields (text, choices, phone, checkbox, radio implemented; date/initials planned) | 🚧 | Implemented: declarative field system + sign-time value collection/validation/storage, values bound into the signed payload (`docs/ai/field-system.md`, `docs/ai/form-fields.md`). Remaining: PDF/A flattening, date/initials kinds |
-| Envelope lifecycle controls (void/cancel, replace signer, re-send) | 🔲 | Design: `docs/ai/document-package-management.md` |
-| Reminders & deadlines (nudge emails, overdue alerts, enforce `expirationDate`) | � | Nudge emails done: `sendDueReminders` + `/api/cron/reminders` (day 3/7, `EMAIL_REMIND_DAYS`). Overdue alerts + hard `expirationDate` enforcement still pending. Design: `docs/ai/document-package-management.md` |
-| Download/export (original + signed copies + audit data) | 🔲 | Design: `docs/ai/document-package-management.md`; overlaps §3 artifacts |
-| Trash / archive / retention policies | 🔲 | Design: `docs/ai/document-package-management.md` (+ `storage-tiering.md`) |
-| Document search | 🔲 | Design: `docs/ai/document-package-management.md` |
+| Fillable form fields (text, choices, phone, checkbox, radio implemented; date/initials planned) | 🚧 | Implemented: declarative field system + sign-time value collection/validation/storage, values bound into the signed payload (`docs/ai/signing/field-system.md`, `docs/ai/signing/form-fields.md`). Remaining: PDF/A flattening, date/initials kinds |
+| Envelope lifecycle controls (void/cancel, replace signer, re-send) | 🔲 | Design: `docs/ai/signing/document-package-management.md` |
+| Reminders & deadlines (nudge emails, overdue alerts, enforce `expirationDate`) | � | Nudge emails done: `sendDueReminders` + `/api/cron/reminders` (day 3/7, `EMAIL_REMIND_DAYS`). Overdue alerts + hard `expirationDate` enforcement still pending. Design: `docs/ai/signing/document-package-management.md` |
+| Download/export (original + signed copies + audit data) | 🔲 | Design: `docs/ai/signing/document-package-management.md`; overlaps §3 artifacts |
+| Trash / archive / retention policies | 🔲 | Design: `docs/ai/signing/document-package-management.md` (+ `storage-tiering.md`) |
+| Document search | 🔲 | Design: `docs/ai/signing/document-package-management.md` |
 
 ### 8.2 Signing UX
 
 | Feature | Status | Notes |
 |---|---|---|
-| Initials as a separate signature type | 🔲 | Design: `docs/ai/form-fields.md`; registry-ready (`docs/ai/field-system.md`) — `user_signatures` stores full signatures only |
-| Guided signing ceremony (field-by-field) | 🔲 | Design: `docs/ai/signing-ux.md` |
+| Initials as a separate signature type | 🔲 | Design: `docs/ai/signing/form-fields.md`; registry-ready (`docs/ai/signing/field-system.md`) — `user_signatures` stores full signatures only |
+| Guided signing ceremony (field-by-field) | 🔲 | Design: `docs/ai/signing/signing-ux.md` |
 | Certificate of completion | 🔲 | overlaps §3 audit/cert pages (see `pdfa/document-flows.md`) |
-| Mobile + accessibility (WCAG) signing flow | 🔲 | Design: `docs/ai/signing-ux.md` |
+| Mobile + accessibility (WCAG) signing flow | 🔲 | Design: `docs/ai/signing/signing-ux.md` |
 
 ### 8.3 Identity, security & audit
 
 | Feature | Status | Notes |
 |---|---|---|
-| Structured audit trail / event log | 🔲 | Design: `docs/ai/audit-trail.md` — per-event: opened, viewed, signed, IP, device, UA, timestamp |
-| Signer identity verification (SMS OTP, KYC/ID, knowledge-based) | 🔲 | Design: `docs/ai/identity-verification.md`; email OTP planned in `guest-tokens.md` |
-| Geolocation / device attestation capture | 🔲 | Design: `docs/ai/identity-verification.md` (+ `audit-trail.md`) |
+| Structured audit trail / event log | 🔲 | Design: `docs/ai/identity/audit-trail.md` — per-event: opened, viewed, signed, IP, device, UA, timestamp |
+| Signer identity verification (SMS OTP, KYC/ID, knowledge-based) | 🔲 | Design: `docs/ai/identity/identity-verification.md`; email OTP planned in `guest-tokens.md` |
+| Geolocation / device attestation capture | 🔲 | Design: `docs/ai/identity/identity-verification.md` (+ `audit-trail.md`) |
 
 ### 8.4 Notary-specific (e-notary expansion)
 
 | Feature | Status | Notes |
 |---|---|---|
-| Notary commission (license, state/jurisdiction, expiry) | 🔲 | Design: `docs/ai/notary.md` |
-| Notary compliance onboarding (process video + quiz + certificate + court filing) | 🔲 | Design: `docs/ai/notary.md` §1 — all four gate acting as notary; filing is platform-managed |
-| Notary journal (ROR) — its own **private blockchain** | 🔲 | Design: `docs/ai/notary.md`; mechanism per `blockchain-integration.md` / `blockchain-microservice` (private chain variant) |
-| RON (remote) + ION (in-person) notarization | 🔲 | Design: `docs/ai/notary.md` (ION first; RON = two-way audiovisual + recording, deferred) |
-| Acknowledgment vs. jurat wording | 🔲 | Design: `docs/ai/notary.md` §4; per-jurisdiction templates needed |
-| Witnesses | 🔲 | Design: `docs/ai/notary.md` §4 — same as a party, signing for a different reason |
-| e-notary seal / QR code validator | 🔲 | Design: `docs/ai/notary.md` §4 — subject to rules |
-| Data-saving process (hot → cold → arctic storage) | 🔲 | Design: `docs/ai/storage-tiering.md` |
+| Notary commission (license, state/jurisdiction, expiry) | 🔲 | Design: `docs/ai/notary/notary.md` |
+| Notary compliance onboarding (process video + quiz + certificate + court filing) | 🔲 | Design: `docs/ai/notary/notary.md` §1 — all four gate acting as notary; filing is platform-managed |
+| Notary journal (ROR) — its own **private blockchain** | 🔲 | Design: `docs/ai/notary/notary.md`; mechanism per `blockchain-integration.md` / `blockchain-microservice` (private chain variant) |
+| RON (remote) + ION (in-person) notarization | 🔲 | Design: `docs/ai/notary/notary.md` (ION first; RON = two-way audiovisual + recording, deferred) |
+| Acknowledgment vs. jurat wording | 🔲 | Design: `docs/ai/notary/notary.md` §4; per-jurisdiction templates needed |
+| Witnesses | 🔲 | Design: `docs/ai/notary/notary.md` §4 — same as a party, signing for a different reason |
+| e-notary seal / QR code validator | 🔲 | Design: `docs/ai/notary/notary.md` §4 — subject to rules |
+| Data-saving process (hot → cold → arctic storage) | 🔲 | Design: `docs/ai/platform/storage-tiering.md` |
 
 ### 8.5 Compliance & legal
 
 | Feature | Status | Notes |
 |---|---|---|
-| ESIGN / UETA / eIDAS disclosure & rights (click-to-consent, right to withdraw) | 🔲 | Design: `docs/ai/compliance-and-public-api.md` |
-| Public developer API + webhooks | 🔲 | Design: `docs/ai/compliance-and-public-api.md` — **long after release** |
+| ESIGN / UETA / eIDAS disclosure & rights (click-to-consent, right to withdraw) | 🔲 | Design: `docs/ai/compliance/compliance-and-public-api.md` |
+| Public developer API + webhooks | 🔲 | Design: `docs/ai/compliance/compliance-and-public-api.md` — **long after release** |
 
 ### 8.6 Organizations, admin & commercial
 
 | Feature | Status | Notes |
 |---|---|---|
-| Organizations / teams & roles | 🔲 | Design: `docs/ai/organizations-and-admin.md`; Better Auth `organization` plugin installed, unused |
-| Billing / usage metering | 🔲 | Design: `docs/ai/organizations-and-admin.md`; e.g. `PUBLIC_MAX_RECIPIENTS` cap hints at intent |
-| Admin console | 🔲 | Design: `docs/ai/organizations-and-admin.md` |
-| Reports / analytics | 🔲 | Design: `docs/ai/organizations-and-admin.md` |
+| Organizations / teams & roles | 🔲 | Design: `docs/ai/platform/organizations-and-admin.md`; Better Auth `organization` plugin installed, unused |
+| Billing / usage metering | 🔲 | Design: `docs/ai/platform/organizations-and-admin.md`; e.g. `PUBLIC_MAX_RECIPIENTS` cap hints at intent |
+| Admin console | 🔲 | Design: `docs/ai/platform/organizations-and-admin.md` |
+| Reports / analytics | 🔲 | Design: `docs/ai/platform/organizations-and-admin.md` |
 
 ### 8.7 Integrations
 
 | Feature | Status | Notes |
 |---|---|---|
-| Upload integrations (cloud storage / sources) | 🔲 | Design: `docs/ai/integrations-upload.md` — solely for uploading to the system |
+| Upload integrations (cloud storage / sources) | 🔲 | Design: `docs/ai/platform/integrations-upload.md` — solely for uploading to the system |
 
 ### 8.8 Support & help
 
-> Design: `docs/ai/support.md`
+> Design: `docs/ai/platform/support.md`
 
 | Feature | Status | Notes |
 |---|---|---|
@@ -324,7 +324,7 @@ These exist as stubs/TODOs and are **not** in any `docs/ai` file other than this
 
 Agreed attack order for the undocumented features:
 
-1. **Email & notifications** — `docs/ai/email-notifications.md` — ✅ all 7 emails implemented (2026-08-16); reminders need a scheduler hitting `/api/cron/reminders`
+1. **Email & notifications** — `docs/ai/signing/email-notifications.md` — ✅ all 7 emails implemented (2026-08-16); reminders need a scheduler hitting `/api/cron/reminders`
 2. Section 5 codebase gaps — password reset, templates, contacts, viewers enforcement, reject flow
 3. Notary: **ION** + commission + journal (private blockchain) design
 4. Structured audit trail

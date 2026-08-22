@@ -45,7 +45,7 @@ the database**, plus **missing rate limiting** on unauthenticated endpoints.
 
 **Risk** — Anyone with log access (or a log aggregator/retention store) can extract live guest
 tokens and impersonate signers, or harvest OTP/reset codes. This directly contradicts the design
-rule in `docs/ai/email-notifications.md` ("Signing URLs + tokens only ever appear in email; never
+rule in `docs/ai/signing/email-notifications.md` ("Signing URLs + tokens only ever appear in email; never
 logged").
 
 **Recommendation**
@@ -120,7 +120,7 @@ expiry only); `guestTokens.revokedAt` is never checked anywhere, including
 `api/guest/otp/request` and `api/guest/otp/verify`.
 
 **Risk** — A revoked token remains valid; OTP can still be requested/verified with it. (This is a
-pre-existing gap from `docs/ai/guest-tokens.md` decision #2, now inherited by the OTP path.)
+pre-existing gap from `docs/ai/identity/guest-tokens.md` decision #2, now inherited by the OTP path.)
 
 **Recommendation** — On every verification, look up the `guest_tokens` row and reject when
 `revokedAt` is set (aligning with the roadmap P1 item).

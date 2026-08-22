@@ -6,7 +6,7 @@
 > Related:
 > - `docs/ai/pdfa/pdfa-compliance.md` — PDF/A conversion, artifacts, PAdES, verification
 > - `docs/ai/keys/recommendations.md` — signing keys (level-1 session / level-2 persistent)
-> - `docs/ai/blockchain-integration.md` — anchoring the artifact hash
+> - `docs/ai/blockchain/blockchain-integration.md` — anchoring the artifact hash
 > - `src/routes/(app)/doc/[pageId]/sign/+page.server.ts` — finalize action
 
 ## Purpose

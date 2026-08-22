@@ -6,7 +6,7 @@
 > Related:
 > - `docs/ai/roadmap.md` §8.2
 > - `src/routes/(app)/doc/[pageId]/sign/+page.svelte`, `src/lib/client/ui/PDFViewer.svelte`
-> - `docs/ai/form-fields.md` (per-kind field widgets)
+> - `docs/ai/signing/form-fields.md` (per-kind field widgets)
 
 ## 1. Guided signing ceremony
 

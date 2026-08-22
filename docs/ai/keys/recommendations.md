@@ -95,7 +95,7 @@ force: true)` regenerates + re-uploads keys on every visit, leaving orphaned key
 
 8. **No re-verification or public verification path.** `verify-signature.ts` is only used at
    `finalize` and `upload`; the `view` page trusts `signatures.status` from the DB. `anchored`
-   is never set (see `docs/ai/blockchain-integration.md`), and there is no endpoint for a third
+   is never set (see `docs/ai/blockchain/blockchain-integration.md`), and there is no endpoint for a third
    party to check a signature against a pubkey.
 
 9. **Signing payload is too weak.** `${docHash}:${fieldCount}` does not bind the field IDs,
