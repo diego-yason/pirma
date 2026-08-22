@@ -47,7 +47,7 @@ unblocks it — without re-deriving it from the codebase or the roadmap.
 
 | File | Objective it gates | Contents |
 |---|---|---|
-| `o1-standards-compliant-e-signing.md` | **O1 — Standards-compliant electronic signing** — every package goes from request → sign → flatten → verify as a PAdES-compliant PDF/A artifact, anchored on-chain, for registered users and guests | Blocker table (guest finalize, field-values migration, non-PDF uploads, anchoring, PAdES) + suggested order (next: document flattening) |
+| `o1-standards-compliant-e-signing.md` | **O1 — Standards-compliant electronic signing** — every package goes from request → sign → flatten → verify as a PAdES-compliant PDF/A artifact, anchored on-chain, for registered users and guests | Blocker table (guest finalize ✅, field-values migration ✅, non-PDF uploads ✅ (convert at ingest; DOCX deferred), anchoring, PAdES) + suggested order (next: document flattening) |
 | `o2-secure-identity-and-key-management.md` | **O2 — Secure identity & key management** | Email verification, 2FA, challenge persistence/rate-limit, identity verification, expiration enforcement |
 | `o3-independent-long-term-verifiability.md` | **O3 — Independent long-term verifiability (PDF/A + anchoring)** | PDF/A ingestion → artifact → anchoring → PAdES → verification → PQC |
 | `o4-guest-and-recipient-journey.md` | **O4 — Guest & recipient journey** | Guest finalize (shared w/ O1), reject dialog, token revocation/binding, templates/contacts, self-service, UX |

@@ -29,6 +29,13 @@ The **authenticated** core signing loop is implemented end to end:
   `executed` transition, email notifications.
 - Decision locked: **Option B (2026-08-23)** — PAdES replaces the custom text-payload
   signature; anchor targets the artifact hash.
+- Guest finalize (2026-08-23): a linked guest signs via the authenticated flow; a
+  token-only finalize escalates to the linked user, and an unlinked guest is prompted
+  to verify their email (OTP).
+- `signatures.field_values` migration applied (`drizzle/0003_demonic_firedrake.sql`).
+- Ingestion conversion (2026-08-23): JPG/PNG are converted to a single-page PDF at
+  upload via pdf-lib (`src/lib/server/ingest/convert-to-pdf.ts`); the hash + page count
+  are computed over the stored PDF; DOCX is deferred with a clear message.
 
 ---
 
@@ -36,9 +43,9 @@ The **authenticated** core signing loop is implemented end to end:
 
 | # | Blocker | Type | Impact | Status | Unblock path |
 |---|---|---|---|---|---|
-| B1 | **Guest finalize unsupported** — `sign/+page.server.ts` returns `fail(400, "Guest finalize not yet supported")`. Guests can open the sign page and fill fields but **cannot actually sign/finalize**, even though guest signing with email OTP is an advertised feature. | Functional (signing) | Guests (a first-class recipient flow) are blocked from completing the primary action. | 🔴 | Let `party.type === "guest"` finalize with a session (L1) key, store against the linked recipient, and validate ownership the same way as authenticated signers. |
-| B2 | **`signatures.field_values` migration pending** — the jsonb column is in the runtime schema but the hand-written drizzle migration (`0003_field_values.sql`) + journal entry were reverted. | Tech-debt | Field values are stored at runtime but not tracked in migrations; fresh DBs won't have the column. | 🔴 | Generate + apply the drizzle migration (`db:generate` / `db:migrate`). |
-| B3 | **Non-PDF uploads not converted/renderable** — `doc/new` accepts PDF/DOCX/JPG/PNG, but only PDFs render (pdfjs-dist) and nothing converts to PDF/A. The error message also misleadingly says "Only PDF files are allowed". | Feature (ingestion) | Blocks flattening/PDF-A for non-PDF uploads; inconsistent UX. | 🟡 | Decide DOCX/JPG/PNG policy: convert at ingestion (mupdf/Ghostscript) or restrict to PDF; fix the error message. |
+| B1 | **Guest finalize unsupported** — guests could open the sign page and fill fields but **couldn't actually sign/finalize**. | Functional (signing) | Guests (a first-class recipient flow) were blocked from completing the primary action. | ✅ resolved 2026-08-23 | `resolveParty` returns the recipient's linked `userId`; `finalize` escalates a linked guest to the authenticated flow, and prompts unlinked guests to verify their email (OTP). |
+| B2 | **`signatures.field_values` migration pending** — the jsonb column existed in the runtime schema but no migration tracked it. | Tech-debt | Fresh DBs wouldn't have the column. | ✅ resolved 2026-08-23 | Migration applied: `drizzle/0003_demonic_firedrake.sql` adds `signatures.field_values jsonb`. |
+| B3 | **Non-PDF uploads not converted/renderable** — DOCX/JPG/PNG were accepted but only PDFs rendered. | Feature (ingestion) | Non-PDF uploads were unusable; misleading error message. | ✅ resolved 2026-08-23 | Decision: **convert at ingest**. JPG/PNG → single-page PDF via pdf-lib (`src/lib/server/ingest/convert-to-pdf.ts`); hash + page count computed over the stored PDF; accurate error messages. **DOCX deferred** (needs LibreOffice/microservice — see pdfa doc §4). |
 | B4 | **Blockchain anchoring unimplemented** — `signatures.status` never reaches `anchored` (spec only). The `executed` transition works without it. | Feature (verification) | No independent on-chain proof; marketing promises anchoring. | 🟢 | Build `signature_anchors` + anchor client (roadmap §2); anchor the artifact hash once artifacts exist. |
 | B5 | **PAdES deferred (P3)** — Option B locked in docs, but the embedded PAdES-BASELINE-T signature isn't built. | Feature (compliance) | The objective's compliance end-state isn't reached yet. | 🟡 | After flattening (Phase 2), build cert/CMS/TSA modules + two-step `finalize` (pades-baseline-t-spec.md). |
 
@@ -51,9 +58,10 @@ The **authenticated** core signing loop is implemented end to end:
 
 ## 4. Suggested order
 
-1. **B2** — apply the pending `field_values` migration (one command).
-2. **B1** — implement guest finalize (small; core functional gap for the guest flow).
-3. **B3** — decide the non-PDF upload policy (needed before/with flattening).
+1. **B2** — ✅ `signatures.field_values` migration applied (`0003_demonic_firedrake.sql`).
+2. **B1** — ✅ guest finalize implemented (linked-guest escalation + OTP prompt).
+3. **B3** — ✅ non-PDF upload policy decided: convert JPG/PNG at ingest (pdf-lib);
+   DOCX deferred to the microservice path.
 4. **Flattening** (next major feature) — burn signature images + field values into a
    signed PDF/A artifact; this is the foundation for B5 (PAdES Phase 2).
 5. **B5** — PAdES (Phase 3) after flattening.

@@ -11,15 +11,16 @@
 
 ## 1. Current state
 
-Entirely **planned (🔲)** — specs exist (`blockchain/blockchain-integration.md`,
-`pdfa/*`) but nothing is built. `signatures.status` never reaches `anchored`;
-`documents.hash` is the raw-upload hash, not an artifact hash.
+Mostly **planned (🔲)** — specs exist (`blockchain/blockchain-integration.md`, `pdfa/*`);
+`signatures.status` never reaches `anchored`. Partial: JPG/PNG uploads are now converted
+to a single-page PDF at ingest (`src/lib/server/ingest/convert-to-pdf.ts`), but there is no
+PDF/A-2b conformance, DOCX conversion, artifact generation, or anchoring yet.
 
 ## 2. Blockers
 
 | # | Blocker | Type | Impact | Status | Unblock path |
 |---|---|---|---|---|---|
-| B1 | **PDF/A ingestion (Phase 1) not built** — no conversion of PDF/DOCX/JPG/PNG → PDF/A-2b. | Feature (ingestion) | Foundation for everything below; non-PDF uploads aren't even renderable today. | 🔴 | Convert at upload (mupdf/Ghostscript) or defer to the document microservice. |
+| B1 | **PDF/A ingestion (Phase 1) partially built** — JPG/PNG are converted to a single-page PDF at upload (pdf-lib), but full PDF/A-2b conformance and DOCX → PDF aren't done. | Feature (ingestion) | Non-PDF uploads now render/sign; PDF/A-2b conformance + DOCX remain. | 🟡 | Add PDF/A-2b conformance (mupdf WASM / Ghostscript or microservice) and DOCX → PDF (LibreOffice/microservice). |
 | B2 | **Signed artifact generation (Phase 2) not built** — no flatten + XMP + re-convert. | Feature (artifact) | No signed PDF artifact exists (only DB rows). | 🔴 | Flatten signature images + field values; re-convert to PDF/A; store artifact + hash. |
 | B3 | **Blockchain anchoring unimplemented** — `signature_anchors` + anchor client + auto-anchor by **artifact hash** + `signed → anchored` all absent. | Feature (verification) | No independent on-chain proof; `executed` happens without it. | 🔴 | Build `signature_anchors`, anchor client, state machine (roadmap §2). |
 | B4 | **PAdES embedding (Phase 3) not built** — shared with O1/B5. | Feature (compliance) | The objective's compliance end-state is unreached. | 🟡 | After artifact generation (B2), build cert/CMS/TSA + two-step finalize. |
@@ -33,7 +34,7 @@ Entirely **planned (🔲)** — specs exist (`blockchain/blockchain-integration.
 
 ## 4. Suggested order
 
-1. **B1** — ingestion conversion (foundation).
+1. **B1** — ingestion conversion (foundation): ✅ JPG/PNG → PDF done (pdf-lib); remaining: PDF/A-2b conformance + DOCX.
 2. **B2** — artifact generation (the real "signed document").
 3. **B3** — anchoring (can run in parallel once artifact hash exists).
 4. **B4** — PAdES (with O1).

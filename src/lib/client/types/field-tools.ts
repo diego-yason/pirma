@@ -55,7 +55,7 @@ export interface FieldToolDef {
      * Default validation rule (e.g. a phone-number regex) enforced at signing time.
      * Signers enter values in per-kind widgets, `finalize` validates against this
      * pattern and stores values on `signatures.field_values`, and their hash is
-     * bound into the signed payload. See docs/ai/form-fields.md.
+     * bound into the signed payload. See docs/ai/signing/form-fields.md.
      */
     validation?: FieldValidation;
 }

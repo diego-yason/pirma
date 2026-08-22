@@ -760,7 +760,7 @@ async function resolveParty(formData: FormData, locals: App.Locals, packageId: s
         }
 
         const [recipient] = await db
-            .select({ id: packageRecipients.id })
+            .select({ id: packageRecipients.id, userId: packageRecipients.userId })
             .from(packageRecipients)
             .where(
                 and(
@@ -782,10 +782,12 @@ async function resolveParty(formData: FormData, locals: App.Locals, packageId: s
         logger.info("sign", "Action resolved as guest", {
             recipientId: recipient.id,
             packageId,
+            linkedUserId: recipient.userId ?? null,
         });
         return {
             type: "guest" as const,
             recipientId: recipient.id,
+            userId: recipient.userId ?? null,
             packageId: payload.packageId,
         };
     }
@@ -798,10 +800,34 @@ export const actions: Actions = {
     finalize: async ({ request, params, locals }) => {
         const packageId = params.pageId;
         const formData = await request.formData();
-        const party = await resolveParty(formData, locals, packageId);
+        let party = await resolveParty(formData, locals, packageId);
         if (!party) {
             logger.warn("sign", "Finalize rejected — no valid party", { packageId });
             return fail(401);
+        }
+
+        // Guest escalation: a guest token valid for a recipient that is already
+        // linked to an (anonymous/real) account signs as that account. This makes
+        // finalize work for guests even when the session cookie isn't present, as
+        // long as the email-OTP link was completed. An unlinked guest must verify
+        // their email first (the sign page gates on this).
+        if (party.type === "guest") {
+            if (party.userId) {
+                logger.info("sign", "Finalize — guest escalated to linked user", {
+                    packageId,
+                    recipientId: party.recipientId,
+                    userId: party.userId,
+                });
+                party = { type: "user", userId: party.userId };
+            } else {
+                logger.warn("sign", "Finalize — guest not linked; email verification required", {
+                    packageId,
+                    recipientId: party.recipientId,
+                });
+                return fail(403, {
+                    error: "Please verify your email to sign, then try again.",
+                });
+            }
         }
 
         const signedFieldsRaw = formData.get("signedFields") as string | null;
@@ -825,14 +851,6 @@ export const actions: Actions = {
             partyId: party.type === "user" ? party.userId : party.recipientId,
             signedFieldCount: signedFieldIds.length,
         });
-
-        if (party.type !== "user") {
-            logger.warn("sign", "Finalize — only authenticated users can sign cryptographically", {
-                packageId,
-                partyType: party.type,
-            });
-            return fail(400, { error: "Guest finalize not yet supported" });
-        }
 
         // ── Authorize: the user must be a signer of this package, or the
         //    owner signing fields assigned to "me". Field ownership is

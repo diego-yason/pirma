@@ -191,6 +191,16 @@ password-bound keys kept (recommendation option a).** Extra key rows are accepta
   server confirms the stored row's `keyLevel` matches the requested level before accepting a
   signature (`finalize` already rejects `kid`/`keyLevel` mismatches).
 
+> **Decision (2026-08-23): keep the persistent device key for the T2 device leg.** The
+> all-ephemeral alternative (everything is T1; T2 = any device signature + a password-authenticated
+> session) was considered and **rejected**. It would degrade T2/`mfaRequired` to password-only
+> (losing the device as a real second factor) and forfeit rotation/revocation/usage policy,
+> stable device identity, and audit linkage. Long-lived keys also **"prove themselves" via
+> long-term usage** — age + consistent signing history are themselves evidence of a legitimate
+> registered device. The session stamp (`passwordVerifiedAt`, server-issued at OPAQUE
+> `completeLogin`) remains the **identity** leg; the persistent key remains the **device** leg;
+> **neither alone is sufficient**.
+
 ### 3. Challenge + device info in the exchange
 
 - The server **transmits a challenge and device-information request** when a key is requested

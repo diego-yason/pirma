@@ -5,21 +5,12 @@ import { documents, packages, documentAssignments } from "#lib/server/db/schema.
 import { supabaseAdmin } from "#lib/server/storage/supabase.js";
 import { and, eq } from "drizzle-orm";
 import { logger } from "#lib/server/logger.js";
+import { convertToPdf, DOCX_MIME } from "#lib/server/ingest/convert-to-pdf.js";
 
 const MAX_FILE_SIZE = 50 * 1024 * 1024; // 50 MB
-const ALLOWED_TYPES = [
-    "application/pdf",
-    "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-    "image/jpeg",
-    "image/png",
-];
-
-const MIME_TO_EXT: Record<string, string> = {
-    "application/pdf": "pdf",
-    "application/vnd.openxmlformats-officedocument.wordprocessingml.document": "docx",
-    "image/jpeg": "jpg",
-    "image/png": "png",
-};
+// Types we can normalize to a PDF at ingest (PDF kept as-is, JPG/PNG converted).
+// DOCX is accepted only to give a tailored "not yet supported" message.
+const CONVERTIBLE_TYPES = ["application/pdf", "image/jpeg", "image/png"];
 
 export const load: PageServerLoad = async ({ locals }) => {
     if (!locals.user) {
@@ -51,9 +42,17 @@ export const actions: Actions = {
             logger.warn("uploadFile", "Rejected: missing title");
             return fail(400, { error: "Document title is required" });
         }
-        if (!ALLOWED_TYPES.includes(file.type)) {
+        if (![...CONVERTIBLE_TYPES, DOCX_MIME].includes(file.type)) {
             logger.warn("uploadFile", "Rejected: disallowed type", { type: file.type });
-            return fail(400, { error: "Only PDF files are allowed" });
+            return fail(400, { error: "Only PDF, JPG, or PNG files are allowed" });
+        }
+        if (file.type === DOCX_MIME) {
+            logger.warn("uploadFile", "Rejected: DOCX conversion not yet supported", {
+                type: file.type,
+            });
+            return fail(400, {
+                error: "DOCX conversion isn't supported yet — please upload a PDF, JPG, or PNG.",
+            });
         }
 
         if (file.size > MAX_FILE_SIZE) {
@@ -62,20 +61,22 @@ export const actions: Actions = {
         }
 
         try {
-            // Compute SHA-256 hash of the file
+            // Normalize to PDF at ingest (JPG/PNG → single-page PDF; PDF kept as-is).
             const buffer = await file.arrayBuffer();
-            const hashBuffer = await crypto.subtle.digest("SHA-256", buffer);
+            const { bytes, pageCount } = await convertToPdf(buffer, file.type);
+
+            // Compute SHA-256 over the CONVERTED PDF — the bytes actually stored.
+            const hashBuffer = await crypto.subtle.digest("SHA-256", bytes);
             const hashArray = Array.from(new Uint8Array(hashBuffer));
             const hashHex = hashArray.map((b) => b.toString(16).padStart(2, "0")).join("");
 
-            // Upload to Supabase Storage
-            const ext = MIME_TO_EXT[file.type] ?? "bin";
-            const filePath = `${crypto.randomUUID()}.${ext}`;
+            // Upload the normalized PDF to Supabase Storage.
+            const filePath = `${crypto.randomUUID()}.pdf`;
 
             const { error: uploadError } = await supabaseAdmin.storage
                 .from("drafts")
-                .upload(filePath, buffer, {
-                    contentType: file.type,
+                .upload(filePath, bytes, {
+                    contentType: "application/pdf",
                     upsert: false,
                 });
 
@@ -84,17 +85,15 @@ export const actions: Actions = {
                 return fail(500, { error: "Failed to upload file. Please try again." });
             }
 
-            logger.info("uploadFile", "File uploaded to storage", {
+            logger.info("uploadFile", "File stored as PDF", {
                 path: filePath,
-                size: file.size,
+                size: bytes.byteLength,
                 type: file.type,
+                converted: file.type !== "application/pdf",
+                pageCount,
             });
 
-            // Parse optional metadata from the client
-            const pageCountRaw = formData.get("pageCount");
-            const pageCount = pageCountRaw != null ? Number(pageCountRaw) || undefined : undefined;
-
-            // Create document record in database
+            // Create document record in database (pageCount is server-computed).
             const [document] = await db
                 .insert(documents)
                 .values({
@@ -104,7 +103,7 @@ export const actions: Actions = {
                     status: "draft",
                     detailedViewAccess: "restricted",
                     pageCount,
-                    fileSize: file.size,
+                    fileSize: bytes.byteLength,
                     storagePath: filePath,
                 })
                 .returning();
@@ -118,6 +117,7 @@ export const actions: Actions = {
             return {
                 documentId: document.id,
                 storagePath: filePath,
+                pageCount,
             };
         } catch (err) {
             logger.error("uploadFile", "Unexpected error", err);

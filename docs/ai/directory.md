@@ -56,7 +56,7 @@ docs/ai/
 | File | What it is |
 |---|---|
 | `README.md` | Explains the folder's purpose and conventions (status legend, naming by objective, when to add/resolve). |
-| `o1-standards-compliant-e-signing.md` | Current blockers to **O1** (guest finalize, field-values migration, non-PDF uploads, anchoring, PAdES) + suggested order (next: flattening). |
+| `o1-standards-compliant-e-signing.md` | Current blockers to **O1** (guest finalize ✅, field-values migration ✅, non-PDF uploads ✅, anchoring, PAdES) + suggested order (next: flattening). |
 | `o2-secure-identity-and-key-management.md` | Blocker to **O2**: email verification, 2FA, challenges/rate-limit, identity verification, expiration. |
 | `o3-independent-long-term-verifiability.md` | Blocker to **O3**: PDF/A ingestion → artifact → anchoring → PAdES → verification → PQC. |
 | `o4-guest-and-recipient-journey.md` | Blocker to **O4**: guest finalize (shared), reject dialog, token revocation/binding, workspace stubs, self-service, UX. |

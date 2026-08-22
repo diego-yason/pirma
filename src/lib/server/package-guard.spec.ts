@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 
-// DB-mock pattern (see docs/ai/testing.md §3): stub the DB module so no real
+// DB-mock pattern (see docs/ai/qa/testing.md §3): stub the DB module so no real
 // connection is attempted. `makeQuery` returns a fluent drizzle-style chain.
 const { db, makeQuery, makeRejectingQuery, loggerMock } = vi.hoisted(() => {
     const db = { select: vi.fn() };

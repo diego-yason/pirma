@@ -28,7 +28,7 @@
         setStep(1);
     });
 
-    const ACCEPTED_TYPES = ".pdf,.docx,.jpg,.jpeg,.png";
+    const ACCEPTED_TYPES = ".pdf,.jpg,.jpeg,.png";
 
     function formatSize(bytes: number): string {
         if (bytes < 1024) return `${bytes} B`;
@@ -209,7 +209,7 @@
             Upload Files
         </h2>
         <p class="mt-1 text-sm text-neutral-500 dark:text-neutral-400">
-            PDF, DOCX, JPG, or PNG files
+            PDF, JPG, or PNG files
         </p>
         <button
             type="button"
