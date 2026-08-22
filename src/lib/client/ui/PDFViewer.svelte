@@ -553,11 +553,38 @@
         contextMenu = null;
     }
 
-    let menuClampedStyle = $derived(
-        contextMenu
-            ? `left: ${Math.min(Math.max(contextMenu.x, 8), window.innerWidth - 228)}px; top: ${Math.min(Math.max(contextMenu.y, 8), window.innerHeight - 340)}px;`
-            : "",
-    );
+    /**
+     * Positions the context menu inside the viewport. When it would overflow the
+     * right/bottom edge it flips/clamps to the left/above the cursor, measured
+     * from the menu's real size. Recalculates whenever the menu itself grows or
+     * shrinks (e.g. the config editor expands), on window resize, and re-runs
+     * reactively when the menu is opened at a new position.
+     */
+    function positionMenu(cm: { x: number; y: number } | null) {
+        return (node: HTMLDivElement) => {
+            if (!cm) return;
+            const pos = cm;
+            const margin = 8;
+            function apply() {
+                const w = node.offsetWidth;
+                const h = node.offsetHeight;
+                const left = Math.max(margin, Math.min(pos.x, window.innerWidth - w - margin));
+                const top = Math.max(margin, Math.min(pos.y, window.innerHeight - h - margin));
+                node.style.left = `${left}px`;
+                node.style.top = `${top}px`;
+            }
+            apply();
+            // Re-position whenever the menu's own size changes after opening
+            // (e.g. the choices/config editor grows when items are added).
+            const ro = new ResizeObserver(apply);
+            ro.observe(node);
+            window.addEventListener("resize", apply);
+            return () => {
+                ro.disconnect();
+                window.removeEventListener("resize", apply);
+            };
+        };
+    }
 
     function handleReassign(id: string, newAssignedTo: string) {
         const el = placedElements.find((r) => r.id === id);
@@ -893,8 +920,8 @@
         }}
     ></div>
     <div
-        class="fixed z-50 min-w-50 max-h-[65vh] flex flex-col rounded-lg border border-neutral-200 bg-white shadow-xl dark:border-neutral-700 dark:bg-neutral-900"
-        style={menuClampedStyle}
+        class="fixed z-50 min-w-50 max-h-[calc(100vh-1rem)] flex flex-col overflow-hidden rounded-lg border border-neutral-200 bg-white shadow-xl dark:border-neutral-700 dark:bg-neutral-900"
+        {@attach positionMenu(contextMenu)}
         role="menu"
         tabindex="-1"
     >
