@@ -57,24 +57,22 @@
             : "border-neutral-300 dark:border-neutral-700",
     );
 
-    const primaryFlag = $derived(sortedFlags[0]);
+    const initial = $derived(((from ?? "?").trim().charAt(0) || "?").toUpperCase());
 </script>
 
 <div
     class="group flex items-center gap-4 rounded-xl border border-l-4 border-neutral-200 bg-white px-5 py-5 transition hover:border-neutral-300 hover:bg-neutral-50 {leftBorder} dark:border-neutral-800 dark:bg-neutral-900/60 dark:hover:border-neutral-700 dark:hover:bg-neutral-900"
 >
     <span
-        class="grid size-11 shrink-0 place-items-center rounded-lg {primaryFlag
-            ? flagConfig[primaryFlag].chip
-            : 'bg-neutral-100 text-neutral-500 dark:bg-neutral-800 dark:text-neutral-400'} font-extrabold"
+        class="grid size-11 shrink-0 place-items-center rounded-xl bg-linear-to-br from-secondary-600 to-primary-700 text-base font-bold text-white shadow-sm"
         aria-hidden="true"
     >
-        !
+        {initial}
     </span>
 
     <div class="min-w-0 grow">
         <div class="flex flex-wrap items-center gap-2.5">
-            <p class="truncate text-lg font-semibold text-neutral-900 dark:text-neutral-50">
+            <p class="truncate text-base font-semibold text-neutral-900 dark:text-neutral-50">
                 {title}
             </p>
             {#each sortedFlags as flag (flag)}
@@ -96,7 +94,9 @@
             class="mt-1.5 flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-neutral-600 dark:text-neutral-500"
         >
             {#if dueDate}
-                <span class="inline-flex items-center gap-1.5">
+                <span
+                    class="inline-flex items-center gap-1.5 rounded-md bg-amber-500/10 px-2 py-1 font-medium text-amber-700 dark:text-amber-300"
+                >
                     <svg
                         viewBox="0 0 24 24"
                         fill="none"
@@ -113,7 +113,22 @@
                     Due {dueDate}
                 </span>
             {/if}
-            <span>{docCount} Document{docCount !== 1 ? "s" : ""}</span>
+            <span class="inline-flex items-center gap-1.5">
+                <svg
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="2"
+                    class="size-3.5"
+                >
+                    <path
+                        stroke-linecap="round"
+                        stroke-linejoin="round"
+                        d="M9 12h6m-6 4h6m2 5H7a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5.586a1 1 0 0 1 .707.293l5.414 5.414a1 1 0 0 1 .293.707V19a2 2 0 0 1-2 2Z"
+                    ></path>
+                </svg>
+                {docCount} Document{docCount !== 1 ? "s" : ""}
+            </span>
         </div>
     </div>
 

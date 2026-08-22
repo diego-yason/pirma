@@ -18,6 +18,43 @@
         executed: "Executed",
     };
 
+    /** Visual treatment per document/envelope status. */
+    const statusStyle: Record<string, { badge: string; dot: string; bar: string; text: string }> = {
+        draft: {
+            badge: "bg-neutral-200 text-neutral-600 dark:bg-neutral-800 dark:text-neutral-300",
+            dot: "bg-neutral-400",
+            bar: "bg-neutral-400",
+            text: "text-neutral-500 dark:text-neutral-400",
+        },
+        finalized: {
+            badge: "bg-amber-500/15 text-amber-600 dark:text-amber-300",
+            dot: "bg-amber-500 dark:bg-amber-400",
+            bar: "bg-amber-500",
+            text: "text-amber-600 dark:text-amber-300",
+        },
+        executed: {
+            badge: "bg-emerald-500/15 text-emerald-600 dark:text-emerald-300",
+            dot: "bg-emerald-500 dark:bg-emerald-400",
+            bar: "bg-emerald-500",
+            text: "text-emerald-600 dark:text-emerald-300",
+        },
+    };
+
+    type EnvStatus = "draft" | "finalized" | "executed";
+    /** Aggregate a package's documents into one envelope status. */
+    function envelopeStatus(docs: { status: string }[]): EnvStatus {
+        if (docs.some((d) => d.status === "draft")) return "draft";
+        if (docs.every((d) => d.status === "executed")) return "executed";
+        return "finalized";
+    }
+
+    /** Signature completion across the envelope's documents. */
+    function envelopeProgress(docs: { status: string }[]) {
+        const total = docs.length;
+        const executed = docs.filter((d) => d.status === "executed").length;
+        return { executed, total, pct: total ? Math.round((executed / total) * 100) : 0 };
+    }
+
     function fmtDate(iso?: string | Date | null): string {
         if (!iso) return "";
         return new Date(iso).toLocaleDateString("en-SG", {
@@ -59,121 +96,131 @@
     </div>
 
     <!-- Stat cards -->
-    <div class="mt-8 grid grid-cols-2 gap-4 lg:grid-cols-4">
+    <div class="mt-8 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
         <a
             href="#waiting"
-            class="group rounded-xl border border-neutral-200 bg-white p-5 transition hover:border-secondary-500/50 hover:bg-neutral-50 dark:border-neutral-800 dark:bg-neutral-900/60 dark:hover:bg-neutral-900"
+            class="group flex items-center gap-4 rounded-xl border border-neutral-200 bg-white p-5 transition hover:border-secondary-500/50 hover:shadow-sm dark:border-neutral-800 dark:bg-neutral-900/60 dark:hover:border-secondary-500/40"
         >
-            <div class="flex items-center justify-between">
-                <p class="text-sm font-medium text-neutral-500 dark:text-neutral-400">
+            <span
+                class="grid size-11 shrink-0 place-items-center rounded-xl bg-amber-500/15 text-amber-600 dark:text-amber-400"
+            >
+                <svg
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="2"
+                    class="size-5"
+                >
+                    <path
+                        stroke-linecap="round"
+                        stroke-linejoin="round"
+                        d="M12 8v4l3 3m6-3a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z"
+                    ></path>
+                </svg>
+            </span>
+            <div class="min-w-0">
+                <p class="text-3xl leading-none font-bold text-neutral-900 dark:text-neutral-50">
+                    {pendingCount}
+                </p>
+                <p
+                    class="mt-1.5 truncate text-sm font-medium text-neutral-500 dark:text-neutral-400"
+                >
                     Waiting for you
                 </p>
-                <span
-                    class="grid size-8 place-items-center rounded-lg bg-amber-500/15 text-amber-600 dark:text-amber-400"
-                >
-                    <svg
-                        viewBox="0 0 24 24"
-                        fill="none"
-                        stroke="currentColor"
-                        stroke-width="2"
-                        class="size-4"
-                    >
-                        <path
-                            stroke-linecap="round"
-                            stroke-linejoin="round"
-                            d="M12 8v4l3 3m6-3a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z"
-                        ></path>
-                    </svg>
-                </span>
             </div>
-            <p class="mt-3 text-3xl font-bold text-neutral-900 dark:text-neutral-50">
-                {pendingCount}
-            </p>
         </a>
         <div
-            class="rounded-xl border border-neutral-200 bg-white p-5 dark:border-neutral-800 dark:bg-neutral-900/60"
+            class="flex items-center gap-4 rounded-xl border border-neutral-200 bg-white p-5 dark:border-neutral-800 dark:bg-neutral-900/60"
         >
-            <div class="flex items-center justify-between">
-                <p class="text-sm font-medium text-neutral-500 dark:text-neutral-400">Completed</p>
-                <span
-                    class="grid size-8 place-items-center rounded-lg bg-emerald-500/15 text-emerald-600 dark:text-emerald-400"
+            <span
+                class="grid size-11 shrink-0 place-items-center rounded-xl bg-emerald-500/15 text-emerald-600 dark:text-emerald-400"
+            >
+                <svg
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="2"
+                    class="size-5"
                 >
-                    <svg
-                        viewBox="0 0 24 24"
-                        fill="none"
-                        stroke="currentColor"
-                        stroke-width="2"
-                        class="size-4"
-                    >
-                        <path
-                            stroke-linecap="round"
-                            stroke-linejoin="round"
-                            d="M9 12l2 2 4-4m5-1a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z"
-                        ></path>
-                    </svg>
-                </span>
+                    <path
+                        stroke-linecap="round"
+                        stroke-linejoin="round"
+                        d="M9 12l2 2 4-4m5-1a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z"
+                    ></path>
+                </svg>
+            </span>
+            <div class="min-w-0">
+                <p class="text-3xl leading-none font-bold text-neutral-900 dark:text-neutral-50">
+                    {completedCount}
+                </p>
+                <p
+                    class="mt-1.5 truncate text-sm font-medium text-neutral-500 dark:text-neutral-400"
+                >
+                    Completed
+                </p>
             </div>
-            <p class="mt-3 text-3xl font-bold text-neutral-900 dark:text-neutral-50">
-                {completedCount}
-            </p>
         </div>
         <div
-            class="rounded-xl border border-neutral-200 bg-white p-5 dark:border-neutral-800 dark:bg-neutral-900/60"
+            class="flex items-center gap-4 rounded-xl border border-neutral-200 bg-white p-5 dark:border-neutral-800 dark:bg-neutral-900/60"
         >
-            <div class="flex items-center justify-between">
-                <p class="text-sm font-medium text-neutral-500 dark:text-neutral-400">
+            <span
+                class="grid size-11 shrink-0 place-items-center rounded-xl bg-secondary-500/15 text-secondary-600 dark:text-secondary-400"
+            >
+                <svg
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="2"
+                    class="size-5"
+                >
+                    <path
+                        stroke-linecap="round"
+                        stroke-linejoin="round"
+                        d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V7Z"
+                    ></path>
+                </svg>
+            </span>
+            <div class="min-w-0">
+                <p class="text-3xl leading-none font-bold text-neutral-900 dark:text-neutral-50">
+                    {recentCount}
+                </p>
+                <p
+                    class="mt-1.5 truncate text-sm font-medium text-neutral-500 dark:text-neutral-400"
+                >
                     Recent envelopes
                 </p>
-                <span
-                    class="grid size-8 place-items-center rounded-lg bg-secondary-500/15 text-secondary-600 dark:text-secondary-400"
-                >
-                    <svg
-                        viewBox="0 0 24 24"
-                        fill="none"
-                        stroke="currentColor"
-                        stroke-width="2"
-                        class="size-4"
-                    >
-                        <path
-                            stroke-linecap="round"
-                            stroke-linejoin="round"
-                            d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V7Z"
-                        ></path>
-                    </svg>
-                </span>
             </div>
-            <p class="mt-3 text-3xl font-bold text-neutral-900 dark:text-neutral-50">
-                {recentCount}
-            </p>
         </div>
         <div
-            class="rounded-xl border border-neutral-200 bg-white p-5 dark:border-neutral-800 dark:bg-neutral-900/60"
+            class="flex items-center gap-4 rounded-xl border border-neutral-200 bg-white p-5 dark:border-neutral-800 dark:bg-neutral-900/60"
         >
-            <div class="flex items-center justify-between">
-                <p class="text-sm font-medium text-neutral-500 dark:text-neutral-400">
+            <span
+                class="grid size-11 shrink-0 place-items-center rounded-xl bg-sky-500/15 text-sky-600 dark:text-sky-400"
+            >
+                <svg
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="2"
+                    class="size-5"
+                >
+                    <path
+                        stroke-linecap="round"
+                        stroke-linejoin="round"
+                        d="M17 20h5v-2a4 4 0 0 0-3-3.87M9 20H4v-2a4 4 0 0 1 3-3.87m6-1.13a4 4 0 1 0 0-8 4 4 0 0 0 0 8Zm-5-1a4 4 0 1 0 0-8 4 4 0 0 0 0 8Z"
+                    ></path>
+                </svg>
+            </span>
+            <div class="min-w-0">
+                <p class="text-3xl leading-none font-bold text-neutral-900 dark:text-neutral-50">
+                    {viewableCount}
+                </p>
+                <p
+                    class="mt-1.5 truncate text-sm font-medium text-neutral-500 dark:text-neutral-400"
+                >
                     Shared with you
                 </p>
-                <span
-                    class="grid size-8 place-items-center rounded-lg bg-sky-500/15 text-sky-600 dark:text-sky-400"
-                >
-                    <svg
-                        viewBox="0 0 24 24"
-                        fill="none"
-                        stroke="currentColor"
-                        stroke-width="2"
-                        class="size-4"
-                    >
-                        <path
-                            stroke-linecap="round"
-                            stroke-linejoin="round"
-                            d="M17 20h5v-2a4 4 0 0 0-3-3.87M9 20H4v-2a4 4 0 0 1 3-3.87m6-1.13a4 4 0 1 0 0-8 4 4 0 0 0 0 8Zm-5-1a4 4 0 1 0 0-8 4 4 0 0 0 0 8Z"
-                        ></path>
-                    </svg>
-                </span>
             </div>
-            <p class="mt-3 text-3xl font-bold text-neutral-900 dark:text-neutral-50">
-                {viewableCount}
-            </p>
         </div>
     </div>
 
@@ -258,70 +305,93 @@
                 </a>
             </div>
         {:else}
-            <div
-                class="overflow-hidden rounded-xl border border-neutral-200 dark:border-neutral-800"
-            >
-                {#each data.recentDocuments as pkg, i (pkg.id)}
+            <div class="flex flex-col gap-4">
+                {#each data.recentDocuments as pkg (pkg.id)}
+                    {@const st = envelopeStatus(pkg.documents)}
+                    {@const prog = envelopeProgress(pkg.documents)}
+                    {@const firstDoc = pkg.documents[0]}
                     <div
-                        class="border-b border-neutral-200 last:border-b-0 dark:border-neutral-800"
+                        class="overflow-hidden rounded-xl border border-neutral-200 bg-white transition hover:border-neutral-300 hover:shadow-sm dark:border-neutral-800 dark:bg-neutral-900/60 dark:hover:border-neutral-700"
                     >
-                        <div
-                            class="flex items-center justify-between gap-3 bg-neutral-50 px-5 py-3.5 dark:bg-neutral-900/60"
-                        >
-                            <div class="min-w-0 flex-1">
-                                <p
-                                    class="truncate text-sm font-semibold text-neutral-900 dark:text-neutral-100"
+                        <div class="flex items-center justify-between gap-3 px-5 py-4">
+                            <div class="flex min-w-0 items-center gap-3">
+                                <span
+                                    class="grid size-10 shrink-0 place-items-center rounded-xl bg-neutral-100 text-neutral-500 dark:bg-neutral-800 dark:text-neutral-400"
                                 >
-                                    {pkg.name}
-                                </p>
-                                <p class="mt-0.5 text-xs text-neutral-600 dark:text-neutral-500">
-                                    {pkg.documents.length} doc{pkg.documents.length !== 1
-                                        ? "s"
-                                        : ""}
-                                    · Updated {fmtDate(pkg.documents[0]?.updatedAt)}
-                                </p>
+                                    <svg
+                                        viewBox="0 0 24 24"
+                                        fill="none"
+                                        stroke="currentColor"
+                                        stroke-width="2"
+                                        class="size-5"
+                                    >
+                                        <path
+                                            stroke-linecap="round"
+                                            stroke-linejoin="round"
+                                            d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V7Z"
+                                        ></path>
+                                    </svg>
+                                </span>
+                                <div class="min-w-0">
+                                    <a
+                                        href={resolve(`doc/${pkg.id}`)}
+                                        class="block truncate text-sm font-semibold text-neutral-900 transition hover:text-secondary-600 dark:text-neutral-100 dark:hover:text-secondary-400"
+                                    >
+                                        {pkg.name}
+                                    </a>
+                                    <p
+                                        class="mt-0.5 text-xs text-neutral-600 dark:text-neutral-500"
+                                    >
+                                        {pkg.documents.length}
+                                        {pkg.documents.length !== 1 ? "documents" : "document"} · Updated
+                                        {fmtDate(firstDoc?.updatedAt ?? firstDoc?.createdAt)}
+                                    </p>
+                                </div>
                             </div>
-                            <div class="flex shrink-0 items-center gap-3 text-xs">
-                                {#if pkg.documents.some((d) => d.status === "draft")}
-                                    <span
-                                        class="rounded-full bg-neutral-200 px-2.5 py-1 text-neutral-600 dark:bg-neutral-800 dark:text-neutral-400"
-                                    >
-                                        {statusLabel.draft}
-                                    </span>
-                                {:else if pkg.documents.every((d) => d.status === "executed")}
-                                    <span
-                                        class="rounded-full bg-emerald-500/15 px-2.5 py-1 text-emerald-600 dark:text-emerald-300"
-                                    >
-                                        {statusLabel.executed}
-                                    </span>
-                                {:else}
-                                    <span
-                                        class="rounded-full bg-amber-500/15 px-2.5 py-1 text-amber-600 dark:text-amber-300"
-                                    >
-                                        {statusLabel.finalized}
-                                    </span>
-                                {/if}
-                                <a
-                                    href={resolve(`doc/${pkg.id}`)}
-                                    class="font-medium text-secondary-600 transition hover:text-secondary-500 hover:underline dark:text-secondary-400 dark:hover:text-secondary-300"
+                            <span
+                                class="shrink-0 rounded-full px-2.5 py-1 text-xs font-semibold {statusStyle[
+                                    st
+                                ].badge}"
+                            >
+                                {statusLabel[st]}
+                            </span>
+                        </div>
+
+                        <!-- Signature progress -->
+                        <div class="px-5 pb-4">
+                            <div
+                                class="flex items-center justify-between text-xs text-neutral-500 dark:text-neutral-400"
+                            >
+                                <span>Signature progress</span>
+                                <span class="tabular-nums">{prog.executed}/{prog.total} signed</span
                                 >
-                                    View
-                                </a>
+                            </div>
+                            <div
+                                class="mt-1.5 h-1.5 w-full overflow-hidden rounded-full bg-neutral-200 dark:bg-neutral-800"
+                            >
+                                <div
+                                    class="h-full rounded-full transition-all {statusStyle[st].bar}"
+                                    style="width: {prog.pct}%"
+                                ></div>
                             </div>
                         </div>
+
+                        <!-- Documents -->
                         <div
-                            class="divide-y divide-neutral-200/60 bg-neutral-100/50 dark:divide-neutral-800/60 dark:bg-neutral-950/40"
+                            class="divide-y divide-neutral-200/60 border-t border-neutral-200/60 bg-neutral-50/50 dark:divide-neutral-800/60 dark:border-neutral-800/60 dark:bg-neutral-950/40"
                         >
                             {#each pkg.documents as doc (doc.id)}
+                                {@const dSt = doc.status}
                                 <a
                                     href={doc.status === "draft"
                                         ? resolve(`doc/new/${pkg.id}`)
                                         : resolve(`doc/${pkg.id}`)}
                                     class="flex items-center gap-2.5 px-5 py-2.5 pl-8 text-sm text-neutral-700 transition hover:bg-neutral-200/50 hover:text-neutral-900 dark:text-neutral-300 dark:hover:bg-neutral-900/40 dark:hover:text-neutral-100"
                                 >
-                                    <span class="shrink-0 text-neutral-400 dark:text-neutral-600"
-                                        >└─</span
-                                    >
+                                    <span
+                                        class="size-1.5 shrink-0 rounded-full {statusStyle[dSt]
+                                            .dot}"
+                                    ></span>
                                     <span class="truncate">{doc.title}</span>
                                     <span
                                         class="ml-auto shrink-0 text-xs text-neutral-400 dark:text-neutral-600"
