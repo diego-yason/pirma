@@ -100,6 +100,10 @@
         startHeight: number;
     } | null>(null);
 
+    // Active / hovered field — resize handles show only for these
+    let activeBoxId = $state<string | null>(null);
+    let hoveredBoxId = $state<string | null>(null);
+
     // Page container refs for coordinate conversion
     let pageContainers: HTMLDivElement[] = $state([]);
 
@@ -148,6 +152,11 @@
     }
 
     function handleKeyDown(e: KeyboardEvent) {
+        if (e.key === "Escape") {
+            activeBoxId = null;
+            hoveredBoxId = null;
+            return;
+        }
         if (e.ctrlKey || e.metaKey) {
             if (e.key === "=" || e.key === "+") {
                 e.preventDefault();
@@ -293,6 +302,7 @@
 
     function handlePageMouseDown(e: MouseEvent, pageIndex: number) {
         if (mode !== "design" || !activeTool) return;
+        activeBoxId = null;
 
         const container = pageContainers[pageIndex];
         if (!container) return;
@@ -404,6 +414,7 @@
         e.stopPropagation();
         e.preventDefault();
 
+        activeBoxId = el.id;
         dragging = {
             id: el.id,
             startMouseX: e.clientX,
@@ -456,6 +467,7 @@
         e.stopPropagation();
         e.preventDefault();
 
+        activeBoxId = el.id;
         resizing = {
             id: el.id,
             handle,
@@ -642,7 +654,7 @@
                         <canvas
                             width={page.canvasWidth}
                             height={page.canvasHeight}
-                            class="w-full h-auto"
+                            class="h-auto w-full"
                             class:pointer-events-none={pageIsInteractive}
                             use:renderPageAction={i + 1}
                         ></canvas>
@@ -652,12 +664,15 @@
                             {#if mode === "design"}
                                 <!-- Design mode: always draggable, resizable -->
                                 <div
-                                    class="absolute cursor-move border-2 select-none {toolDef.accent.box}"
+                                    class="absolute cursor-move border-2 select-none {toolDef.accent
+                                        .box}"
                                     class:border-dashed={activeTool === null &&
                                         dragging?.id !== el.id}
                                     style={boxStyle(el, page)}
                                     onmousedown={(e) => handleDragStart(e, el)}
                                     oncontextmenu={(e) => handleContextMenu(e, el)}
+                                    onmouseenter={() => (hoveredBoxId = el.id)}
+                                    onmouseleave={() => (hoveredBoxId = null)}
                                     role="button"
                                     tabindex="0"
                                     title={toolDef.hasConfig
@@ -665,7 +680,8 @@
                                         : "Drag to move · Drag handles to resize · Right-click for options"}
                                 >
                                     <span
-                                        class="absolute inset-0 flex items-center justify-center gap-1 text-xs font-medium pointer-events-none {toolDef.accent.text}"
+                                        class="pointer-events-none absolute inset-0 flex items-center justify-center gap-1 text-xs font-medium {toolDef
+                                            .accent.text}"
                                     >
                                         {#if toolDef.boxIcon}
                                             <svg
@@ -684,82 +700,84 @@
                                         {/if}
                                         {labelFor(el)}
                                     </span>
-                                    <!-- nw -->
-                                    <div
-                                        class="absolute w-2 h-2 bg-blue-500 border border-white rounded-sm z-10"
-                                        style="top: -4px; left: -4px; cursor: nw-resize;"
-                                        role="button"
-                                        tabindex="-1"
-                                        aria-label="Resize top-left"
-                                        onmousedown={(e) => handleResizeStart(e, el, "nw")}
-                                    ></div>
-                                    <!-- n -->
-                                    <div
-                                        class="absolute w-2 h-2 bg-blue-500 border border-white rounded-sm z-10"
-                                        style="top: -4px; left: 50%; margin-left: -4px; cursor: n-resize;"
-                                        role="button"
-                                        tabindex="-1"
-                                        aria-label="Resize top"
-                                        onmousedown={(e) => handleResizeStart(e, el, "n")}
-                                    ></div>
-                                    <!-- ne -->
-                                    <div
-                                        class="absolute w-2 h-2 bg-blue-500 border border-white rounded-sm z-10"
-                                        style="top: -4px; right: -4px; cursor: ne-resize;"
-                                        role="button"
-                                        tabindex="-1"
-                                        aria-label="Resize top-right"
-                                        onmousedown={(e) => handleResizeStart(e, el, "ne")}
-                                    ></div>
-                                    <!-- e -->
-                                    <div
-                                        class="absolute w-2 h-2 bg-blue-500 border border-white rounded-sm z-10"
-                                        style="top: 50%; margin-top: -4px; right: -4px; cursor: e-resize;"
-                                        role="button"
-                                        tabindex="-1"
-                                        aria-label="Resize right"
-                                        onmousedown={(e) => handleResizeStart(e, el, "e")}
-                                    ></div>
-                                    <!-- se -->
-                                    <div
-                                        class="absolute w-2 h-2 bg-blue-500 border border-white rounded-sm z-10"
-                                        style="bottom: -4px; right: -4px; cursor: se-resize;"
-                                        role="button"
-                                        tabindex="-1"
-                                        aria-label="Resize bottom-right"
-                                        onmousedown={(e) => handleResizeStart(e, el, "se")}
-                                    ></div>
-                                    <!-- s -->
-                                    <div
-                                        class="absolute w-2 h-2 bg-blue-500 border border-white rounded-sm z-10"
-                                        style="bottom: -4px; left: 50%; margin-left: -4px; cursor: s-resize;"
-                                        role="button"
-                                        tabindex="-1"
-                                        aria-label="Resize bottom"
-                                        onmousedown={(e) => handleResizeStart(e, el, "s")}
-                                    ></div>
-                                    <!-- sw -->
-                                    <div
-                                        class="absolute w-2 h-2 bg-blue-500 border border-white rounded-sm z-10"
-                                        style="bottom: -4px; left: -4px; cursor: sw-resize;"
-                                        role="button"
-                                        tabindex="-1"
-                                        aria-label="Resize bottom-left"
-                                        onmousedown={(e) => handleResizeStart(e, el, "sw")}
-                                    ></div>
-                                    <!-- w -->
-                                    <div
-                                        class="absolute w-2 h-2 bg-blue-500 border border-white rounded-sm z-10"
-                                        style="top: 50%; margin-top: -4px; left: -4px; cursor: w-resize;"
-                                        role="button"
-                                        tabindex="-1"
-                                        aria-label="Resize left"
-                                        onmousedown={(e) => handleResizeStart(e, el, "w")}
-                                    ></div>
+                                    {#if activeBoxId === el.id || hoveredBoxId === el.id}
+                                        <!-- nw -->
+                                        <div
+                                            class="absolute z-10 h-2 w-2 rounded-sm border border-white bg-blue-500"
+                                            style="top: -4px; left: -4px; cursor: nw-resize;"
+                                            role="button"
+                                            tabindex="-1"
+                                            aria-label="Resize top-left"
+                                            onmousedown={(e) => handleResizeStart(e, el, "nw")}
+                                        ></div>
+                                        <!-- n -->
+                                        <div
+                                            class="absolute z-10 h-2 w-2 rounded-sm border border-white bg-blue-500"
+                                            style="top: -4px; left: 50%; margin-left: -4px; cursor: n-resize;"
+                                            role="button"
+                                            tabindex="-1"
+                                            aria-label="Resize top"
+                                            onmousedown={(e) => handleResizeStart(e, el, "n")}
+                                        ></div>
+                                        <!-- ne -->
+                                        <div
+                                            class="absolute z-10 h-2 w-2 rounded-sm border border-white bg-blue-500"
+                                            style="top: -4px; right: -4px; cursor: ne-resize;"
+                                            role="button"
+                                            tabindex="-1"
+                                            aria-label="Resize top-right"
+                                            onmousedown={(e) => handleResizeStart(e, el, "ne")}
+                                        ></div>
+                                        <!-- e -->
+                                        <div
+                                            class="absolute z-10 h-2 w-2 rounded-sm border border-white bg-blue-500"
+                                            style="top: 50%; margin-top: -4px; right: -4px; cursor: e-resize;"
+                                            role="button"
+                                            tabindex="-1"
+                                            aria-label="Resize right"
+                                            onmousedown={(e) => handleResizeStart(e, el, "e")}
+                                        ></div>
+                                        <!-- se -->
+                                        <div
+                                            class="absolute z-10 h-2 w-2 rounded-sm border border-white bg-blue-500"
+                                            style="bottom: -4px; right: -4px; cursor: se-resize;"
+                                            role="button"
+                                            tabindex="-1"
+                                            aria-label="Resize bottom-right"
+                                            onmousedown={(e) => handleResizeStart(e, el, "se")}
+                                        ></div>
+                                        <!-- s -->
+                                        <div
+                                            class="absolute z-10 h-2 w-2 rounded-sm border border-white bg-blue-500"
+                                            style="bottom: -4px; left: 50%; margin-left: -4px; cursor: s-resize;"
+                                            role="button"
+                                            tabindex="-1"
+                                            aria-label="Resize bottom"
+                                            onmousedown={(e) => handleResizeStart(e, el, "s")}
+                                        ></div>
+                                        <!-- sw -->
+                                        <div
+                                            class="absolute z-10 h-2 w-2 rounded-sm border border-white bg-blue-500"
+                                            style="bottom: -4px; left: -4px; cursor: sw-resize;"
+                                            role="button"
+                                            tabindex="-1"
+                                            aria-label="Resize bottom-left"
+                                            onmousedown={(e) => handleResizeStart(e, el, "sw")}
+                                        ></div>
+                                        <!-- w -->
+                                        <div
+                                            class="absolute z-10 h-2 w-2 rounded-sm border border-white bg-blue-500"
+                                            style="top: 50%; margin-top: -4px; left: -4px; cursor: w-resize;"
+                                            role="button"
+                                            tabindex="-1"
+                                            aria-label="Resize left"
+                                            onmousedown={(e) => handleResizeStart(e, el, "w")}
+                                        ></div>
+                                    {/if}
                                 </div>
                             {:else if isSigned(el.id)}
                                 <!-- Sign/View mode: signed -->
-                                <div role="img" class="absolute group" style={boxStyle(el, page)}>
+                                <div role="img" class="group absolute" style={boxStyle(el, page)}>
                                     <img
                                         src={mode === "view"
                                             ? (fieldSignatureUrls?.[el.id] ?? "")
@@ -772,7 +790,7 @@
                                     {#if mode !== "view" && isOwn(el.id)}
                                         <button
                                             type="button"
-                                            class="absolute -top-2 -right-2 z-10 flex h-5 w-5 items-center justify-center rounded-full bg-red-500 text-white text-xs leading-none opacity-0 transition-opacity group-hover:opacity-100 hover:bg-red-600"
+                                            class="absolute -top-2 -right-2 z-10 flex h-5 w-5 items-center justify-center rounded-full bg-red-500 text-xs leading-none text-white opacity-0 transition-opacity group-hover:opacity-100 hover:bg-red-600"
                                             onclick={(e) => {
                                                 e.stopPropagation();
                                                 onremove?.(el.id);
@@ -786,7 +804,7 @@
                             {:else if mode === "view" || (mode === "sign" && !isOwn(el.id))}
                                 <!-- View mode / other user's field in sign mode: greyed-out static box -->
                                 <div
-                                    class="absolute pointer-events-none border-2 border-dashed border-neutral-400 bg-neutral-500/5"
+                                    class="pointer-events-none absolute border-2 border-dashed border-neutral-400 bg-neutral-500/5"
                                     style={boxStyle(el, page)}
                                 >
                                     {#if el.label}
@@ -826,7 +844,8 @@
                                                 type="checkbox"
                                                 class="size-5 cursor-pointer"
                                                 checked={fieldValues?.[el.id] === true}
-                                                onchange={(e) => onvalue?.(el.id, e.currentTarget.checked)}
+                                                onchange={(e) =>
+                                                    onvalue?.(el.id, e.currentTarget.checked)}
                                             />
                                         </div>
                                     {:else if el.kind === "radio"}
@@ -854,7 +873,8 @@
                                                 value={typeof fieldValues?.[el.id] === "string"
                                                     ? fieldValues[el.id]
                                                     : ""}
-                                                onchange={(e) => onvalue?.(el.id, e.currentTarget.value)}
+                                                onchange={(e) =>
+                                                    onvalue?.(el.id, e.currentTarget.value)}
                                             >
                                                 <option value="">Select…</option>
                                                 {#each el.choices ?? [] as c (c)}
@@ -876,14 +896,15 @@
                                                 value={typeof fieldValues?.[el.id] === "string"
                                                     ? fieldValues[el.id]
                                                     : ""}
-                                                oninput={(e) => onvalue?.(el.id, e.currentTarget.value)}
+                                                oninput={(e) =>
+                                                    onvalue?.(el.id, e.currentTarget.value)}
                                             />
                                         </div>
                                     {/if}
                                 {:else}
                                     <button
                                         type="button"
-                                        class="absolute cursor-pointer border-2 border-green-500 bg-green-500/10 transition-colors hover:bg-red-500/20 hover:border-red-500"
+                                        class="absolute cursor-pointer border-2 border-green-500 bg-green-500/10 transition-colors hover:border-red-500 hover:bg-red-500/20"
                                         style={boxStyle(el, page)}
                                         onclick={() => onsign?.(el.id)}
                                         oncontextmenu={(e) => {
@@ -896,7 +917,9 @@
                                             <span
                                                 class="absolute inset-0 flex items-center justify-between gap-1 px-2 text-xs font-medium text-green-700 dark:text-green-300"
                                             >
-                                                <span class="truncate">{el.label ?? toolDef.label}</span>
+                                                <span class="truncate"
+                                                    >{el.label ?? toolDef.label}</span
+                                                >
                                                 <svg
                                                     viewBox="0 0 24 24"
                                                     fill="none"
@@ -929,7 +952,7 @@
                             {@const dx = (drawing.startX + drawing.currentX) / 2}
                             {@const dy = (drawing.startY + drawing.currentY) / 2}
                             <div
-                                class="absolute border-2 border-blue-400 bg-blue-400/20 pointer-events-none"
+                                class="pointer-events-none absolute border-2 border-blue-400 bg-blue-400/20"
                                 style="
                                 left: {((dx - dw / 2) / page.canvasWidth) * 100}%;
                                 top: {((dy - dh / 2) / page.canvasHeight) * 100}%;
@@ -964,26 +987,26 @@
         {#if pages.length > 0}
             <div class="sticky bottom-0 flex justify-center pb-2">
                 <div
-                    class="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-white/80 dark:bg-neutral-900/80 backdrop-blur border border-neutral-200 dark:border-neutral-700 shadow"
+                    class="inline-flex items-center gap-2 rounded-full border border-neutral-200 bg-white/80 px-4 py-2 shadow backdrop-blur dark:border-neutral-700 dark:bg-neutral-900/80"
                 >
                     <button
                         type="button"
-                        class="px-2 py-1 text-sm rounded hover:bg-neutral-100 dark:hover:bg-neutral-800 transition disabled:opacity-30"
+                        class="rounded px-2 py-1 text-sm transition hover:bg-neutral-100 disabled:opacity-30 dark:hover:bg-neutral-800"
                         onclick={() => changeZoom(-ZOOM_STEP)}
                         disabled={zoom <= ZOOM_MIN}
                         aria-label="Zoom out">−</button
                     >
-                    <span class="text-xs text-neutral-500 tabular-nums min-w-12 text-center"
+                    <span class="min-w-12 text-center text-xs text-neutral-500 tabular-nums"
                         >{zoomPercent}%</span
                     >
                     <button
                         type="button"
-                        class="px-2 py-1 text-sm rounded hover:bg-neutral-100 dark:hover:bg-neutral-800 transition disabled:opacity-30"
+                        class="rounded px-2 py-1 text-sm transition hover:bg-neutral-100 disabled:opacity-30 dark:hover:bg-neutral-800"
                         onclick={() => changeZoom(ZOOM_STEP)}
                         disabled={zoom >= ZOOM_MAX}
                         aria-label="Zoom in">+</button
                     >
-                    <span class="text-neutral-300 dark:text-neutral-600 mx-2">|</span>
+                    <span class="mx-2 text-neutral-300 dark:text-neutral-600">|</span>
                     <span class="text-xs text-neutral-500 tabular-nums"
                         >Page {currentPage} of {totalPages}</span
                     >
@@ -1005,15 +1028,15 @@
         }}
     ></div>
     <div
-        class="fixed z-50 min-w-50 max-h-[calc(100vh-1rem)] flex flex-col overflow-hidden rounded-lg border border-neutral-200 bg-white shadow-xl dark:border-neutral-700 dark:bg-neutral-900"
+        class="fixed z-50 flex max-h-[calc(100vh-1rem)] min-w-50 flex-col overflow-hidden rounded-lg border border-neutral-200 bg-white shadow-xl dark:border-neutral-700 dark:bg-neutral-900"
         {@attach positionMenu(contextMenu)}
         role="menu"
         tabindex="-1"
     >
         <!-- Current assignee -->
-        <div class="shrink-0 px-3 py-2 border-b border-neutral-100 dark:border-neutral-800">
-            <span class="text-xs text-neutral-400 uppercase tracking-wider">Assigned to</span>
-            <p class="text-sm font-medium mt-0.5">
+        <div class="shrink-0 border-b border-neutral-100 px-3 py-2 dark:border-neutral-800">
+            <span class="text-xs tracking-wider text-neutral-400 uppercase">Assigned to</span>
+            <p class="mt-0.5 text-sm font-medium">
                 {#if contextMenu.el.assignedTo}
                     {recipientName(contextMenu.el.assignedTo)}
                 {:else}
@@ -1024,23 +1047,23 @@
 
         <!-- Reassign — scrollable -->
         <div
-            class="flex-1 min-h-0 flex flex-col overflow-y-auto px-2 py-1 border-b border-neutral-100 dark:border-neutral-800"
+            class="flex min-h-0 flex-1 flex-col overflow-y-auto border-b border-neutral-100 px-2 py-1 dark:border-neutral-800"
         >
             <span
-                class="block shrink-0 px-1 py-0.5 text-xs text-neutral-400 uppercase tracking-wider"
+                class="block shrink-0 px-1 py-0.5 text-xs tracking-wider text-neutral-400 uppercase"
                 >Reassign to</span
             >
             <!-- Unassign option -->
             <button
                 type="button"
-                class="shrink-0 w-full text-left px-2 py-1 text-sm rounded hover:bg-neutral-100 dark:hover:bg-neutral-800 transition"
+                class="w-full shrink-0 rounded px-2 py-1 text-left text-sm transition hover:bg-neutral-100 dark:hover:bg-neutral-800"
                 onclick={() => handleReassign(contextMenu!.el.id, "")}
             >
                 <span class="text-neutral-400 italic">Unassigned</span>
             </button>
             <button
                 type="button"
-                class="shrink-0 w-full text-left px-2 py-1 text-sm rounded hover:bg-neutral-100 dark:hover:bg-neutral-800 transition"
+                class="w-full shrink-0 rounded px-2 py-1 text-left text-sm transition hover:bg-neutral-100 dark:hover:bg-neutral-800"
                 onclick={() => handleReassign(contextMenu!.el.id, "me")}
             >
                 Me
@@ -1048,7 +1071,7 @@
             {#each recipients as r (r.id)}
                 <button
                     type="button"
-                    class="w-full text-left px-2 py-1 text-sm rounded hover:bg-neutral-100 dark:hover:bg-neutral-800 transition"
+                    class="w-full rounded px-2 py-1 text-left text-sm transition hover:bg-neutral-100 dark:hover:bg-neutral-800"
                     class:font-semibold={contextMenu!.el.assignedTo === r.id}
                     onclick={() => handleReassign(contextMenu!.el.id, r.id)}
                 >
@@ -1072,7 +1095,7 @@
         <div class="shrink-0 px-2 py-1">
             <button
                 type="button"
-                class="w-full text-left px-2 py-1 text-sm text-red-600 rounded hover:bg-red-50 dark:text-red-400 dark:hover:bg-red-950 transition"
+                class="w-full rounded px-2 py-1 text-left text-sm text-red-600 transition hover:bg-red-50 dark:text-red-400 dark:hover:bg-red-950"
                 onclick={() => handleDeleteBox(contextMenu!.el.id)}
             >
                 Delete
