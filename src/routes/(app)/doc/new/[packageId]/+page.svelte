@@ -39,6 +39,7 @@
         // Stamp the currently selected recipient onto the box
         rect.assignedTo = assignedTo || undefined;
         placedBoxes.push(rect);
+        refreshFieldSnapshot();
         triggerSync();
         // One box per activation — deactivate after placing
         activeTool = null;
@@ -55,11 +56,13 @@
     function handleBoxReassign(id: string, newAssignedTo: string) {
         const box = placedBoxes.find((b) => b.id === id);
         if (box) box.assignedTo = newAssignedTo || undefined;
+        refreshFieldSnapshot();
         triggerSync();
     }
 
     function handleBoxDelete(id: string) {
         placedBoxes = placedBoxes.filter((b) => b.id !== id);
+        refreshFieldSnapshot();
         triggerSync();
     }
 
@@ -167,6 +170,7 @@
             });
             // update local store
             placementFields[selectedDocIndex] = placedBoxes;
+            refreshFieldSnapshot();
         } catch {
             // silently retry on next change
         } finally {
@@ -182,15 +186,17 @@
     );
 
     // Block step 3 while any field across all documents is unassigned.
-    const hasUnassignedFields = $derived(
-        placementFields.some((docFields) => (docFields ?? []).some((b) => !b.assignedTo)),
-    );
-    const unassignedFieldCount = $derived(
-        placementFields.reduce(
-            (n, docFields) => n + (docFields ?? []).filter((b) => !b.assignedTo).length,
-            0,
-        ),
-    );
+    // Tracked from a state snapshot refreshed on every mutation — Svelte may
+    // not observe deep prop mutations on `placementFields`, so a plain
+    // `$derived` over it would go stale (the checker wouldn't clear).
+    // svelte-ignore state_referenced_locally
+    // — seed once, refresh explicitly via refreshFieldSnapshot()
+    let fieldSnapshot = $state<PlacedRect[]>(placementFields.flat().filter((f) => !!f));
+    function refreshFieldSnapshot() {
+        fieldSnapshot = placementFields.flat().filter((f) => !!f);
+    }
+    const hasUnassignedFields = $derived(fieldSnapshot.some((b) => !b.assignedTo));
+    const unassignedFieldCount = $derived(fieldSnapshot.filter((b) => !b.assignedTo).length);
     let showUnassignedWarning = $state(false);
 </script>
 
@@ -462,8 +468,8 @@
                     }}
                     class="mt-4 flex w-full items-center justify-center gap-2 rounded-lg px-4 py-2.5 text-center text-sm font-semibold transition
                         {hasUnassignedFields
-                            ? 'cursor-not-allowed bg-neutral-300 text-neutral-500 dark:bg-neutral-700 dark:text-neutral-400'
-                            : 'bg-linear-to-r from-secondary-600 to-primary-700 text-white shadow-sm hover:from-secondary-500 hover:to-primary-600'}"
+                        ? 'cursor-not-allowed bg-neutral-300 text-neutral-500 dark:bg-neutral-700 dark:text-neutral-400'
+                        : 'bg-linear-to-r from-secondary-600 to-primary-700 text-white shadow-sm hover:from-secondary-500 hover:to-primary-600'}"
                     aria-disabled={hasUnassignedFields}
                 >
                     Next
