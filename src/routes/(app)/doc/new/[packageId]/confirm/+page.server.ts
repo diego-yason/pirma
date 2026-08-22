@@ -55,6 +55,20 @@ export const load: PageServerLoad = async ({ params, locals }) => {
         .innerJoin(documentAssignments, eq(documents.id, documentAssignments.documentId))
         .where(eq(documentAssignments.packageId, params.packageId));
 
+    // Guard: step 3 (confirm) is off-limits while any document still has
+    // unassigned fields — redirect back to step 2 to finish assignments.
+    const hasUnassignedFields = packageDocs.some(
+        (doc) =>
+            Array.isArray(doc.placementFields) &&
+            (doc.placementFields as Array<{ assignedTo?: string }>).some((f) => !f.assignedTo),
+    );
+    if (hasUnassignedFields) {
+        logger.info("confirm", "Blocked step 3 — unassigned fields present", {
+            packageId: params.packageId,
+        });
+        redirect(302, `/doc/new/${params.packageId}`);
+    }
+
     // Fetch recipients
     const rows = await db
         .select({

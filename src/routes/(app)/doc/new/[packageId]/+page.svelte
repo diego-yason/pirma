@@ -180,6 +180,18 @@
     let recipientInfos = $derived<RecipientInfo[]>(
         recipients.map((r) => ({ id: r.id, name: r.name.trim(), personNum: r.personNum })),
     );
+
+    // Block step 3 while any field across all documents is unassigned.
+    const hasUnassignedFields = $derived(
+        placementFields.some((docFields) => (docFields ?? []).some((b) => !b.assignedTo)),
+    );
+    const unassignedFieldCount = $derived(
+        placementFields.reduce(
+            (n, docFields) => n + (docFields ?? []).filter((b) => !b.assignedTo).length,
+            0,
+        ),
+    );
+    let showUnassignedWarning = $state(false);
 </script>
 
 <div class="mt-8 ml-5 flex h-[calc(100vh-16rem)] min-h-0 gap-4 pr-5">
@@ -442,7 +454,17 @@
 
                 <a
                     href={resolve(`doc/new/${data.packageId}/confirm`)}
-                    class="mt-4 flex w-full items-center justify-center gap-2 rounded-lg bg-linear-to-r from-secondary-600 to-primary-700 px-4 py-2.5 text-center text-sm font-semibold text-white shadow-sm transition hover:from-secondary-500 hover:to-primary-600"
+                    onclick={(e) => {
+                        if (hasUnassignedFields) {
+                            e.preventDefault();
+                            showUnassignedWarning = true;
+                        }
+                    }}
+                    class="mt-4 flex w-full items-center justify-center gap-2 rounded-lg px-4 py-2.5 text-center text-sm font-semibold transition
+                        {hasUnassignedFields
+                            ? 'cursor-not-allowed bg-neutral-300 text-neutral-500 dark:bg-neutral-700 dark:text-neutral-400'
+                            : 'bg-linear-to-r from-secondary-600 to-primary-700 text-white shadow-sm hover:from-secondary-500 hover:to-primary-600'}"
+                    aria-disabled={hasUnassignedFields}
                 >
                     Next
                     <svg
@@ -459,6 +481,12 @@
                         ></path>
                     </svg>
                 </a>
+                {#if showUnassignedWarning && hasUnassignedFields}
+                    <p class="mt-2 text-center text-xs text-amber-600 dark:text-amber-400">
+                        Assign every field to a recipient (or "Me") before continuing —
+                        {unassignedFieldCount} unassigned.
+                    </p>
+                {/if}
             </div>
         </div>
     </div>
