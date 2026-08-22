@@ -1,7 +1,8 @@
 <script lang="ts">
     import { getContext } from "svelte";
     import type { PageProps } from "./$types";
-    import type { PlacedRect, RecipientInfo } from "#lib/client/types/SignatureBoxTypes";
+    import type { PlacedRect, RecipientInfo, FieldKind } from "#lib/client/types/SignatureBoxTypes";
+    import { FIELD_TOOLS } from "#lib/client/types/field-tools.js";
     import { PUBLIC_MAX_RECIPIENTS } from "$app/env/public";
     import PDFViewer from "#lib/client/ui/PDFViewer.svelte";
     import DocumentSelector from "#lib/client/ui/DocumentSelector.svelte";
@@ -18,8 +19,13 @@
     });
 
     // --- Tool & box state ---
-    type Tool = "signature" | "text" | null;
+    type Tool = FieldKind | null;
     let activeTool = $state<Tool>(null);
+
+    // Standardized field-tool definitions (see #lib/client/types/field-tools.js)
+    const signatureTool = FIELD_TOOLS.find((t) => t.kind === "signature")!;
+    const textTool = FIELD_TOOLS.find((t) => t.kind === "text")!;
+    const alternativeTools = FIELD_TOOLS.filter((t) => t.group === "alternative");
     let selectedDocIndex = $state(0);
     let placedBoxes = $derived<PlacedRect[]>(placementFields[selectedDocIndex] ?? []);
     let selectedDoc: string = $derived(documents[selectedDocIndex]?.url ?? "");
@@ -223,14 +229,15 @@
                 </h2>
             </div>
 
-            <div class="grid grid-cols-2 gap-2">
+            <div class="flex gap-2">
+                <!-- Signature (primary) — full height -->
                 <button
                     type="button"
-                    class="flex flex-col items-center gap-1.5 rounded-lg border px-3 py-3 text-sm font-medium transition
-                        {activeTool === 'signature'
+                    class="flex flex-1 flex-col items-center justify-center gap-1.5 rounded-lg border px-3 py-3 text-sm font-medium transition
+                        {activeTool === signatureTool.kind
                         ? 'border-secondary-500 bg-secondary-500/10 text-secondary-700 dark:bg-secondary-500/15 dark:text-secondary-300'
                         : 'border-neutral-200 bg-white text-neutral-600 hover:border-secondary-500/50 hover:bg-neutral-50 hover:text-neutral-900 dark:border-neutral-700 dark:bg-neutral-900 dark:text-neutral-300 dark:hover:border-secondary-500/50 dark:hover:bg-neutral-800 dark:hover:text-white'}"
-                    onclick={() => activateTool("signature")}
+                    onclick={() => activateTool(signatureTool.kind)}
                 >
                     <svg
                         viewBox="0 0 24 24"
@@ -239,37 +246,64 @@
                         stroke-width="1.5"
                         class="size-5"
                     >
-                        <path
-                            stroke-linecap="round"
-                            stroke-linejoin="round"
-                            d="M3 17c3.5-2 6-2.5 8-2.5 2 0 2.5 1 5 .5 2-.4 4-2 4-2m-9 3.5c2.5 0 3.5 1.5 6 1.5 1.5 0 3-.5 3-.5"
+                        <path stroke-linecap="round" stroke-linejoin="round" d={signatureTool.icon}
                         ></path>
                     </svg>
-                    Signature
+                    {signatureTool.label}
                 </button>
-                <button
-                    type="button"
-                    class="flex flex-col items-center gap-1.5 rounded-lg border px-3 py-3 text-sm font-medium transition
-                        {activeTool === 'text'
-                        ? 'border-secondary-500 bg-secondary-500/10 text-secondary-700 dark:bg-secondary-500/15 dark:text-secondary-300'
-                        : 'border-neutral-200 bg-white text-neutral-600 hover:border-secondary-500/50 hover:bg-neutral-50 hover:text-neutral-900 dark:border-neutral-700 dark:bg-neutral-900 dark:text-neutral-300 dark:hover:border-secondary-500/50 dark:hover:bg-neutral-800 dark:hover:text-white'}"
-                    onclick={() => activateTool("text")}
-                >
-                    <svg
-                        viewBox="0 0 24 24"
-                        fill="none"
-                        stroke="currentColor"
-                        stroke-width="1.5"
-                        class="size-5"
+
+                <!-- Right column: text field (top half) + others dropdown (bottom half) -->
+                <div class="flex flex-1 flex-col gap-2">
+                    <button
+                        type="button"
+                        class="flex flex-1 flex-col items-center justify-center gap-1.5 rounded-lg border px-3 py-3 text-sm font-medium transition
+                            {activeTool === textTool.kind
+                            ? 'border-secondary-500 bg-secondary-500/10 text-secondary-700 dark:bg-secondary-500/15 dark:text-secondary-300'
+                            : 'border-neutral-200 bg-white text-neutral-600 hover:border-secondary-500/50 hover:bg-neutral-50 hover:text-neutral-900 dark:border-neutral-700 dark:bg-neutral-900 dark:text-neutral-300 dark:hover:border-secondary-500/50 dark:hover:bg-neutral-800 dark:hover:text-white'}"
+                        onclick={() => activateTool(textTool.kind)}
                     >
-                        <path
-                            stroke-linecap="round"
-                            stroke-linejoin="round"
-                            d="M4 6h16M4 12h16M4 18h10"
-                        ></path>
-                    </svg>
-                    Text Field
-                </button>
+                        <svg
+                            viewBox="0 0 24 24"
+                            fill="none"
+                            stroke="currentColor"
+                            stroke-width="1.5"
+                            class="size-5"
+                        >
+                            <path stroke-linecap="round" stroke-linejoin="round" d={textTool.icon}
+                            ></path>
+                        </svg>
+                        {textTool.label}
+                    </button>
+
+                    <!-- Others dropdown: alternative field kinds (checkbox, date, initials, …) -->
+                    <div class="relative flex-1">
+                        <select
+                            class="h-full w-full appearance-none rounded-lg border border-neutral-300 bg-white px-3 py-2 pr-9 text-sm text-neutral-600 transition focus:border-secondary-500 focus:ring-2 focus:ring-secondary-500/20 dark:border-neutral-700 dark:bg-neutral-900 dark:text-neutral-300 dark:focus:border-secondary-500"
+                            value={activeTool && alternativeTools.some((t) => t.kind === activeTool)
+                                ? activeTool
+                                : ""}
+                            onchange={(e) =>
+                                activateTool((e.currentTarget.value || null) as FieldKind | null)}
+                            aria-label="Add alternative field"
+                        >
+                            <option selected class="hidden" value="">Others</option>
+                            <option value="">---</option>
+                            {#each alternativeTools as t (t.kind)}
+                                <option value={t.kind}>{t.label}</option>
+                            {/each}
+                        </select>
+                        <svg
+                            viewBox="0 0 24 24"
+                            fill="none"
+                            stroke="currentColor"
+                            stroke-width="2"
+                            class="pointer-events-none absolute top-1/2 right-3 size-4 -translate-y-1/2 text-neutral-400"
+                        >
+                            <path stroke-linecap="round" stroke-linejoin="round" d="M19 9l-7 7-7-7"
+                            ></path>
+                        </svg>
+                    </div>
+                </div>
             </div>
 
             <!-- dropdown -->

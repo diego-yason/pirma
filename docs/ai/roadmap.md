@@ -55,7 +55,7 @@
 | **P2** | Feature | Document templates | 🔲 | §5 |
 | **P2** | Feature | Contacts | 🔲 | §5 |
 | **P2** | Feature | Package expiration enforcement (`expirationDate` checked) | ⚠️ | §6 |
-| **P2** | Feature | Fillable form fields (initials, date, text, checkbox, dropdown) | 🔲 | §8.1 |
+| **P2** | Feature | Fillable form fields (text, choices implemented; checkbox/date/initials planned) | 🚧 | §8.1 |
 | **P2** | Feature | Initials as a separate signature type | 🔲 | §8.2 |
 | **P2** | Feature | Mobile + accessibility (WCAG) signing flow | 🔲 | §8.2 |
 | **P2** | Feature | Signer identity verification (SMS OTP, KYC/ID, knowledge-based) | 🔲 | §8.3 |
@@ -238,9 +238,16 @@ These exist as stubs/TODOs and are **not** in any `docs/ai` file other than this
 
 ### 8.1 Document & package lifecycle
 
+> 🔥 **HIGH-PRIORITY TODO — enforce field values at signing and bind them into the signed payload.**
+> The declarative field system (text / choices / phone) is built and validators are *declared*
+> (e.g. the phone regex), but signers cannot yet enter values: nothing is validated or stored,
+> and values are **not bound into what is signed** — a signer could change data after signing
+> without detection. Design: `docs/ai/form-fields.md`; implementation guide:
+> `docs/ai/field-system.md`.
+
 | Feature | Status | Notes |
 |---|---|---|
-| Fillable form fields (initials, date, text, checkbox, dropdown) | 🔲 | Design: `docs/ai/form-fields.md`; `placementFields` are signature-only today |
+| Fillable form fields (text, choices implemented; checkbox/date/initials planned) | 🚧 | Implemented: declarative field system (`docs/ai/field-system.md`); design: `docs/ai/form-fields.md`. Text + Choices place/config; sign-time value binding into payload still pending |
 | Envelope lifecycle controls (void/cancel, replace signer, re-send) | 🔲 | Design: `docs/ai/document-package-management.md` |
 | Reminders & deadlines (nudge emails, overdue alerts, enforce `expirationDate`) | � | Nudge emails done: `sendDueReminders` + `/api/cron/reminders` (day 3/7, `EMAIL_REMIND_DAYS`). Overdue alerts + hard `expirationDate` enforcement still pending. Design: `docs/ai/document-package-management.md` |
 | Download/export (original + signed copies + audit data) | 🔲 | Design: `docs/ai/document-package-management.md`; overlaps §3 artifacts |
@@ -251,7 +258,7 @@ These exist as stubs/TODOs and are **not** in any `docs/ai` file other than this
 
 | Feature | Status | Notes |
 |---|---|---|
-| Initials as a separate signature type | 🔲 | Design: `docs/ai/form-fields.md`; `user_signatures` stores full signatures only |
+| Initials as a separate signature type | 🔲 | Design: `docs/ai/form-fields.md`; registry-ready (`docs/ai/field-system.md`) — `user_signatures` stores full signatures only |
 | Guided signing ceremony (field-by-field) | 🔲 | Design: `docs/ai/signing-ux.md` |
 | Certificate of completion | 🔲 | overlaps §3 audit/cert pages (see `pdfa/document-flows.md`) |
 | Mobile + accessibility (WCAG) signing flow | 🔲 | Design: `docs/ai/signing-ux.md` |

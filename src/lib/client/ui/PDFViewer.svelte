@@ -1,8 +1,25 @@
 <script lang="ts">
-    import type { PlacedRect, RecipientInfo } from "../types/SignatureBoxTypes";
+    import type { Component } from "svelte";
+    import type { PlacedRect, RecipientInfo, FieldKind } from "../types/SignatureBoxTypes";
+    import { fieldDefaultsFor, fieldMetaFor, fieldToolFor } from "../types/field-tools.js";
+    import ChoicesConfig from "./field-configs/ChoicesConfig.svelte";
+    import PhoneConfig from "./field-configs/PhoneConfig.svelte";
 
     type Mode = "design" | "sign" | "view";
-    type Tool = "signature" | "text" | null;
+    type Tool = FieldKind | null;
+
+    // Props shared by every per-kind config editor component.
+    interface FieldConfigProps {
+        box: PlacedRect;
+        onchange: (box: PlacedRect) => void;
+    }
+
+    // Per-kind config editors shown in the context menu (data-driven: drop a
+    // `field-configs/{kind}.svelte` file + set `hasConfig` in the registry).
+    const CONFIG_COMPONENTS: Partial<Record<FieldKind, Component<FieldConfigProps>>> = {
+        choices: ChoicesConfig,
+        phone: PhoneConfig,
+    };
 
     let {
         pdfUrl = "/sample.pdf",
@@ -166,11 +183,6 @@
         };
     });
 
-    const DESIGN_BOX_DEFAULTS = {
-        signature: { width: 200, height: 60 },
-        text: { width: 200, height: 40 },
-    };
-
     function isSigned(id: string): boolean {
         return signedStatus[id] ?? false;
     }
@@ -322,8 +334,8 @@
         const dx = Math.abs(drawing.currentX - drawing.startX);
         const dy = Math.abs(drawing.currentY - drawing.startY);
 
-        const defaults =
-            activeTool === "text" ? DESIGN_BOX_DEFAULTS.text : DESIGN_BOX_DEFAULTS.signature;
+        const defaults = fieldDefaultsFor(activeTool);
+        const meta = fieldMetaFor(activeTool);
 
         const newRect: PlacedRect = {
             id: crypto.randomUUID(),
@@ -332,7 +344,9 @@
             y: (drawing.startY + drawing.currentY) / 2,
             width: dx >= MIN_DRAW ? dx : defaults.width,
             height: dy >= MIN_DRAW ? dy : defaults.height,
-            label: activeTool === "text" ? "Text Field" : undefined,
+            label: meta.label,
+            kind: meta.kind,
+            choices: meta.choices,
         };
 
         placedElements.push(newRect);
@@ -348,8 +362,8 @@
         const page = pages[pageIndex];
         if (!page) return;
 
-        const defaults =
-            activeTool === "text" ? DESIGN_BOX_DEFAULTS.text : DESIGN_BOX_DEFAULTS.signature;
+        const defaults = fieldDefaultsFor(activeTool);
+        const meta = fieldMetaFor(activeTool);
 
         const newRect: PlacedRect = {
             id: crypto.randomUUID(),
@@ -358,7 +372,9 @@
             y: page.canvasHeight / 2,
             width: defaults.width,
             height: defaults.height,
-            label: activeTool === "text" ? "Text Field" : undefined,
+            label: meta.label,
+            kind: meta.kind,
+            choices: meta.choices,
         };
 
         placedElements.push(newRect);
@@ -539,7 +555,7 @@
 
     let menuClampedStyle = $derived(
         contextMenu
-            ? `left: ${Math.min(Math.max(contextMenu.x, 8), window.innerWidth - 228)}px; top: ${Math.min(Math.max(contextMenu.y, 8), window.innerHeight - 420)}px;`
+            ? `left: ${Math.min(Math.max(contextMenu.x, 8), window.innerWidth - 228)}px; top: ${Math.min(Math.max(contextMenu.y, 8), window.innerHeight - 340)}px;`
             : "",
     );
 
@@ -554,6 +570,11 @@
         placedElements = placedElements.filter((r) => r.id !== id);
         ondelete?.(id);
         contextMenu = null;
+    }
+
+    // ── Box config editing (driven by per-kind config components) ─
+    function handleBoxConfigChange(box: PlacedRect) {
+        onmove?.(box);
     }
 
     let pageIsInteractive = $derived(mode === "design" && activeTool !== null);
@@ -583,10 +604,11 @@
                         ></canvas>
 
                         {#each pageElements as el (el.id)}
+                            {@const toolDef = fieldToolFor(el.kind)}
                             {#if mode === "design"}
                                 <!-- Design mode: always draggable, resizable -->
                                 <div
-                                    class="absolute cursor-move border-2 border-blue-500 bg-blue-500/10 select-none"
+                                    class="absolute cursor-move border-2 select-none {toolDef.accent.box}"
                                     class:border-dashed={activeTool === null &&
                                         dragging?.id !== el.id}
                                     style={boxStyle(el, page)}
@@ -594,11 +616,28 @@
                                     oncontextmenu={(e) => handleContextMenu(e, el)}
                                     role="button"
                                     tabindex="0"
-                                    title="Drag to move · Drag handles to resize · Right-click for options"
+                                    title={toolDef.hasConfig
+                                        ? "Drag to move · Drag handles to resize · Right-click to configure"
+                                        : "Drag to move · Drag handles to resize · Right-click for options"}
                                 >
                                     <span
-                                        class="absolute inset-0 flex items-center justify-center text-xs font-medium text-blue-700 dark:text-blue-300 pointer-events-none"
+                                        class="absolute inset-0 flex items-center justify-center gap-1 text-xs font-medium pointer-events-none {toolDef.accent.text}"
                                     >
+                                        {#if toolDef.boxIcon}
+                                            <svg
+                                                viewBox="0 0 24 24"
+                                                fill="none"
+                                                stroke="currentColor"
+                                                stroke-width="2"
+                                                class="size-3.5 shrink-0"
+                                            >
+                                                <path
+                                                    stroke-linecap="round"
+                                                    stroke-linejoin="round"
+                                                    d={toolDef.boxIcon}
+                                                ></path>
+                                            </svg>
+                                        {/if}
                                         {labelFor(el)}
                                     </span>
                                     <!-- nw -->
@@ -708,9 +747,25 @@
                                 >
                                     {#if el.label}
                                         <span
-                                            class="absolute inset-0 flex items-center justify-center text-xs font-medium text-neutral-500"
-                                            >{el.label}</span
+                                            class="absolute inset-0 flex items-center justify-center gap-1 text-xs font-medium text-neutral-500"
                                         >
+                                            {#if toolDef.boxIcon}
+                                                <svg
+                                                    viewBox="0 0 24 24"
+                                                    fill="none"
+                                                    stroke="currentColor"
+                                                    stroke-width="2"
+                                                    class="size-3 shrink-0"
+                                                >
+                                                    <path
+                                                        stroke-linecap="round"
+                                                        stroke-linejoin="round"
+                                                        d={toolDef.boxIcon}
+                                                    ></path>
+                                                </svg>
+                                            {/if}
+                                            {el.label}
+                                        </span>
                                     {/if}
                                 </div>
                             {:else}
@@ -726,7 +781,26 @@
                                     }}
                                     title="Click to sign · Right-click to remove"
                                 >
-                                    {#if el.label}
+                                    {#if toolDef.boxIcon}
+                                        <span
+                                            class="absolute inset-0 flex items-center justify-between gap-1 px-2 text-xs font-medium text-green-700 dark:text-green-300"
+                                        >
+                                            <span class="truncate">{el.label ?? toolDef.label}</span>
+                                            <svg
+                                                viewBox="0 0 24 24"
+                                                fill="none"
+                                                stroke="currentColor"
+                                                stroke-width="2"
+                                                class="size-3.5 shrink-0"
+                                            >
+                                                <path
+                                                    stroke-linecap="round"
+                                                    stroke-linejoin="round"
+                                                    d={toolDef.boxIcon}
+                                                ></path>
+                                            </svg>
+                                        </span>
+                                    {:else if el.label}
                                         <span
                                             class="absolute inset-0 flex items-center justify-center text-xs font-medium text-green-700 dark:text-green-300"
                                             >{el.label}</span
@@ -808,6 +882,7 @@
 </div>
 <!-- Context menu overlay -->
 {#if contextMenu}
+    {@const ConfigCmp = contextMenu.el.kind ? CONFIG_COMPONENTS[contextMenu.el.kind] : undefined}
     <!-- svelte-ignore a11y_no_static_element_interactions -->
     <div
         class="fixed inset-0 z-40"
@@ -868,6 +943,13 @@
                     {r.name || `Person ${r.personNum}`}
                 </button>
             {/each}
+
+            <!-- Config editor — per-kind component resolved from the registry -->
+            {#if ConfigCmp}
+                <div class="mt-1 border-t border-neutral-100 px-1 pt-1 dark:border-neutral-800">
+                    <ConfigCmp box={contextMenu.el} onchange={handleBoxConfigChange} />
+                </div>
+            {/if}
         </div>
 
         <!-- Delete -->

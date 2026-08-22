@@ -254,6 +254,8 @@ export const load: PageServerLoad = async ({ params, locals }) => {
                 width: number;
                 height: number;
                 label?: string;
+                kind?: "signature" | "text" | "choices";
+                choices?: string[];
             }>;
             return {
                 ...d,

@@ -319,6 +319,8 @@ export const load: PageServerLoad = async ({ params, locals, url }) => {
                     width: f.width,
                     height: f.height,
                     label: f.label,
+                    kind: f.kind,
+                    choices: f.choices,
                 })),
                 allSignedStatus: {},
             };
@@ -474,6 +476,8 @@ export const load: PageServerLoad = async ({ params, locals, url }) => {
                 width: f.width,
                 height: f.height,
                 label: f.label,
+                kind: f.kind,
+                choices: f.choices,
             })),
             allSignedStatus: Object.fromEntries(
                 fields.map((f) => [f.id, allSignedFieldIds.has(f.id)]),
@@ -594,6 +598,8 @@ async function handleGuestLoad(
                     width: f.width,
                     height: f.height,
                     label: f.label,
+                    kind: f.kind,
+                    choices: f.choices,
                 })),
                 allSignedStatus: {},
             };
