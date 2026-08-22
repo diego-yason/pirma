@@ -18,6 +18,12 @@ Thumbs.db
 !.env.example
 !.env.test
 
+# Local credentials (test access to auth-gated pages)
+cred.local.txt
+
+# Playwright auth state (session cookies)
+e2e/.auth/
+
 # Vite
 vite.config.js.timestamp-*
 vite.config.ts.timestamp-*

@@ -5,6 +5,7 @@
 > Related:
 > - `vite.config.ts` — Vitest config (3 projects)
 > - `playwright.config.ts` — E2E config (build + preview, `**/*.e2e.{ts,js}`)
+> - `playwright.dashboard.config.ts` — E2E config for the auth-gated dashboard suite (dev server on 5173)
 > - `.env.test` — committed test-only env (mock values)
 > - `src/lib/server/crypto/verify-signature.ts`, `key-rotation.ts`, `src/lib/shared/signing-payload.ts`
 > - `docs/ai/security/keys-and-signing-review.md` (KSR-08 fixed, verified by tests)
@@ -21,9 +22,9 @@ Not a finished spec — coverage grows module by module.
 
 | Layer | Tooling | State | Priority |
 |---|---|---|---|
-| **Unit** (node) | Vitest `server` | ✅ active (34 tests) | P0 — security-critical crypto/logic first |
-| **Component/browser** | Vitest `client` (Playwright) | 🔲 scaffold example only | P1 |
-| **E2E** | Playwright | 🔲 1 smoke test (`demo/playwright`) | P1 — happy-path journeys |
+| **Unit** (node) | Vitest `server` | ✅ active (116 tests) | P0 — security-critical crypto/logic first |
+| **Component/browser** | Vitest `client` (Playwright) | 🟡 5 tests (`device-fingerprint`) | P1 |
+| **E2E** | Playwright | 🟡 1 smoke (`demo/playwright`) + 7 dashboard (`e2e/dashboard`) | P1 — happy-path journeys |
 | **Storybook** | `@storybook/addon-vitest` | 🟡 scaffold stories only | P2 |
 | **Coverage enforcement** | `@vitest/coverage-v8` | 🔲 no thresholds configured | P2 |
 | **Integration / DB** | Drizzle test DB or mocks (TBD) | 🔲 none | P2 |
@@ -107,6 +108,46 @@ pnpm exec vitest run --project server
 ```
 
 Current status (2026-08-21): **110 tests / 9 files, all passing** (server project) + **6 tests / 2 files** (client/browser project).
+
+---
+
+## 1b. Dashboard E2E suite (added 2026-08-22)
+
+Auth-gated pages can't be tested against the generic `build + preview` config (see the `ORIGIN`
+gotcha below), so the dashboard gets its **own Playwright config**:
+
+| File | Purpose |
+|---|---|
+| `playwright.dashboard.config.ts` | Dedicated config: dev server on **5173** (reused if already running), `storageState` session, `e2e/dashboard` test dir |
+| `e2e/dashboard/global-setup.ts` | Logs in once via the real login UI (OPAQUE), waits for the HttpOnly session cookie, saves it to `e2e/.auth/user.json` |
+| `e2e/dashboard/dashboard.spec.ts` | 7 tests: greeting + CTA, 4 stat cards, Waiting for You section, Recent Envelopes + view-all, uploaded docs listing, sidebar nav, theme toggle |
+
+Run it with:
+
+```sh
+pnpm exec playwright test --config=playwright.dashboard.config.ts
+# or
+pnpm run test:e2e:dashboard
+```
+
+**Credentials** come from `cred.local.txt` (gitignored — `Email:` / `Passw:` lines) or the
+`TEST_EMAIL` / `TEST_PASSWORD` env vars. The auth state (`e2e/.auth/`) is gitignored.
+
+**Gotchas (all hit in practice):**
+1. **Port must be 5173.** Better-auth's `svelteKitHandler` only treats `/api/auth/*` as auth
+   routes when the request origin matches `ORIGIN` (`.env` → `http://localhost:5173`). On any
+   other port every `/api/auth/*` returns 404 and OPAQUE login fails with "Failed to get
+   registration challenge".
+2. **HttpOnly cookie.** `document.cookie` can't see the session cookie, so global setup polls
+   `page.context().cookies()` instead.
+3. **Login rate limit.** Better-auth rate-limits rapid attempts; the global setup retries up to
+   3 times with a short backoff.
+4. **Hydration race.** The theme toggle button's handler attaches during `onMount`; clicking
+   before hydration no-ops. The test waits for `style.colorScheme` on `<html>` (only set by
+   `syncTheme()` after mount) before clicking.
+
+Status (2026-08-22): **7 tests, all passing** (verified repeatedly). The generic `demo/playwright`
+smoke test (build + preview, port 4173) still passes independently.
 
 ---
 
