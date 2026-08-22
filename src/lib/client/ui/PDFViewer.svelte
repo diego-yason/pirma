@@ -836,51 +836,95 @@
                                     <!-- Fillable value field: signer enters/selects a value -->
                                     {#if el.kind === "checkbox"}
                                         <div
-                                            class="absolute grid place-items-center border-2 border-green-500 bg-green-500/10"
+                                            class="absolute grid place-items-center rounded-lg border-2 border-green-500/70 bg-green-500/10 transition-colors hover:border-green-500"
                                             style={boxStyle(el, page)}
                                             title={el.label ?? "Checkbox"}
                                         >
-                                            <input
-                                                type="checkbox"
-                                                class="size-5 cursor-pointer"
-                                                checked={fieldValues?.[el.id] === true}
-                                                onchange={(e) =>
-                                                    onvalue?.(el.id, e.currentTarget.checked)}
-                                            />
+                                            <label class="relative inline-flex cursor-pointer">
+                                                <input
+                                                    type="checkbox"
+                                                    class="peer size-5 cursor-pointer appearance-none rounded-md border-2 border-green-500 bg-white transition-all checked:border-green-600 checked:bg-green-600 focus-visible:ring-2 focus-visible:ring-green-500/40 focus-visible:outline-none dark:bg-neutral-900 dark:checked:border-green-600 dark:checked:bg-green-600"
+                                                    checked={fieldValues?.[el.id] === true}
+                                                    onchange={(e) =>
+                                                        onvalue?.(el.id, e.currentTarget.checked)}
+                                                />
+                                                <svg
+                                                    viewBox="0 0 24 24"
+                                                    fill="none"
+                                                    stroke="currentColor"
+                                                    stroke-width="3.5"
+                                                    stroke-linecap="round"
+                                                    stroke-linejoin="round"
+                                                    class="pointer-events-none absolute inset-0 m-auto size-3 text-white opacity-0 transition-opacity peer-checked:opacity-100"
+                                                >
+                                                    <path d="M20 6 9 17l-5-5"></path>
+                                                </svg>
+                                            </label>
                                         </div>
                                     {:else if el.kind === "radio"}
                                         <div
-                                            class="absolute grid place-items-center border-2 border-green-500 bg-green-500/10"
+                                            class="absolute grid place-items-center rounded-lg border-2 border-green-500/70 bg-green-500/10 transition-colors hover:border-green-500"
                                             style={boxStyle(el, page)}
                                             title={el.label ?? "Radio"}
                                         >
-                                            <input
-                                                type="radio"
-                                                name={el.radioGroup ?? `radio-${el.id}`}
-                                                class="size-5 cursor-pointer"
-                                                checked={fieldValues?.[el.id] === el.id}
-                                                onchange={() => onvalue?.(el.id, el.id)}
-                                            />
+                                            <label class="relative inline-flex cursor-pointer">
+                                                <input
+                                                    type="radio"
+                                                    name={el.radioGroup ?? `radio-${el.id}`}
+                                                    class="peer size-5 cursor-pointer appearance-none rounded-full border-2 border-green-500 bg-white transition-all checked:border-green-600 focus-visible:ring-2 focus-visible:ring-green-500/40 focus-visible:outline-none dark:bg-neutral-900 dark:checked:border-green-600"
+                                                    checked={fieldValues?.[el.id] === el.id}
+                                                    onchange={() => onvalue?.(el.id, el.id)}
+                                                />
+                                                <span
+                                                    class="pointer-events-none absolute inset-0 m-auto size-2.5 rounded-full bg-green-600 opacity-0 transition-opacity peer-checked:opacity-100"
+                                                ></span>
+                                            </label>
                                         </div>
                                     {:else if el.kind === "choices"}
                                         <div
-                                            class="absolute flex items-center border-2 border-green-500 bg-green-500/10"
+                                            class="absolute flex items-stretch overflow-hidden rounded-lg border-2 border-green-500/70 bg-green-500/10 transition-colors hover:border-green-500"
                                             style={boxStyle(el, page)}
                                             title={el.label ?? "Choices"}
                                         >
-                                            <select
-                                                class="w-full min-w-0 bg-transparent px-1.5 py-1 text-xs font-medium text-green-800 focus:outline-none dark:text-green-200"
-                                                value={typeof fieldValues?.[el.id] === "string"
-                                                    ? fieldValues[el.id]
-                                                    : ""}
-                                                onchange={(e) =>
-                                                    onvalue?.(el.id, e.currentTarget.value)}
-                                            >
-                                                <option value="">Select…</option>
-                                                {#each el.choices ?? [] as c (c)}
-                                                    <option value={c}>{c}</option>
-                                                {/each}
-                                            </select>
+                                            <div class="relative min-w-0 flex-1">
+                                                <select
+                                                    class="h-full w-full min-w-0 cursor-pointer appearance-none bg-transparent pr-7 pl-2 text-xs font-medium focus:outline-none
+                                                        {typeof fieldValues?.[el.id] === 'string' &&
+                                                    fieldValues[el.id] !== ''
+                                                        ? 'text-green-800 dark:text-green-200'
+                                                        : 'text-green-800/50 dark:text-green-200/50'}"
+                                                    value={typeof fieldValues?.[el.id] === "string"
+                                                        ? fieldValues[el.id]
+                                                        : ""}
+                                                    onchange={(e) =>
+                                                        onvalue?.(el.id, e.currentTarget.value)}
+                                                >
+                                                    <option
+                                                        value=""
+                                                        class="bg-white text-neutral-900 dark:bg-neutral-900 dark:text-neutral-100"
+                                                    >
+                                                        Select…
+                                                    </option>
+                                                    {#each el.choices ?? [] as c (c)}
+                                                        <option
+                                                            value={c}
+                                                            class="bg-white text-neutral-900 dark:bg-neutral-900 dark:text-neutral-100"
+                                                            >{c}</option
+                                                        >
+                                                    {/each}
+                                                </select>
+                                                <svg
+                                                    viewBox="0 0 24 24"
+                                                    fill="none"
+                                                    stroke="currentColor"
+                                                    stroke-width="2"
+                                                    stroke-linecap="round"
+                                                    stroke-linejoin="round"
+                                                    class="pointer-events-none absolute top-1/2 right-2 size-3.5 -translate-y-1/2 text-green-700/70 dark:text-green-300/70"
+                                                >
+                                                    <path d="m6 9 6 6 6-6"></path>
+                                                </svg>
+                                            </div>
                                         </div>
                                     {:else}
                                         <!-- text / phone -->
