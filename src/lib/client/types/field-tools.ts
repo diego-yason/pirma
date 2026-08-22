@@ -52,10 +52,10 @@ export interface FieldToolDef {
     /** Whether this kind has a config editor (rendered in the context menu). */
     hasConfig?: boolean;
     /**
-     * Default validation rule (e.g. a phone-number regex) applied at signing time.
-     * TODO(HIGH): not yet enforced — sign-time value collection is unimplemented.
-     * Wire up `field-inputs/{kind}.svelte` + `finalize` validation + payload
-     * binding so declared validators actually run. See docs/ai/form-fields.md.
+     * Default validation rule (e.g. a phone-number regex) enforced at signing time.
+     * Signers enter values in per-kind widgets, `finalize` validates against this
+     * pattern and stores values on `signatures.field_values`, and their hash is
+     * bound into the signed payload. See docs/ai/form-fields.md.
      */
     validation?: FieldValidation;
 }
@@ -111,21 +111,41 @@ export const FIELD_TOOLS: FieldToolDef[] = [
             hint: "+1 (555) 000-0000",
         },
     },
+    {
+        // Checkbox — a boolean toggle the signer ticks.
+        kind: "checkbox",
+        label: "Checkbox",
+        group: "alternative",
+        icon: "M3.75 5.25h16.5v13.5H3.75zM8 11l2.5 2.5L16 8",
+        width: 32,
+        height: 32,
+        accent: {
+            box: "border-emerald-500 bg-emerald-500/10",
+            text: "text-emerald-700 dark:text-emerald-300",
+        },
+        boxIcon: "M3.75 5.25h16.5v13.5H3.75zM8 11l2.5 2.5L16 8",
+        hasConfig: true,
+    },
+    {
+        // Radio — a single choice from a group; radios sharing a `radioGroup`
+        // are mutually exclusive at signing time.
+        kind: "radio",
+        label: "Radio",
+        group: "alternative",
+        icon: "M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18ZM12 8a4 4 0 1 1 0 8 4 4 0 0 1 0-8Z",
+        width: 32,
+        height: 32,
+        accent: {
+            box: "border-violet-500 bg-violet-500/10",
+            text: "text-violet-700 dark:text-violet-300",
+        },
+        boxIcon: "M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18ZM12 8a4 4 0 1 1 0 8 4 4 0 0 1 0-8Z",
+        hasConfig: true,
+    },
     // ── Future field types ─────────────────────────────────────────
     // Fully declarative: add the kind + this entry, then drop optional
-    // `field-configs/checkbox.svelte` / `field-inputs/checkbox.svelte`
+    // `field-configs/{kind}.svelte` / `field-inputs/{kind}.svelte`
     // components for the config/behavior slots. No PDFViewer edits needed.
-    // {
-    //     kind: "checkbox",
-    //     label: "Checkbox",
-    //     group: "alternative",
-    //     icon: "M3.75 5.25h16.5v13.5H3.75zM8 11l2.5 2.5L16 8",
-    //     width: 24,
-    //     height: 24,
-    //     accent: { box: "border-emerald-500 bg-emerald-500/10", text: "text-emerald-700 dark:text-emerald-300" },
-    //     boxIcon: "M3.75 5.25h16.5v13.5H3.75zM8 11l2.5 2.5L16 8",
-    //     hasConfig: true,
-    // },
     // {
     //     kind: "date",
     //     label: "Date",
@@ -170,16 +190,18 @@ export function fieldDefaultsFor(kind: FieldKind | undefined | null): {
     return { width: def.width, height: def.height };
 }
 
-/** Label + kind + seeded choices for a newly placed field. */
+/** Label + kind + seeded choices + validation for a newly placed field. */
 export function fieldMetaFor(kind: FieldKind | undefined | null): {
     label: string;
     kind: FieldKind;
     choices?: string[];
+    validation?: FieldValidation;
 } {
     const def = fieldToolFor(kind);
     return {
         label: def.label,
         kind: def.kind,
         choices: def.placeholderChoices ? [...def.placeholderChoices] : undefined,
+        validation: def.validation ? { ...def.validation } : undefined,
     };
 }

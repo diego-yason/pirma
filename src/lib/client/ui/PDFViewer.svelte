@@ -4,14 +4,23 @@
     import { fieldDefaultsFor, fieldMetaFor, fieldToolFor } from "../types/field-tools.js";
     import ChoicesConfig from "./field-configs/ChoicesConfig.svelte";
     import PhoneConfig from "./field-configs/PhoneConfig.svelte";
+    import CheckboxConfig from "./field-configs/CheckboxConfig.svelte";
+    import RadioConfig from "./field-configs/RadioConfig.svelte";
 
     type Mode = "design" | "sign" | "view";
     type Tool = FieldKind | null;
+
+    const VALUE_KINDS = new Set<FieldKind>(["text", "phone", "choices", "checkbox", "radio"]);
+    function isValueKind(kind?: FieldKind): boolean {
+        return kind ? VALUE_KINDS.has(kind) : false;
+    }
 
     // Props shared by every per-kind config editor component.
     interface FieldConfigProps {
         box: PlacedRect;
         onchange: (box: PlacedRect) => void;
+        /** All placed boxes in the document (used e.g. for radio-group suggestions). */
+        boxes?: PlacedRect[];
     }
 
     // Per-kind config editors shown in the context menu (data-driven: drop a
@@ -19,6 +28,8 @@
     const CONFIG_COMPONENTS: Partial<Record<FieldKind, Component<FieldConfigProps>>> = {
         choices: ChoicesConfig,
         phone: PhoneConfig,
+        checkbox: CheckboxConfig,
+        radio: RadioConfig,
     };
 
     let {
@@ -31,8 +42,10 @@
         signatureUrl,
         fieldSignatureUrls,
         ownFieldIds,
+        fieldValues = {},
         onsign,
         onremove,
+        onvalue,
         onadd,
         onmove,
         onresize,
@@ -48,8 +61,10 @@
         signatureUrl?: string;
         fieldSignatureUrls?: Record<string, string>;
         ownFieldIds?: Set<string>;
+        fieldValues?: Record<string, string | boolean>;
         onsign?: (id: string) => void;
         onremove?: (id: string) => void;
+        onvalue?: (id: string, value: string | boolean) => void;
         onadd?: (rect: PlacedRect) => void;
         onmove?: (rect: PlacedRect) => void;
         onresize?: (rect: PlacedRect) => void;
@@ -347,6 +362,7 @@
             label: meta.label,
             kind: meta.kind,
             choices: meta.choices,
+            validation: meta.validation,
         };
 
         placedElements.push(newRect);
@@ -375,6 +391,7 @@
             label: meta.label,
             kind: meta.kind,
             choices: meta.choices,
+            validation: meta.validation,
         };
 
         placedElements.push(newRect);
@@ -797,43 +814,111 @@
                                 </div>
                             {:else}
                                 <!-- Sign mode: unsigned (own field) -->
-                                <button
-                                    type="button"
-                                    class="absolute cursor-pointer border-2 border-green-500 bg-green-500/10 transition-colors hover:bg-red-500/20 hover:border-red-500"
-                                    style={boxStyle(el, page)}
-                                    onclick={() => onsign?.(el.id)}
-                                    oncontextmenu={(e) => {
-                                        e.preventDefault();
-                                        onremove?.(el.id);
-                                    }}
-                                    title="Click to sign · Right-click to remove"
-                                >
-                                    {#if toolDef.boxIcon}
-                                        <span
-                                            class="absolute inset-0 flex items-center justify-between gap-1 px-2 text-xs font-medium text-green-700 dark:text-green-300"
+                                {#if isValueKind(el.kind)}
+                                    <!-- Fillable value field: signer enters/selects a value -->
+                                    {#if el.kind === "checkbox"}
+                                        <div
+                                            class="absolute grid place-items-center border-2 border-green-500 bg-green-500/10"
+                                            style={boxStyle(el, page)}
+                                            title={el.label ?? "Checkbox"}
                                         >
-                                            <span class="truncate">{el.label ?? toolDef.label}</span>
-                                            <svg
-                                                viewBox="0 0 24 24"
-                                                fill="none"
-                                                stroke="currentColor"
-                                                stroke-width="2"
-                                                class="size-3.5 shrink-0"
+                                            <input
+                                                type="checkbox"
+                                                class="size-5 cursor-pointer"
+                                                checked={fieldValues?.[el.id] === true}
+                                                onchange={(e) => onvalue?.(el.id, e.currentTarget.checked)}
+                                            />
+                                        </div>
+                                    {:else if el.kind === "radio"}
+                                        <div
+                                            class="absolute grid place-items-center border-2 border-green-500 bg-green-500/10"
+                                            style={boxStyle(el, page)}
+                                            title={el.label ?? "Radio"}
+                                        >
+                                            <input
+                                                type="radio"
+                                                name={el.radioGroup ?? `radio-${el.id}`}
+                                                class="size-5 cursor-pointer"
+                                                checked={fieldValues?.[el.id] === el.id}
+                                                onchange={() => onvalue?.(el.id, el.id)}
+                                            />
+                                        </div>
+                                    {:else if el.kind === "choices"}
+                                        <div
+                                            class="absolute flex items-center border-2 border-green-500 bg-green-500/10"
+                                            style={boxStyle(el, page)}
+                                            title={el.label ?? "Choices"}
+                                        >
+                                            <select
+                                                class="w-full min-w-0 bg-transparent px-1.5 py-1 text-xs font-medium text-green-800 focus:outline-none dark:text-green-200"
+                                                value={typeof fieldValues?.[el.id] === "string"
+                                                    ? fieldValues[el.id]
+                                                    : ""}
+                                                onchange={(e) => onvalue?.(el.id, e.currentTarget.value)}
                                             >
-                                                <path
-                                                    stroke-linecap="round"
-                                                    stroke-linejoin="round"
-                                                    d={toolDef.boxIcon}
-                                                ></path>
-                                            </svg>
-                                        </span>
-                                    {:else if el.label}
-                                        <span
-                                            class="absolute inset-0 flex items-center justify-center text-xs font-medium text-green-700 dark:text-green-300"
-                                            >{el.label}</span
+                                                <option value="">Select…</option>
+                                                {#each el.choices ?? [] as c (c)}
+                                                    <option value={c}>{c}</option>
+                                                {/each}
+                                            </select>
+                                        </div>
+                                    {:else}
+                                        <!-- text / phone -->
+                                        <div
+                                            class="absolute flex items-center border-2 border-green-500 bg-green-500/10"
+                                            style={boxStyle(el, page)}
+                                            title={el.label ?? "Text"}
                                         >
+                                            <input
+                                                type={el.kind === "phone" ? "tel" : "text"}
+                                                placeholder={el.validation?.hint ?? ""}
+                                                class="w-full min-w-0 bg-transparent px-1.5 py-1 text-xs font-medium text-green-800 placeholder:text-green-800/40 focus:outline-none dark:text-green-200 dark:placeholder:text-green-200/40"
+                                                value={typeof fieldValues?.[el.id] === "string"
+                                                    ? fieldValues[el.id]
+                                                    : ""}
+                                                oninput={(e) => onvalue?.(el.id, e.currentTarget.value)}
+                                            />
+                                        </div>
                                     {/if}
-                                </button>
+                                {:else}
+                                    <button
+                                        type="button"
+                                        class="absolute cursor-pointer border-2 border-green-500 bg-green-500/10 transition-colors hover:bg-red-500/20 hover:border-red-500"
+                                        style={boxStyle(el, page)}
+                                        onclick={() => onsign?.(el.id)}
+                                        oncontextmenu={(e) => {
+                                            e.preventDefault();
+                                            onremove?.(el.id);
+                                        }}
+                                        title="Click to sign · Right-click to remove"
+                                    >
+                                        {#if toolDef.boxIcon}
+                                            <span
+                                                class="absolute inset-0 flex items-center justify-between gap-1 px-2 text-xs font-medium text-green-700 dark:text-green-300"
+                                            >
+                                                <span class="truncate">{el.label ?? toolDef.label}</span>
+                                                <svg
+                                                    viewBox="0 0 24 24"
+                                                    fill="none"
+                                                    stroke="currentColor"
+                                                    stroke-width="2"
+                                                    class="size-3.5 shrink-0"
+                                                >
+                                                    <path
+                                                        stroke-linecap="round"
+                                                        stroke-linejoin="round"
+                                                        d={toolDef.boxIcon}
+                                                    ></path>
+                                                </svg>
+                                            </span>
+                                        {:else if el.label}
+                                            <span
+                                                class="absolute inset-0 flex items-center justify-center text-xs font-medium text-green-700 dark:text-green-300"
+                                                >{el.label}</span
+                                            >
+                                        {/if}
+                                    </button>
+                                {/if}
                             {/if}
                         {/each}
 
@@ -974,7 +1059,11 @@
             <!-- Config editor — per-kind component resolved from the registry -->
             {#if ConfigCmp}
                 <div class="mt-1 border-t border-neutral-100 px-1 pt-1 dark:border-neutral-800">
-                    <ConfigCmp box={contextMenu.el} onchange={handleBoxConfigChange} />
+                    <ConfigCmp
+                        box={contextMenu.el}
+                        boxes={placedElements}
+                        onchange={handleBoxConfigChange}
+                    />
                 </div>
             {/if}
         </div>

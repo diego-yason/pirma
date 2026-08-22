@@ -124,6 +124,7 @@ export const signatures = pgTable(
             .notNull()
             .references(() => user.id),
         signedFields: jsonb("signed_fields").notNull().default([]),
+        fieldValues: jsonb("field_values"),
         documentHash: text("document_hash").notNull(),
         status: signaturesStatus("status").notNull().default("pending"),
         signedAt: timestamp("signed_at"),

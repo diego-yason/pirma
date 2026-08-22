@@ -40,7 +40,7 @@
                 type="text"
                 placeholder="e.g. 'Yes'"
                 class="w-full min-w-0 rounded-md border border-neutral-300 bg-white px-2 py-1 text-sm text-neutral-900 placeholder:text-neutral-400 focus:border-secondary-500 focus:ring-2 focus:ring-secondary-500/20 dark:border-neutral-700 dark:bg-neutral-900 dark:text-neutral-100 dark:placeholder:text-neutral-500"
-                bind:value={box.choices[i]}
+                bind:value={box.choices![i]}
                 oninput={handleInput}
             />
             <button

@@ -7,7 +7,11 @@
     import { authClient } from "#lib/client/auth/auth-client.js";
     import { setupDeviceKeys } from "#lib/client/crypto/setup-device-keys.js";
     import { sign, loadKeys, getKeyForLevel } from "#lib/client/crypto/sw-key.js";
-    import { buildSigningPayload } from "#lib/shared/signing-payload.js";
+    import {
+        buildSigningPayload,
+        canonicalFieldValues,
+        sha256Hex,
+    } from "#lib/shared/signing-payload.js";
     import { page } from "$app/state";
     import { SvelteMap } from "svelte/reactivity";
 
@@ -187,6 +191,39 @@
         localSignStatus = { ...localSignStatus, [fieldId]: "pending" };
     }
 
+    // ── Field values (text / phone / choices / checkbox / radio) ──
+    let fieldValues = $state<Record<string, string | boolean>>({});
+
+    function isValueKind(kind?: string): boolean {
+        return (
+            kind === "text" ||
+            kind === "phone" ||
+            kind === "choices" ||
+            kind === "checkbox" ||
+            kind === "radio"
+        );
+    }
+
+    interface UserFieldLike {
+        fieldId: string;
+        documentId: string;
+        rect: PlacedRect;
+    }
+
+    /** Whether a value field is complete (blocks finalize when not). */
+    function valueFieldComplete(field: UserFieldLike): boolean {
+        const kind = field.rect.kind;
+        if (!isValueKind(kind)) return true;
+        const value = fieldValues[field.fieldId];
+        if (!field.rect.required) return true; // non-required value fields don't block
+        if (kind === "checkbox") return value === true; // required checkbox must be checked
+        return typeof value === "string" && value.trim() !== "";
+    }
+
+    function handleValueChange(fieldId: string, value: string | boolean) {
+        fieldValues[fieldId] = value;
+    }
+
     let finalizing = $state(false);
     let rejecting = $state(false);
 
@@ -299,13 +336,18 @@
                 return;
             }
 
-            // 2. Get the signed field IDs
+            // 2. Get the signed field IDs (signature fields only — value fields
+            //    are submitted separately and bound into the payload via a hash).
             const fieldIds = Object.entries(localSignStatus)
                 .filter(([, status]) => status === "signed" || status === "anchored")
-                .map(([fieldId]) => fieldId);
+                .map(([fieldId]) => fieldId)
+                .filter((fieldId) => {
+                    const f = data.userFields.find((uf) => uf.fieldId === fieldId);
+                    return f ? !isValueKind(f.rect.kind) : true;
+                });
 
             if (fieldIds.length === 0) {
-                console.warn("[sign] No fields are marked as signed — nothing to finalize", {
+                console.warn("[sign] No signature fields are signed — nothing to finalize", {
                     userId: data.user.id,
                 });
                 finalizing = false;
@@ -316,6 +358,19 @@
                 kid,
                 fieldIds,
             });
+
+            // 2b. Submitted field values (value fields only)
+            const fieldValuesPayload: Record<string, { kind: string; value: string | boolean }> =
+                {};
+            for (const field of data.userFields) {
+                const kind = field.rect.kind;
+                if (!isValueKind(kind)) continue;
+                const value = fieldValues[field.fieldId];
+                if (value === undefined || (typeof value === "string" && value.trim() === "")) {
+                    continue;
+                }
+                fieldValuesPayload[field.fieldId] = { kind, value };
+            }
 
             // 3. Sign ONCE per document (not per field)
             //    Group fields by document, then sign one payload per doc
@@ -341,12 +396,25 @@
             }
 
             for (const [docId, group] of docGroups) {
+                // Values hash for this document (empty map when no value fields) —
+                // must match what the server derives from the submitted values.
+                const valuesForHash: Record<string, string | boolean> = {};
+                for (const field of data.userFields) {
+                    if (field.documentId !== docId) continue;
+                    if (!isValueKind(field.rect.kind)) continue;
+                    const v = fieldValues[field.fieldId];
+                    if (v === undefined || v === "") continue;
+                    valuesForHash[field.fieldId] = v;
+                }
+                const fieldValuesHash = await sha256Hex(canonicalFieldValues(valuesForHash));
+
                 const payload = buildSigningPayload({
                     packageId: data.pkg.id,
                     documentId: docId,
                     documentHash: group.docHash,
                     fieldIds: group.fieldIds,
                     signerUserId: data.user.id,
+                    fieldValuesHash,
                 });
                 const sig = await sign(kid, payload, requiredLevel);
                 // All fields in this document share the same signature
@@ -363,6 +431,7 @@
             // 4. POST to the server
             const body = new FormData();
             body.append("signedFields", JSON.stringify(fieldIds));
+            body.append("fieldValues", JSON.stringify(fieldValuesPayload));
             body.append("signatures", JSON.stringify(signatures));
             body.append("kid", kid);
             body.append("keyLevel", String(requiredLevel));
@@ -444,15 +513,21 @@
 
     // All fields across all documents for the action center
     let pendingCount = $derived(
-        Object.values(localSignStatus).filter((s) => s === "pending").length,
+        data.userFields.filter((f) => {
+            if (isValueKind(f.rect.kind)) return !valueFieldComplete(f);
+            const st = localSignStatus[f.fieldId] ?? "pending";
+            return st !== "signed" && st !== "anchored";
+        }).length,
     );
-    let signedCount = $derived(
-        Object.values(localSignStatus).filter((s) => s === "signed" || s === "anchored").length,
-    );
+    let signedCount = $derived(data.userFields.length - pendingCount);
 
-    // Per-field status lookup for the action center
-    function fieldStatus(fieldId: string): string {
-        return localSignStatus[fieldId] ?? "pending";
+    // Per-field status lookup for the action center (value fields complete once
+    // filled; signature fields once signed)
+    function fieldStatus(field: UserFieldLike): string {
+        if (isValueKind(field.rect.kind)) {
+            return valueFieldComplete(field) ? "signed" : "pending";
+        }
+        return localSignStatus[field.fieldId] ?? "pending";
     }
 
     function statusBadge(status: string): { label: string; class: string } {
@@ -515,12 +590,12 @@
     <!-- Guest email OTP gate — covers the page until the guest verifies -->
     <div class="fixed inset-0 z-50 flex items-center justify-center bg-white dark:bg-neutral-950">
         <div
-            class="mx-4 w-full max-w-sm rounded-lg border border-neutral-200 dark:border-neutral-800 p-6"
+            class="mx-4 w-full max-w-sm rounded-lg border border-neutral-200 p-6 dark:border-neutral-800"
         >
             <h2 class="mb-1 text-lg font-semibold">Verify your email</h2>
             <p class="mb-4 text-sm text-neutral-500">
-                To sign this document, confirm you're the right person by entering the code we
-                send to your email.
+                To sign this document, confirm you're the right person by entering the code we send
+                to your email.
             </p>
 
             <div class="flex flex-col gap-4">
@@ -537,7 +612,7 @@
 
                 {#if otpStep === "idle"}
                     <button
-                        class="tracking-wider rounded-md bg-secondary-200 py-3 font-bold text-primary-900 disabled:opacity-50"
+                        class="rounded-md bg-secondary-200 py-3 font-bold tracking-wider text-primary-900 disabled:opacity-50"
                         disabled={otpSending || !otpEmail.trim()}
                         onclick={sendOtpCode}
                     >
@@ -554,11 +629,11 @@
                             autocomplete="one-time-code"
                             maxlength="6"
                             placeholder="6-digit code"
-                            class="rounded-md text-primary-900 tracking-[0.4em]"
+                            class="rounded-md tracking-[0.4em] text-primary-900"
                         />
                     </div>
                     <button
-                        class="tracking-wider rounded-md bg-secondary-200 py-3 font-bold text-primary-900 disabled:opacity-50"
+                        class="rounded-md bg-secondary-200 py-3 font-bold tracking-wider text-primary-900 disabled:opacity-50"
                         disabled={otpVerifying || otpCode.trim().length !== 6}
                         onclick={verifyOtpCode}
                     >
@@ -596,11 +671,11 @@
     >
         <!-- svelte-ignore a11y_click_events_have_key_events -->
         <div
-            class="bg-white dark:bg-neutral-900 rounded-lg shadow-xl w-full max-w-lg mx-4 p-6"
+            class="mx-4 w-full max-w-lg rounded-lg bg-white p-6 shadow-xl dark:bg-neutral-900"
             onclick={(e) => e.stopPropagation()}
         >
-            <h2 class="text-lg font-semibold mb-1">Set Up Your Signature</h2>
-            <p class="text-sm text-neutral-500 mb-4">
+            <h2 class="mb-1 text-lg font-semibold">Set Up Your Signature</h2>
+            <p class="mb-4 text-sm text-neutral-500">
                 Create a signature to use when signing documents.
             </p>
 
@@ -615,16 +690,16 @@
 
 <div class="flex h-full overflow-hidden">
     <!-- Left: Document List -->
-    <div class="w-56 shrink-0 border-r border-neutral-200 dark:border-neutral-800 flex flex-col">
-        <div class="px-4 py-3 border-b border-neutral-200 dark:border-neutral-800">
-            <h2 class="text-sm font-semibold text-neutral-500 uppercase tracking-wider">
+    <div class="flex w-56 shrink-0 flex-col border-r border-neutral-200 dark:border-neutral-800">
+        <div class="border-b border-neutral-200 px-4 py-3 dark:border-neutral-800">
+            <h2 class="text-sm font-semibold tracking-wider text-neutral-500 uppercase">
                 Documents
             </h2>
         </div>
         <div class="flex-1 overflow-y-auto">
             {#each data.documents as doc (doc.id)}
                 <button
-                    class="w-full text-left px-4 py-3 text-sm transition hover:bg-neutral-100 dark:hover:bg-neutral-900"
+                    class="w-full px-4 py-3 text-left text-sm transition hover:bg-neutral-100 dark:hover:bg-neutral-900"
                     class:bg-neutral-100={doc.id === selectedDocId}
                     class:dark:bg-neutral-900={doc.id === selectedDocId}
                     class:font-semibold={doc.id === selectedDocId}
@@ -640,7 +715,7 @@
     </div>
 
     <!-- Center: PDF Viewer -->
-    <div class="flex-1 min-w-0 min-h-0 overflow-y-auto">
+    <div class="min-h-0 min-w-0 flex-1 overflow-y-auto">
         {#if selectedDoc?.url}
             <PDFViewer
                 pdfUrl={selectedDoc.url}
@@ -650,30 +725,32 @@
                 mode="sign"
                 onsign={handleSign}
                 onremove={handleRemove}
+                onvalue={handleValueChange}
+                {fieldValues}
                 signatureUrl={localSignatureUrl ?? data.defaultSignature ?? undefined}
             />
         {:else}
-            <div class="flex items-center justify-center h-full text-neutral-500">
+            <div class="flex h-full items-center justify-center text-neutral-500">
                 <p>No document available for preview.</p>
             </div>
         {/if}
     </div>
 
     <!-- Right: Action / Todo Center -->
-    <div class="w-72 shrink-0 border-l border-neutral-200 dark:border-neutral-800 flex flex-col">
-        <div class="px-4 py-3 border-b border-neutral-200 dark:border-neutral-800">
-            <h2 class="text-sm font-semibold text-neutral-500 uppercase tracking-wider">
+    <div class="flex w-72 shrink-0 flex-col border-l border-neutral-200 dark:border-neutral-800">
+        <div class="border-b border-neutral-200 px-4 py-3 dark:border-neutral-800">
+            <h2 class="text-sm font-semibold tracking-wider text-neutral-500 uppercase">
                 Signature Fields
             </h2>
         </div>
 
         <!-- Summary -->
-        <div class="px-4 py-3 border-b border-neutral-200 dark:border-neutral-800">
+        <div class="border-b border-neutral-200 px-4 py-3 dark:border-neutral-800">
             <div class="flex justify-between text-sm">
                 <span class="text-neutral-500">Pending</span>
                 <span class="font-medium text-amber-600">{pendingCount}</span>
             </div>
-            <div class="flex justify-between text-sm mt-1">
+            <div class="mt-1 flex justify-between text-sm">
                 <span class="text-neutral-500">Completed</span>
                 <span class="font-medium text-emerald-600">{signedCount}</span>
             </div>
@@ -684,18 +761,18 @@
             {#if data.userFields.length > 0}
                 <div class="flex flex-col">
                     {#each data.userFields as field (field.fieldId + field.documentId)}
-                        {@const st = fieldStatus(field.fieldId)}
+                        {@const st = fieldStatus(field)}
                         {@const badge = statusBadge(st)}
                         <button
-                            class="flex items-center justify-between px-4 py-3 text-left text-sm border-b border-neutral-100 dark:border-neutral-900 transition hover:bg-neutral-50 dark:hover:bg-neutral-900/50"
+                            class="flex items-center justify-between border-b border-neutral-100 px-4 py-3 text-left text-sm transition hover:bg-neutral-50 dark:border-neutral-900 dark:hover:bg-neutral-900/50"
                             class:opacity-60={st === "signed" || st === "anchored"}
                             onclick={() => (selectedDocId = field.documentId)}
                         >
-                            <div class="min-w-0 flex-1 mr-2">
+                            <div class="mr-2 min-w-0 flex-1">
                                 <p class="truncate font-medium">
                                     {field.label || "Signature"}
                                 </p>
-                                <p class="text-xs text-neutral-500 truncate">
+                                <p class="truncate text-xs text-neutral-500">
                                     {field.documentTitle} · Page {field.page}
                                 </p>
                             </div>
@@ -708,28 +785,28 @@
                     {/each}
                 </div>
             {:else}
-                <p class="px-4 py-6 text-sm text-neutral-500 text-center">
+                <p class="px-4 py-6 text-center text-sm text-neutral-500">
                     No signature fields assigned to you.
                 </p>
             {/if}
         </div>
 
         <!-- Actions -->
-        <div class="px-4 py-3 border-t border-neutral-200 dark:border-neutral-800 space-y-2">
+        <div class="space-y-2 border-t border-neutral-200 px-4 py-3 dark:border-neutral-800">
             {#if !data.canSign}
-                <p class="text-xs text-neutral-500 text-center">
+                <p class="text-center text-xs text-neutral-500">
                     Waiting for previous signers to complete.
                 </p>
             {/if}
             <button
-                class="w-full rounded-md bg-blue-600 px-4 py-3 text-sm font-medium text-white transition hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
+                class="w-full rounded-md bg-blue-600 px-4 py-3 text-sm font-medium text-white transition hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-50"
                 disabled={!data.canSign || pendingCount > 0 || finalizing}
-                onclick={handleFinalize}
+                onclick={() => handleFinalize()}
             >
                 {finalizing ? "Finalizing..." : "Finalize Document"}
             </button>
             <button
-                class="w-full rounded-md border border-red-300 dark:border-red-800 px-4 py-3 text-sm font-medium text-red-600 dark:text-red-400 transition hover:bg-red-50 dark:hover:bg-red-950 disabled:opacity-50 disabled:cursor-not-allowed"
+                class="w-full rounded-md border border-red-300 px-4 py-3 text-sm font-medium text-red-600 transition hover:bg-red-50 disabled:cursor-not-allowed disabled:opacity-50 dark:border-red-800 dark:text-red-400 dark:hover:bg-red-950"
                 disabled={!data.canSign || rejecting}
                 onclick={openRejectModal}
             >
@@ -750,13 +827,13 @@
     >
         <!-- svelte-ignore a11y_click_events_have_key_events -->
         <div
-            class="mx-4 w-full max-w-sm rounded-lg bg-white dark:bg-neutral-900 p-6"
+            class="mx-4 w-full max-w-sm rounded-lg bg-white p-6 dark:bg-neutral-900"
             onclick={(e) => e.stopPropagation()}
         >
             <h2 class="mb-1 text-lg font-semibold">Confirm your password</h2>
             <p class="mb-4 text-sm text-neutral-500">
-                This document requires two-factor authentication. Enter your password to unlock
-                your signing key.
+                This document requires two-factor authentication. Enter your password to unlock your
+                signing key.
             </p>
             <form
                 onsubmit={(e) => {
@@ -811,25 +888,25 @@
     >
         <!-- svelte-ignore a11y_click_events_have_key_events -->
         <div
-            class="bg-white dark:bg-neutral-900 rounded-lg shadow-xl w-full max-w-md mx-4 p-6"
+            class="mx-4 w-full max-w-md rounded-lg bg-white p-6 shadow-xl dark:bg-neutral-900"
             onclick={(e) => e.stopPropagation()}
         >
-            <h2 class="text-lg font-semibold mb-1">Reject Document</h2>
-            <p class="text-sm text-neutral-500 mb-4">
+            <h2 class="mb-1 text-lg font-semibold">Reject Document</h2>
+            <p class="mb-4 text-sm text-neutral-500">
                 Are you sure you want to reject this document? This cannot be undone.
             </p>
 
-            <label for="rejectReason" class="block text-sm font-medium mb-1">
-                Reason <span class="text-neutral-400 font-normal">(optional)</span>
+            <label for="rejectReason" class="mb-1 block text-sm font-medium">
+                Reason <span class="font-normal text-neutral-400">(optional)</span>
             </label>
             <textarea
                 id="rejectReason"
-                class="w-full rounded-md border border-neutral-300 dark:border-neutral-600 dark:bg-neutral-800 px-3 py-2 text-sm resize-none"
+                class="w-full resize-none rounded-md border border-neutral-300 px-3 py-2 text-sm dark:border-neutral-600 dark:bg-neutral-800"
                 rows={3}
                 placeholder="Please provide a reason for rejection..."
                 bind:value={rejectReason}></textarea>
 
-            <label class="flex items-center gap-2 mt-4 cursor-pointer">
+            <label class="mt-4 flex cursor-pointer items-center gap-2">
                 <input
                     type="checkbox"
                     class="rounded border-neutral-300 dark:border-neutral-600"
@@ -840,17 +917,17 @@
                 </span>
             </label>
 
-            <div class="flex gap-3 mt-6">
+            <div class="mt-6 flex gap-3">
                 <button
                     type="button"
-                    class="flex-1 rounded-md border border-neutral-300 dark:border-neutral-600 px-4 py-2.5 text-sm font-medium text-neutral-700 dark:text-neutral-300 transition hover:bg-neutral-100 dark:hover:bg-neutral-800"
+                    class="flex-1 rounded-md border border-neutral-300 px-4 py-2.5 text-sm font-medium text-neutral-700 transition hover:bg-neutral-100 dark:border-neutral-600 dark:text-neutral-300 dark:hover:bg-neutral-800"
                     onclick={closeRejectModal}
                 >
                     Cancel
                 </button>
                 <button
                     type="button"
-                    class="flex-1 rounded-md bg-red-600 px-4 py-2.5 text-sm font-medium text-white transition hover:bg-red-700 disabled:opacity-50 disabled:cursor-not-allowed"
+                    class="flex-1 rounded-md bg-red-600 px-4 py-2.5 text-sm font-medium text-white transition hover:bg-red-700 disabled:cursor-not-allowed disabled:opacity-50"
                     disabled={!rejectConfirmed || rejecting}
                     onclick={handleReject}
                 >

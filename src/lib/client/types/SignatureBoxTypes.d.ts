@@ -1,5 +1,5 @@
 /** The kind of fillable field a placed box represents. */
-export type FieldKind = "signature" | "text" | "choices" | "phone";
+export type FieldKind = "signature" | "text" | "choices" | "phone" | "checkbox" | "radio";
 
 /** A validation rule a text-like field's value must satisfy at signing time. */
 export interface FieldValidation {
@@ -10,6 +10,18 @@ export interface FieldValidation {
     /** Placeholder / example hint shown to the signer. */
     hint?: string;
 }
+
+/**
+ * A single field's submitted value. `radio` stores the id of the checked radio
+ * box; `checkbox` stores a boolean; text/phone/choices store a string.
+ */
+export interface FieldValue {
+    kind: FieldKind;
+    value: string | boolean;
+}
+
+/** Submitted field values keyed by field (box) id. */
+export type FieldValues = Record<string, FieldValue>;
 
 export interface PlacedRect {
     id: string;
@@ -29,6 +41,10 @@ export interface PlacedRect {
     choices?: string[];
     /** text-like fields: whether the signer must fill this in before finalize */
     required?: boolean;
+    /** radio: the group this option belongs to — radios in the same group are mutually exclusive */
+    radioGroup?: string;
+    /** Validation rule carried on the box (seeded from the registry at placement). */
+    validation?: FieldValidation;
 }
 
 export interface RecipientInfo {

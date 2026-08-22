@@ -46,17 +46,24 @@ box objects unchanged — so new properties persist with **no schema migration**
 | `text` | Text Field | `primary` | blue (default) | — |
 | `choices` | Choices | `alternative` | amber + list icon | `field-configs/ChoicesConfig.svelte` |
 | `phone` | Phone Number | `alternative` | blue (default) + phone icon | `field-configs/PhoneConfig.svelte` |
+| `checkbox` | Checkbox | `alternative` | emerald + checkbox icon | `field-configs/CheckboxConfig.svelte` |
+| `radio` | Radio | `alternative` | violet + radio icon | `field-configs/RadioConfig.svelte` |
 
 `group: "primary"` tools get a dedicated button; `group: "alternative"` tools appear in the
 **Others ▾** dropdown. (The user-facing concept for `choices` is a *list of choices*; it may be
 rendered as a literal dropdown at signing time later — the registry field is `choices`, not
 `dropdown`.)
 
+> **Radio groups** — a `radio` box carries a group name on `PlacedRect.radioGroup`. Radios
+> sharing the same group are mutually exclusive at signing time. The `RadioConfig` editor sets
+> the group (with quick-pick chips for groups already used in the document) plus a per-option
+> label; `CheckboxConfig` sets a label and `required`.
+
 ## The registry: `FieldToolDef`
 
 ```ts
 export interface FieldToolDef {
-    kind: FieldKind;                  // "signature" | "text" | "choices" (extend FieldKind too)
+    kind: FieldKind;                  // signature/text/choices/phone/checkbox/radio (extend FieldKind too)
     label: string;                    // button / box label
     icon: string;                     // 24×24 SVG path for the tool button
     group: "primary" | "alternative"; // button vs. Others ▾ dropdown
@@ -91,8 +98,9 @@ The registry drives the box's *looks and config UI* with no template edits:
 Config editor component API (see `field-configs/ChoicesConfig.svelte`):
 
 ```ts
-let { box, onchange }: {
+let { box, boxes = [], onchange }: {
     box: PlacedRect;                // mutate in place — reactive, shared with the document
+    boxes?: PlacedRect[];           // all placed boxes (e.g. for radio-group suggestions)
     onchange: (box: PlacedRect) => void; // call after each change to trigger the parent sync
 } = $props();
 ```
@@ -131,11 +139,10 @@ and persists automatically.
 
 ## Current limitations / next steps
 
-> 🔥 **TODO(HIGH): sign-time value collection + validation is not implemented.** The registry
-> declares validators (e.g. the phone regex) but they are **not enforced** — signers see a
-> preview only, values are not stored, and nothing is bound into the signed payload (a signer
-> could change data post-sign undetected). Build: `field-inputs/{kind}.svelte` widgets,
-> `finalize` validation, payload binding (`sha256(canonicalJson(fieldValues))`), and PDF/A
-> flattening. Design: `docs/ai/form-fields.md`.
+> ✅ **Implemented 2026-08-23:** sign-time value collection + validation + payload binding.
+> Value widgets render in sign mode (text/phone input, choices select, checkbox toggle, radio
+> group), `finalize` validates and stores values on `signatures.field_values` (migration
+> `0003`), and their hash is bound into the signed payload (`canonicalFieldValues` + `sha256Hex`
+> in `signing-payload.ts`). Remaining: PDF/A flattening + `date`/`initials` kinds.
 
-- Implemented kinds: `signature`, `text`, `choices`, `phone`; checkbox/date/initials are planned.
+- Implemented kinds: `signature`, `text`, `choices`, `phone`, `checkbox`, `radio`; date/initials are planned.

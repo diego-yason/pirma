@@ -18,7 +18,11 @@ import { verifyGuestToken } from "#lib/server/auth/guest-token.js";
 import { logger } from "#lib/server/logger.js";
 import { verifyEcdsaSignature } from "#lib/server/crypto/verify-signature.js";
 import { checkKeyPolicy, checkKeyUsage } from "#lib/server/crypto/key-rotation.js";
-import { buildSigningPayload } from "#lib/shared/signing-payload.js";
+import {
+    buildSigningPayload,
+    canonicalFieldValues,
+    sha256Hex,
+} from "#lib/shared/signing-payload.js";
 import { ORIGIN } from "$app/env/private";
 import { sendEmail } from "#lib/server/email/index.js";
 import {
@@ -29,7 +33,58 @@ import {
     renderExecuted,
     executedSubject,
 } from "#lib/server/email/templates/index.js";
-import type { PlacedRect } from "#lib/client/types/SignatureBoxTypes";
+// Field definitions + submitted value types for fillable fields.
+import type {
+    PlacedRect,
+    FieldValues,
+    FieldValue,
+    FieldKind,
+} from "#lib/client/types/SignatureBoxTypes";
+
+// Value fields accept submitted data at signing time (signature fields are
+// signed instead). Their values are stored and bound into the signed payload.
+const VALUE_KINDS = new Set<FieldKind>(["text", "phone", "choices", "checkbox", "radio"]);
+
+function isValueKind(kind?: FieldKind): boolean {
+    return kind ? VALUE_KINDS.has(kind) : false;
+}
+
+/** Validates a submitted value against the field's kind + config. Returns an error message or null. */
+function validateFieldValue(
+    field: PlacedRect,
+    entry: FieldValue,
+    radioGroupIds: Map<string, Set<string>>,
+): string | null {
+    const v = entry.value;
+    if (field.kind === "checkbox") {
+        return typeof v === "boolean" ? null : "must be true or false";
+    }
+    if (field.kind === "radio") {
+        if (typeof v !== "string" || !v) return "must reference a radio option";
+        if (!field.radioGroup) return "has no group assigned";
+        if (!radioGroupIds.get(field.radioGroup)?.has(v)) {
+            return "references a radio outside its group";
+        }
+        return null;
+    }
+    // text / phone / choices
+    if (typeof v !== "string" || !v.trim()) return "must be filled in";
+    if (field.kind === "choices") {
+        return (field.choices ?? []).includes(v) ? null : "is not one of the allowed choices";
+    }
+    if (field.kind === "phone" && field.validation?.pattern) {
+        return new RegExp(field.validation.pattern).test(v) ? null : field.validation.message;
+    }
+    return null;
+}
+
+function hasValidValue(
+    field: PlacedRect,
+    entry: FieldValue | undefined,
+    radioGroupIds: Map<string, Set<string>>,
+): boolean {
+    return !!entry && validateFieldValue(field, entry, radioGroupIds) === null;
+}
 
 export const load: PageServerLoad = async ({ params, locals, url }) => {
     const packageId = params.pageId;
@@ -955,6 +1010,80 @@ export const actions: Actions = {
             return fail(403, { error: "You are not authorized to sign one or more of these fields" });
         }
 
+        // ── Field values: validate ownership + per-kind semantics ──
+        const fieldValuesRaw = formData.get("fieldValues") as string | null;
+        let fieldValues: FieldValues = {};
+        if (fieldValuesRaw) {
+            try {
+                fieldValues = JSON.parse(fieldValuesRaw);
+            } catch {
+                logger.warn("sign", "Finalize — invalid fieldValues JSON", { packageId });
+                return fail(400, { error: "Invalid field values data" });
+            }
+        }
+
+        // Radio groups in the package: radioGroup → set of radio box ids.
+        const radioGroupIds = new Map<string, Set<string>>();
+        for (const doc of packageDocs) {
+            for (const f of (doc.placementFields ?? []) as PlacedRect[]) {
+                if (f.kind === "radio" && f.radioGroup) {
+                    const set = radioGroupIds.get(f.radioGroup) ?? new Set<string>();
+                    set.add(f.id);
+                    radioGroupIds.set(f.radioGroup, set);
+                }
+            }
+        }
+
+        // Value fields assigned to this signer, grouped by document.
+        const valueFieldsByDoc = new Map<string, PlacedRect[]>();
+        for (const doc of packageDocs) {
+            const mine = ((doc.placementFields ?? []) as PlacedRect[]).filter(
+                (f) =>
+                    isValueKind(f.kind) &&
+                    ((signatoryRecipient?.id && f.assignedTo === signatoryRecipient.id) ||
+                        (signatoryRecipient?.recipientId != null &&
+                            f.assignedTo === String(signatoryRecipient.recipientId)) ||
+                        (isOwnerSigner && f.assignedTo === "me")),
+            );
+            if (mine.length > 0) valueFieldsByDoc.set(doc.id, mine);
+        }
+
+        // Every submitted value must belong to a value field assigned to this
+        // signer and satisfy the field's kind + config.
+        for (const [fieldId, entry] of Object.entries(fieldValues)) {
+            if (!allowedFieldIds.has(fieldId)) {
+                return fail(403, {
+                    error: "You are not authorized to fill one or more of these fields",
+                });
+            }
+            const field = [...docMap.values()]
+                .map((d) => ((d.placementFields ?? []) as PlacedRect[]).find((f) => f.id === fieldId))
+                .find((f) => !!f) as PlacedRect | undefined;
+            if (!field || !isValueKind(field.kind)) {
+                return fail(400, { error: `Field ${fieldId} is not a fillable value field` });
+            }
+            if (field.kind !== entry.kind) {
+                return fail(400, { error: `Field "${field.label ?? fieldId}" kind mismatch` });
+            }
+            const err = validateFieldValue(field, entry, radioGroupIds);
+            if (err) {
+                return fail(400, {
+                    error: `Field "${field.label ?? fieldId}": ${err}`,
+                });
+            }
+        }
+
+        // Required value fields must be filled.
+        for (const [, fields] of valueFieldsByDoc) {
+            for (const f of fields) {
+                if (f.required && !hasValidValue(f, fieldValues[f.id], radioGroupIds)) {
+                    return fail(400, {
+                        error: `A required field ("${f.label ?? "field"}") is missing a value`,
+                    });
+                }
+            }
+        }
+
         // ── Sequential signing: reject if earlier signing groups are incomplete.
         const signingGroup = signatoryRecipient?.signingGroup ?? null;
         if (pkgOwnerRow?.signingOrderEnabled && signingGroup != null && signingGroup > 1) {
@@ -1058,12 +1187,30 @@ export const actions: Actions = {
             const doc = docMap.get(docId)!;
             const sigB64 = sigMap[group.fieldIds[0]]!; // all fields share same sig
 
+            // Collect this document's submitted values and bind their hash into
+            // the signed payload (client and server hash identically).
+            const docFields = (doc.placementFields ?? []) as PlacedRect[];
+            const docValues: FieldValues = {};
+            const valuesForHash: Record<string, string | boolean> = {};
+            for (const f of docFields) {
+                if (!isValueKind(f.kind)) continue;
+                const entry = fieldValues[f.id];
+                if (entry) {
+                    docValues[f.id] = entry;
+                    if (entry.value !== "" && entry.value !== undefined) {
+                        valuesForHash[f.id] = entry.value;
+                    }
+                }
+            }
+            const valuesHash = await sha256Hex(canonicalFieldValues(valuesForHash));
+
             const payload = buildSigningPayload({
                 packageId,
                 documentId: docId,
                 documentHash: doc.hash,
                 fieldIds: group.fieldIds,
                 signerUserId: party.userId,
+                fieldValuesHash: valuesHash,
             });
 
             if (!verifyEcdsaSignature(activeKey.pubkey, payload, sigB64)) {
@@ -1086,6 +1233,7 @@ export const actions: Actions = {
                 documentId: docId,
                 signerUserId: party.userId,
                 signedFields: group.fieldIds,
+                fieldValues: Object.keys(docValues).length > 0 ? docValues : undefined,
                 documentHash: doc.hash,
                 status: "signed",
                 signedAt: now,
@@ -1105,6 +1253,7 @@ export const actions: Actions = {
                         target: [signatures.documentId, signatures.signerUserId],
                         set: {
                             signedFields: sig.signedFields,
+                            fieldValues: sig.fieldValues,
                             status: sig.status,
                             signedAt: sig.signedAt,
                             cryptoKey: sig.cryptoKey,

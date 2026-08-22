@@ -55,7 +55,7 @@
 | **P2** | Feature | Document templates | 🔲 | §5 |
 | **P2** | Feature | Contacts | 🔲 | §5 |
 | **P2** | Feature | Package expiration enforcement (`expirationDate` checked) | ⚠️ | §6 |
-| **P2** | Feature | Fillable form fields (text, choices implemented; checkbox/date/initials planned) | 🚧 | §8.1 |
+| **P2** | Feature | Fillable form fields (text, choices, phone, checkbox, radio implemented; date/initials planned) | 🚧 | §8.1 |
 | **P2** | Feature | Initials as a separate signature type | 🔲 | §8.2 |
 | **P2** | Feature | Mobile + accessibility (WCAG) signing flow | 🔲 | §8.2 |
 | **P2** | Feature | Signer identity verification (SMS OTP, KYC/ID, knowledge-based) | 🔲 | §8.3 |
@@ -238,16 +238,14 @@ These exist as stubs/TODOs and are **not** in any `docs/ai` file other than this
 
 ### 8.1 Document & package lifecycle
 
-> 🔥 **HIGH-PRIORITY TODO — enforce field values at signing and bind them into the signed payload.**
-> The declarative field system (text / choices / phone) is built and validators are *declared*
-> (e.g. the phone regex), but signers cannot yet enter values: nothing is validated or stored,
-> and values are **not bound into what is signed** — a signer could change data after signing
-> without detection. Design: `docs/ai/form-fields.md`; implementation guide:
-> `docs/ai/field-system.md`.
+> ✅ **Done 2026-08-23 — field values are enforced at signing and bound into the signed payload.**
+> Signers fill per-kind widgets, `finalize` validates + stores values on `signatures.field_values`,
+> and their hash is part of the signed payload. Remaining: PDF/A flattening + `date`/`initials`
+> kinds. Design: `docs/ai/form-fields.md`; implementation: `docs/ai/field-system.md`.
 
 | Feature | Status | Notes |
 |---|---|---|
-| Fillable form fields (text, choices implemented; checkbox/date/initials planned) | 🚧 | Implemented: declarative field system (`docs/ai/field-system.md`); design: `docs/ai/form-fields.md`. Text + Choices place/config; sign-time value binding into payload still pending |
+| Fillable form fields (text, choices, phone, checkbox, radio implemented; date/initials planned) | 🚧 | Implemented: declarative field system + sign-time value collection/validation/storage, values bound into the signed payload (`docs/ai/field-system.md`, `docs/ai/form-fields.md`). Remaining: PDF/A flattening, date/initials kinds |
 | Envelope lifecycle controls (void/cancel, replace signer, re-send) | 🔲 | Design: `docs/ai/document-package-management.md` |
 | Reminders & deadlines (nudge emails, overdue alerts, enforce `expirationDate`) | � | Nudge emails done: `sendDueReminders` + `/api/cron/reminders` (day 3/7, `EMAIL_REMIND_DAYS`). Overdue alerts + hard `expirationDate` enforcement still pending. Design: `docs/ai/document-package-management.md` |
 | Download/export (original + signed copies + audit data) | 🔲 | Design: `docs/ai/document-package-management.md`; overlaps §3 artifacts |

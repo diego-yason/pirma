@@ -7,10 +7,12 @@
  * reuses it for every field record in that document.
  *
  * The payload binds the package, document, document hash, the exact (sorted)
- * set of field IDs, and the signer — so a signature cannot be replayed across
- * packages/documents/fields or attributed to a different signer.
+ * set of field IDs, the signer, and a hash of the document's submitted field
+ * values — so a signature cannot be replayed across packages/documents/fields,
+ * attributed to a different signer, or have its fillable values altered after
+ * signing without detection.
  *
- * Format: `${packageId}:${documentId}:${documentHash}:${sortedFieldIds}:${signerUserId}`
+ * Format: `${packageId}:${documentId}:${documentHash}:${sortedFieldIds}:${signerUserId}:${fieldValuesHash}`
  */
 export interface SigningPayloadInput {
     packageId: string;
@@ -18,6 +20,8 @@ export interface SigningPayloadInput {
     documentHash: string;
     fieldIds: string[];
     signerUserId: string;
+    /** hex SHA-256 over `canonicalFieldValues(...)` for this document's submitted values. */
+    fieldValuesHash: string;
 }
 
 export function buildSigningPayload(input: SigningPayloadInput): string {
@@ -28,5 +32,26 @@ export function buildSigningPayload(input: SigningPayloadInput): string {
         input.documentHash,
         fieldIds,
         input.signerUserId,
+        input.fieldValuesHash,
     ].join(":");
 }
+
+/**
+ * Deterministic canonical serialization of a field-value map for hashing.
+ * Entries are sorted by field id and empty strings / undefined are dropped, so
+ * client and server always compute the identical hash.
+ */
+export function canonicalFieldValues(values: Record<string, string | boolean>): string {
+    const entries = Object.entries(values)
+        .filter(([, v]) => v !== undefined && v !== "")
+        .sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0));
+    return JSON.stringify(entries);
+}
+
+/** hex SHA-256 digest of a string (Web Crypto — works in browsers and Node 20+). */
+export async function sha256Hex(input: string): Promise<string> {
+    const data = new TextEncoder().encode(input);
+    const digest = await crypto.subtle.digest("SHA-256", data);
+    return [...new Uint8Array(digest)].map((b) => b.toString(16).padStart(2, "0")).join("");
+}
+
