@@ -64,6 +64,9 @@ export const documents = pgTable(
         fileSize: bigint("file_size", { mode: "number" }),
         storagePath: text("storage_path"),
         placementFields: jsonb("placement_fields"),
+        // Flattened signed artifact (O3-B2) — produced when the document executes.
+        artifactStoragePath: text("artifact_storage_path"),
+        artifactHash: text("artifact_hash"),
         createdAt: timestamp("created_at").notNull().defaultNow(),
         updatedAt: timestamp("updated_at").notNull().defaultNow(),
     },

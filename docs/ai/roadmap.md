@@ -75,7 +75,7 @@
 | **P3** | Feature | Failed-anchor banner + manual re-submit | 🔲 | §2 |
 | **P3** | Feature | Anchoring targets artifact hash + every certificate hash | 🔲 | §2 / §3 |
 | **P3** | Security | PQC post-quantum Merkle-root anchoring (supplementary to ECDSA; regular signing + notary) | 🔲 | §2 / `docs/ai/blockchain/pqc-post-quantum.md` |
-| **P3** | Feature | PDF/A Phase 2 — signed artifact generation (flatten + XMP + re-convert) | 🔲 | §3 |
+| **P3** | Feature | PDF/A Phase 2 — signed artifact generation (flatten + XMP + re-convert) | � | §3 → flatten + artifact storage/hash done (O3-B2: `src/lib/server/artifacts/`); XMP + PDF/A re-pass remain |
 | **P3** | Feature | PAdES-compliant signature — embedded PAdES-BASELINE-T replaces the custom `finalize` text payload (**Option B 2026-08-23: PAdES is the only signature**) | 🔲 | §3 |
 | **P3** | Feature | ~~Detached ECDSA over final artifact hash~~ — **dropped (Option B 2026-08-23)** | ~~🔲~~ | §3 |
 | **P3** | Feature | PDF/A Phase 4 — verification (veraPDF/pdfcpu + PAdES + anchor) | 🔲 | §3 |
@@ -168,7 +168,7 @@ Sources: `docs/ai/pdfa/pdfa-compliance.md`, `docs/ai/pdfa/document-flows.md`
 | Feature | Status | Notes |
 |---|---|---|
 | Ingestion conversion (PDF/DOCX/JPG/PNG → PDF/A-2b) | 🔲 | Phase 1 |
-| Signed artifact generation (flatten + XMP + re-convert to PDF/A) | 🔲 | Phase 2 |
+| Signed artifact generation (flatten + XMP + re-convert to PDF/A) | � | Phase 2 — flatten + artifact storage/hash done (O3-B2, `src/lib/server/artifacts/`); XMP + PDF/A re-pass remain |
 | PAdES embedded signatures (party / notary / platform) | 🔲 | Phase 3; cert strategy resolved (self-signed + TSA). **Option B (2026-08-23): replaces the custom `finalize` text payload — PAdES is the only signature** |
 | Detached ECDSA over final artifact hash | 🔲 | **Superseded — Option B (2026-08-23): dropped; no detached ECDSA** |
 | Verification (veraPDF/pdfcpu + PAdES + anchor) | 🔲 | Phase 4; ECDSA verified inside the CMS |
@@ -240,12 +240,12 @@ These exist as stubs/TODOs and are **not** in any `docs/ai` file other than this
 
 > ✅ **Done 2026-08-23 — field values are enforced at signing and bound into the signed payload.**
 > Signers fill per-kind widgets, `finalize` validates + stores values on `signatures.field_values`,
-> and their hash is part of the signed payload. Remaining: PDF/A flattening + `date`/`initials`
+> and their hash is part of the signed payload. Remaining: `date`/`initials`
 > kinds. Design: `docs/ai/signing/form-fields.md`; implementation: `docs/ai/signing/field-system.md`.
 
 | Feature | Status | Notes |
 |---|---|---|
-| Fillable form fields (text, choices, phone, checkbox, radio implemented; date/initials planned) | 🚧 | Implemented: declarative field system + sign-time value collection/validation/storage, values bound into the signed payload (`docs/ai/signing/field-system.md`, `docs/ai/signing/form-fields.md`). Remaining: PDF/A flattening, date/initials kinds |
+| Fillable form fields (text, choices, phone, checkbox, radio implemented; date/initials planned) | 🚧 | Implemented: declarative field system + sign-time value collection/validation/storage, values bound into the signed payload + flattened into the signed artifact at execute (O3-B2) (`docs/ai/signing/field-system.md`, `docs/ai/signing/form-fields.md`). Remaining: date/initials kinds |
 | Envelope lifecycle controls (void/cancel, replace signer, re-send) | 🔲 | Design: `docs/ai/signing/document-package-management.md` |
 | Reminders & deadlines (nudge emails, overdue alerts, enforce `expirationDate`) | � | Nudge emails done: `sendDueReminders` + `/api/cron/reminders` (day 3/7, `EMAIL_REMIND_DAYS`). Overdue alerts + hard `expirationDate` enforcement still pending. Design: `docs/ai/signing/document-package-management.md` |
 | Download/export (original + signed copies + audit data) | 🔲 | Design: `docs/ai/signing/document-package-management.md`; overlaps §3 artifacts |

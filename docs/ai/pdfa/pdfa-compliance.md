@@ -125,13 +125,16 @@ flowchart LR
 - Set document metadata (title, creator) + XMP `pdfaid:part=2 / conformance=B`.
 
 ### Phase 2 — Signed artifact generation (flatten)
-- On `finalize` in `sign/+page.server.ts`, after signatures are verified:
-  1. Load the PDF/A document + each signer's signature image.
-  2. **Flatten** each signature image at its placement rect (pdf-lib or mupdf).
-  3. Update XMP/document info: add signer name, `SignedAt` timestamp, signer count.
-  4. **Re-convert to PDF/A** if the flattening library degraded conformance (mupdf/Ghostscript
-     re-pass), then store the artifact (e.g., `executed/` bucket) with a fresh hash.
-- Record per-document artifact path + artifact hash.
+- **Implemented (O3-B2):** on `finalize` in `sign/+page.server.ts`, once all signers are done
+  and documents are marked `executed`, each document's flattened artifact is generated
+  (`src/lib/server/artifacts/generate-artifact.ts` → `flatten-pdf.ts`), uploaded to the
+  `artifacts` bucket, and `documents.artifactStoragePath` + `documents.artifactHash` are set.
+  Signature images (per signer, from `user_signatures`) are burnt at each placement rect; text/
+  phone/choices values, checked checkboxes, and selected radios are drawn from
+  `signatures.fieldValues`. Best-effort per field; failures are logged and never break finalize.
+- **Remaining:** (3) update XMP/document info — add signer name, `SignedAt` timestamp, signer
+  count; (4) **re-convert to PDF/A** if the flattening library degraded conformance
+  (mupdf/Ghostscript re-pass) — pdf-lib output is not yet PDF/A-2b conformant.
 
 ### Phase 3 — Signature system (embedded PAdES; Option B)
 - **PAdES:** embed a PAdES-BASELINE-T signature (CMS/PKCS#7, ECDSA-SHA256) per signer via
@@ -152,9 +155,9 @@ flowchart LR
 
 ### Phase 5 — Config, schema, tests
 - Env/config: `PDFA_LEVEL` (`A-2b`), `PDFA_TSA_URL`, `DOC_SERVICE_URL`, etc.
-- Migrations: `documents` (+`pdfAVersion`, `pdfACompliant`, `convertedAt`,
-  `artifactStoragePath`, `artifactHash`), `signatures` (+PAdES fields), new
-  `document_artifacts` (version history) if needed.
+- Migrations: `documents` (+`pdfAVersion`, `pdfACompliant`, `convertedAt`, ✅
+  `artifactStoragePath`, `artifactHash` — done in `drizzle/0004_round_azazel.sql`),
+  `signatures` (+PAdES fields), new `document_artifacts` (version history) if needed.
 - Tests: conversion determinism (same input → stable), PDF/A validation on output, signature
   verification round-trip, hash-stability after flattening.
 
@@ -214,10 +217,10 @@ documentArtifacts = pgTable("document_artifacts", {
 
 - [x] Confirm PAdES signing-cert strategy (§9.1) and conversion architecture (§9.2).
 - [ ] Pick PDF/A level (default A-2b) and DOCX/image policy (§9.3).
-- [ ] Add `pdfAVersion`, `pdfACompliant`, `convertedAt`, artifact fields to schema; migration.
-- [ ] Implement ingestion conversion in `doc/new/+page.server.ts` (or doc-service).
+- [x] Add artifact fields to schema; migration (`artifactStoragePath`, `artifactHash` — `0004_round_azazel.sql`). PDF/A fields still pending.
+- [x] Implement ingestion conversion in `doc/new/+page.server.ts` (or doc-service).
 - [ ] Recompute hash post-conversion; store PDF/A bytes; set XMP/`pdfaid`.
-- [ ] Implement flattening in `finalize` + artifact generation + re-convert to PDF/A.
+- [x] Implement flattening in `finalize` + artifact generation (O3-B2). Remaining: XMP + PDF/A re-pass.
 - [ ] Implement PAdES embedding (Option B — PAdES is the only signature; no detached ECDSA).
 - [ ] Retire `buildSigningPayload` / `signaturePayload` (keep only for legacy verification).
 - [ ] Update blockchain anchoring to use the artifact hash (`documents.signedArtifactHash`).

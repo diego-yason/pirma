@@ -25,6 +25,7 @@ import {
 } from "#lib/shared/signing-payload.js";
 import { ORIGIN } from "$app/env/private";
 import { sendEmail } from "#lib/server/email/index.js";
+import { generateArtifactForDocument } from "#lib/server/artifacts/generate-artifact.js";
 import {
     renderRejected,
     rejectedSubject,
@@ -1398,6 +1399,20 @@ export const actions: Actions = {
                         "Finalize — all signers done, documents executed",
                         { packageId, documentCount: docIds.length },
                     );
+
+                    // O3-B2: produce the flattened signed artifact per document.
+                    // Best-effort — a failure must not break the finalize flow.
+                    for (const documentId of docIds) {
+                        try {
+                            await generateArtifactForDocument(documentId);
+                        } catch (err) {
+                            logger.error(
+                                "sign",
+                                "Finalize — artifact generation failed for document",
+                                { packageId, documentId, error: err },
+                            );
+                        }
+                    }
 
                     // Executed summary emails (owner + signers).
                     const [pkgInfo] = await db
