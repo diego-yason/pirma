@@ -78,7 +78,7 @@
         "@fingerprint/svelte": "^3.0.0",
         "@serenity-kit/opaque": "^1.1.0",
         "@supabase/supabase-js": "^2.112.3",
-        "better-auth-opaque": "link:plugins\\better-auth-opaque",
+        "better-auth-opaque": "link:plugins\\better-auth\\opaque",
         "bsrp": "^1.0.9",
         "nodemailer": "^9.0.5",
         "pdf-lib": "^1.17.1",
