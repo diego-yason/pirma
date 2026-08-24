@@ -1,166 +1,210 @@
 import type { BetterAuthClientPlugin } from "@better-auth/core";
 import { client, ready } from "@serenity-kit/opaque";
-import type { opaque } from "./server";
+import type { OpaqueType } from "./server";
 
-type RegisterChallengeResponse = Awaited<ReturnType<ReturnType<typeof opaque>["endpoints"]["getRegisterChallenge"]>>
-type LoginChallengeResponse = Awaited<ReturnType<ReturnType<typeof opaque>["endpoints"]["getLoginChallenge"]>>
-type RegisterComplete = Awaited<ReturnType<ReturnType<typeof opaque>["endpoints"]["completeRegistration"]>>
-type LoginComplete = Awaited<ReturnType<ReturnType<typeof opaque>["endpoints"]["completeLogin"]>>
-type ChangePasswordChallengeResponse = Awaited<ReturnType<ReturnType<typeof opaque>["endpoints"]["getChangePasswordChallenge"]>>
-type ChangePasswordComplete = Awaited<ReturnType<ReturnType<typeof opaque>["endpoints"]["completeChangePassword"]>>
+type RegisterChallengeResponse = Awaited<
+    ReturnType<ReturnType<OpaqueType>["endpoints"]["getRegisterChallenge"]>
+>;
+type LoginChallengeResponse = Awaited<
+    ReturnType<ReturnType<OpaqueType>["endpoints"]["getLoginChallenge"]>
+>;
+type RegisterComplete = Awaited<
+    ReturnType<ReturnType<OpaqueType>["endpoints"]["completeRegistration"]>
+>;
+type LoginComplete = Awaited<ReturnType<ReturnType<OpaqueType>["endpoints"]["completeLogin"]>>;
+type ChangePasswordChallengeResponse = Awaited<
+    ReturnType<ReturnType<OpaqueType>["endpoints"]["getChangePasswordChallenge"]>
+>;
+type ChangePasswordComplete = Awaited<
+    ReturnType<ReturnType<OpaqueType>["endpoints"]["completeChangePassword"]>
+>;
 
 export const opaqueClient = () => {
-	return {
-		id: "opaque",
-		getActions($fetch) {
-			return {
-				signUp: {
-					opaque: async ({ email, name, password }: {
-						email: string;
-						name: string;
-						password: string;
-					}) => {
-						await ready;
-						const { clientRegistrationState, registrationRequest } = client.startRegistration({
-							password
-						})
-						const challengeResponse = await $fetch<RegisterChallengeResponse>("/sign-up/opaque/challenge", {
-							method: "POST",
-							body: {
-								email,
-								registrationRequest
-							},
-						});
-						if (challengeResponse.error || !challengeResponse.data || !challengeResponse.data.challenge) {
-							return {
-								error: challengeResponse.error || {
-									message: "Failed to get registration challenge"
-								}
-							}
-						}
-						const { challenge: registrationResponse } = challengeResponse.data;
-						const { registrationRecord } = client.finishRegistration({
-							clientRegistrationState,
-							password,
-							registrationResponse,
-						})
-						return await $fetch<RegisterComplete>("/sign-up/opaque/complete", {
-							method: "POST",
-							body: {
-								email,
-								name,
-								registrationRecord,
-							},
-						});
-					}
-				},
-				signIn: {
-					opaque: async ({ email, password }: {
-						email: string;
-						password: string;
-					}) => {
-						await ready;
-						const { clientLoginState, startLoginRequest } = client.startLogin({
-							password,
-						})
-						const challengeResponse = await $fetch<LoginChallengeResponse>("/sign-in/opaque/challenge", {
-							method: "POST",
-							body: {
-								email,
-								loginRequest: startLoginRequest,
-							},
-						});
+    return {
+        id: "opaque",
+        getActions($fetch) {
+            return {
+                signUp: {
+                    opaque: async ({
+                        email,
+                        name,
+                        password,
+                    }: {
+                        email: string;
+                        name: string;
+                        password: string;
+                    }) => {
+                        await ready;
+                        const { clientRegistrationState, registrationRequest } =
+                            client.startRegistration({
+                                password,
+                            });
+                        const challengeResponse = await $fetch<RegisterChallengeResponse>(
+                            "/sign-up/opaque/challenge",
+                            {
+                                method: "POST",
+                                body: {
+                                    email,
+                                    registrationRequest,
+                                },
+                            },
+                        );
+                        if (
+                            challengeResponse.error ||
+                            !challengeResponse.data ||
+                            !challengeResponse.data.challenge
+                        ) {
+                            return {
+                                error: challengeResponse.error || {
+                                    message: "Failed to get registration challenge",
+                                },
+                            };
+                        }
+                        const { challenge: registrationResponse } = challengeResponse.data;
+                        const { registrationRecord } = client.finishRegistration({
+                            clientRegistrationState,
+                            password,
+                            registrationResponse,
+                        });
+                        return await $fetch<RegisterComplete>("/sign-up/opaque/complete", {
+                            method: "POST",
+                            body: {
+                                email,
+                                name,
+                                registrationRecord,
+                            },
+                        });
+                    },
+                },
+                signIn: {
+                    opaque: async ({ email, password }: { email: string; password: string }) => {
+                        await ready;
+                        const { clientLoginState, startLoginRequest } = client.startLogin({
+                            password,
+                        });
+                        const challengeResponse = await $fetch<LoginChallengeResponse>(
+                            "/sign-in/opaque/challenge",
+                            {
+                                method: "POST",
+                                body: {
+                                    email,
+                                    loginRequest: startLoginRequest,
+                                },
+                            },
+                        );
 
-						if (!challengeResponse.data || !challengeResponse.data.challenge) {
-							return { data: null, error: { message: "Failed to get registration challenge" } };
-						}
+                        if (!challengeResponse.data || !challengeResponse.data.challenge) {
+                            return {
+                                data: null,
+                                error: { message: "Failed to get registration challenge" },
+                            };
+                        }
 
-						const { challenge: loginResponse, state: encryptedServerState } = challengeResponse.data;
+                        const { challenge: loginResponse, state: encryptedServerState } =
+                            challengeResponse.data;
 
-						const loginAttempt = client.finishLogin({
-							password,
-							clientLoginState,
-							loginResponse,
-						})
-						if (!loginAttempt) {
-							return { data: null, error: { message: "Login failed" } };
-						}
+                        const loginAttempt = client.finishLogin({
+                            password,
+                            clientLoginState,
+                            loginResponse,
+                        });
+                        if (!loginAttempt) {
+                            return { data: null, error: { message: "Login failed" } };
+                        }
 
-						const { finishLoginRequest: loginResult } = loginAttempt;
+                        const { finishLoginRequest: loginResult } = loginAttempt;
 
-						return await $fetch<LoginComplete>("/sign-in/opaque/complete", {
-							method: "POST",
-							body: {
-								email,
-								loginResult,
-								encryptedServerState
-							},
-						});
-					}
-				},
-				changePassword: async ({ currentPassword, newPassword }: {
-					currentPassword: string;
-					newPassword: string;
-				}) => {
-					await ready;
+                        return await $fetch<LoginComplete>("/sign-in/opaque/complete", {
+                            method: "POST",
+                            body: {
+                                email,
+                                loginResult,
+                                encryptedServerState,
+                            },
+                        });
+                    },
+                },
+                changePassword: async ({
+                    currentPassword,
+                    newPassword,
+                }: {
+                    currentPassword: string;
+                    newPassword: string;
+                }) => {
+                    await ready;
 
-					// Start login flow with current password
-					const { clientLoginState, startLoginRequest } = client.startLogin({
-						password: currentPassword,
-					});
+                    // Start login flow with current password
+                    const { clientLoginState, startLoginRequest } = client.startLogin({
+                        password: currentPassword,
+                    });
 
-					// Start registration flow with new password
-					const { clientRegistrationState, registrationRequest } = client.startRegistration({
-						password: newPassword,
-					});
+                    // Start registration flow with new password
+                    const { clientRegistrationState, registrationRequest } =
+                        client.startRegistration({
+                            password: newPassword,
+                        });
 
-					// Get challenges for both operations
-					const challengeResponse = await $fetch<ChangePasswordChallengeResponse>("/opaque/changePassword/challenge", {
-						method: "POST",
-						body: {
-							loginRequest: startLoginRequest,
-							registrationRequest,
-						},
-					});
+                    // Get challenges for both operations
+                    const challengeResponse = await $fetch<ChangePasswordChallengeResponse>(
+                        "/opaque/changePassword/challenge",
+                        {
+                            method: "POST",
+                            body: {
+                                loginRequest: startLoginRequest,
+                                registrationRequest,
+                            },
+                        },
+                    );
 
-					if (!challengeResponse.data || !challengeResponse.data.loginChallenge || !challengeResponse.data.registrationChallenge) {
-						return { data: null, error: { message: "Failed to get change password challenge" } };
-					}
+                    if (
+                        !challengeResponse.data ||
+                        !challengeResponse.data.loginChallenge ||
+                        !challengeResponse.data.registrationChallenge
+                    ) {
+                        return {
+                            data: null,
+                            error: { message: "Failed to get change password challenge" },
+                        };
+                    }
 
-					const { loginChallenge, registrationChallenge, state: encryptedServerState } = challengeResponse.data;
+                    const {
+                        loginChallenge,
+                        registrationChallenge,
+                        state: encryptedServerState,
+                    } = challengeResponse.data;
 
-					// Finish login with current password
-					const loginAttempt = client.finishLogin({
-						password: currentPassword,
-						clientLoginState,
-						loginResponse: loginChallenge,
-					});
+                    // Finish login with current password
+                    const loginAttempt = client.finishLogin({
+                        password: currentPassword,
+                        clientLoginState,
+                        loginResponse: loginChallenge,
+                    });
 
-					if (!loginAttempt) {
-						return { data: null, error: { message: "Current password is incorrect" } };
-					}
+                    if (!loginAttempt) {
+                        return { data: null, error: { message: "Current password is incorrect" } };
+                    }
 
-					const { finishLoginRequest: loginResult } = loginAttempt;
+                    const { finishLoginRequest: loginResult } = loginAttempt;
 
-					// Finish registration with new password
-					const { registrationRecord } = client.finishRegistration({
-						clientRegistrationState,
-						password: newPassword,
-						registrationResponse: registrationChallenge,
-					});
+                    // Finish registration with new password
+                    const { registrationRecord } = client.finishRegistration({
+                        clientRegistrationState,
+                        password: newPassword,
+                        registrationResponse: registrationChallenge,
+                    });
 
-					// Complete the change password operation
-					return await $fetch<ChangePasswordComplete>("/opaque/changePassword/complete", {
-						method: "POST",
-						body: {
-							loginResult,
-							registrationRecord,
-							encryptedServerState,
-						},
-					});
-				}
-			}
-		},
-		// $InferServerPlugin: {} as ReturnType<typeof opaque>,
-	} satisfies BetterAuthClientPlugin;
+                    // Complete the change password operation
+                    return await $fetch<ChangePasswordComplete>("/opaque/changePassword/complete", {
+                        method: "POST",
+                        body: {
+                            loginResult,
+                            registrationRecord,
+                            encryptedServerState,
+                        },
+                    });
+                },
+            };
+        },
+        // $InferServerPlugin: {} as ReturnType<opaque>,
+    } satisfies BetterAuthClientPlugin;
 };

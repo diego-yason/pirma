@@ -6,7 +6,7 @@ import { anonymous } from "better-auth/plugins";
 import { ORIGIN, BETTER_AUTH_SECRET, OPAQUE_SERVER_KEY } from "$app/env/private";
 import { getRequestEvent } from "$app/server";
 import { db } from "#lib/server/db/index.js";
-import { opaque } from "better-auth-opaque";
+import { opaque } from "better-auth-opaque/server";
 import { sendEmail } from "#lib/server/email/index.js";
 import { renderPasswordReset, passwordResetSubject } from "#lib/server/email/templates/index.js";
 
