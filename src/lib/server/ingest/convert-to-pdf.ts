@@ -5,7 +5,8 @@ export const DOCX_MIME = "application/vnd.openxmlformats-officedocument.wordproc
 
 export interface ConvertedPdf {
     /** Final PDF bytes (post-conversion) — these are what gets stored + hashed. */
-    bytes: Uint8Array;
+    // ArrayBuffer-backed so Web Crypto (BufferSource) accepts them directly.
+    bytes: Uint8Array<ArrayBuffer>;
     /** Page count of the final PDF (authoritative). */
     pageCount: number;
     /** True when the input was converted (image → PDF); false for a kept PDF. */
@@ -33,10 +34,16 @@ export async function convertToPdf(
     bytes: Uint8Array | ArrayBuffer,
     mimeType: string,
 ): Promise<ConvertedPdf> {
+    // Normalize to an ArrayBuffer-backed view — copies only when the input is a
+    // Uint8Array (its backing could be a SharedArrayBuffer). A bare Uint8Array
+    // would not be assignable to Web Crypto's BufferSource under TS 6.
+    const source: Uint8Array<ArrayBuffer> =
+        bytes instanceof Uint8Array ? Uint8Array.from(bytes) : new Uint8Array(bytes);
+
     if (mimeType === PDF_MIME) {
-        const doc = await PDFDocument.load(bytes); // throws if not a valid PDF
+        const doc = await PDFDocument.load(source); // throws if not a valid PDF
         return {
-            bytes: bytes instanceof Uint8Array ? bytes : new Uint8Array(bytes),
+            bytes: source,
             pageCount: doc.getPageCount(),
             converted: false,
         };
@@ -49,7 +56,7 @@ export async function convertToPdf(
     }
 
     const doc = await PDFDocument.create();
-    const image = isPng ? await doc.embedPng(bytes) : await doc.embedJpg(bytes);
+    const image = isPng ? await doc.embedPng(source) : await doc.embedJpg(source);
 
     const page = doc.addPage([PAGE_WIDTH, PAGE_HEIGHT]);
     const maxW = PAGE_WIDTH - MARGIN * 2;
@@ -66,5 +73,7 @@ export async function convertToPdf(
     });
 
     const out = await doc.save();
-    return { bytes: out, pageCount: 1, converted: true };
+    // pdf-lib types save() as a bare Uint8Array (ArrayBufferLike) — copy so the
+    // stored/hashed bytes are guaranteed ArrayBuffer-backed.
+    return { bytes: new Uint8Array(out), pageCount: 1, converted: true };
 }

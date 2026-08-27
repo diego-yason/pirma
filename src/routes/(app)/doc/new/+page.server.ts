@@ -5,7 +5,7 @@ import { documents, packages, documentAssignments } from "#lib/server/db/schema.
 import { supabaseAdmin } from "#lib/server/storage/supabase.js";
 import { and, eq } from "drizzle-orm";
 import { logger } from "#lib/server/logger.js";
-import { convertToPdf, DOCX_MIME } from "#lib/server/ingest/convert-to-pdf.js";
+import { convertToPdf, DOCX_MIME, type ConvertedPdf } from "#lib/server/ingest/convert-to-pdf.js";
 
 const MAX_FILE_SIZE = 50 * 1024 * 1024; // 50 MB
 // Types we can normalize to a PDF at ingest (PDF kept as-is, JPG/PNG converted).
@@ -63,7 +63,9 @@ export const actions: Actions = {
         try {
             // Normalize to PDF at ingest (JPG/PNG → single-page PDF; PDF kept as-is).
             const buffer = await file.arrayBuffer();
-            const { bytes, pageCount } = await convertToPdf(buffer, file.type);
+            // bytes are guaranteed ArrayBuffer-backed (see convertToPdf) so Web
+            // Crypto's BufferSource accepts them without a defensive copy.
+            const { bytes, pageCount }: ConvertedPdf = await convertToPdf(buffer, file.type);
 
             // Compute SHA-256 over the CONVERTED PDF — the bytes actually stored.
             const hashBuffer = await crypto.subtle.digest("SHA-256", bytes);

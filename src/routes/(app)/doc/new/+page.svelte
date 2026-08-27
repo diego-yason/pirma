@@ -1,6 +1,7 @@
 <script lang="ts">
     import { getContext } from "svelte";
     import { PDFDocument } from "pdf-lib";
+    import { deserialize } from "$app/forms";
     import RecentlyUploaded from "./RecentlyUploaded.svelte";
 
     interface UploadedFile {
@@ -73,29 +74,63 @@
                     body: formData,
                     headers: { "x-sveltekit-action": "true" },
                 });
-                const result = await res.json();
-                const [, docId, storagePath] = JSON.parse(result.data);
-                console.log(docId, storagePath);
+                // deserialize() parses the SvelteKit action envelope and its devalue
+                // `data` (JSON.parse alone can't — and masks server errors).
+                const result = deserialize(await res.text());
 
-                files = files.map((f) =>
-                    f.id === id
-                        ? {
-                              ...f,
-                              id: docId, // Update to document ID from server
-                              uploading: false,
-                              uploaded: docId != null,
-                              error: result.error ?? undefined,
-                              storagePath: storagePath ?? undefined,
-                          }
-                        : f,
-                );
+                if (result.type === "success" && result.data) {
+                    // Server returns { documentId, storagePath, pageCount }.
+                    const { documentId, storagePath, pageCount: serverPageCount } =
+                        result.data as {
+                            documentId?: string;
+                            storagePath?: string;
+                            pageCount?: number;
+                        };
+                    files = files.map((f) =>
+                        f.id === id
+                            ? {
+                                  ...f,
+                                  id: documentId ?? f.id, // Update to document ID from server
+                                  uploading: false,
+                                  uploaded: documentId != null,
+                                  error: undefined,
+                                  pageCount: serverPageCount ?? f.pageCount,
+                                  storagePath: storagePath ?? undefined,
+                              }
+                            : f,
+                    );
+                } else {
+                    // fail() → { type: "failure", data: { error } }
+                    // unhandled error → { type: "error", error: { message } }
+                    const message =
+                        result.type === "failure"
+                            ? (result.data as { error?: string } | undefined)?.error
+                            : result.type === "error"
+                              ? (result.error as { message?: string } | undefined)?.message ??
+                                "An unexpected server error occurred"
+                              : undefined;
+
+                    files = files.map((f) =>
+                        f.id === id
+                            ? {
+                                  ...f,
+                                  uploading: false,
+                                  uploaded: false,
+                                  error: message ?? "Upload failed. Please try again.",
+                              }
+                            : f,
+                    );
+                }
             } catch (err) {
                 files = files.map((f) =>
                     f.id === id
                         ? {
                               ...f,
                               uploading: false,
-                              error: err instanceof Error ? err.message : "Upload failed",
+                              error:
+                                  err instanceof Error
+                                      ? err.message
+                                      : "Upload failed. Please try again.",
                           }
                         : f,
                 );
@@ -123,10 +158,16 @@
                     headers: { "x-sveltekit-action": "true" },
                     body: new URLSearchParams({ docId: f.id }),
                 });
-                const result = await res.json();
-                const payload = JSON.parse(result.data ?? "{}");
-                if (!result.type || result.type !== "success" || payload.error) {
-                    console.warn("[docNew] removeFile failed", payload.error);
+                const result = deserialize(await res.text());
+                if (result.type !== "success") {
+                    const message =
+                        result.type === "failure"
+                            ? (result.data as { error?: string } | undefined)?.error
+                            : result.type === "error"
+                              ? (result.error as { message?: string } | undefined)?.message ??
+                                "An unexpected server error occurred"
+                              : undefined;
+                    console.warn("[docNew] removeFile failed", message ?? result);
                     return; // keep the row; server-side removal failed
                 }
             } catch (err) {
@@ -208,9 +249,7 @@
         <h2 class="mt-4 text-lg font-semibold text-neutral-900 dark:text-neutral-50">
             Upload Files
         </h2>
-        <p class="mt-1 text-sm text-neutral-500 dark:text-neutral-400">
-            PDF, JPG, or PNG files
-        </p>
+        <p class="mt-1 text-sm text-neutral-500 dark:text-neutral-400">PDF, JPG, or PNG files</p>
         <button
             type="button"
             class="mt-5 inline-flex items-center gap-2 rounded-lg bg-linear-to-r from-secondary-600 to-primary-700 px-5 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:from-secondary-500 hover:to-primary-600"
