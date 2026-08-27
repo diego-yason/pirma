@@ -50,7 +50,14 @@
 
     function isActive(item: NavItem): boolean {
         const pathname = page.url.pathname;
-        return pathname === item.href || pathname.startsWith(item.href + "/");
+        if (pathname === item.href || pathname.startsWith(item.href + "/")) return true;
+        // A group is also active when one of its children is (so the "Documents"
+        // children — e.g. "All Documents" at /doc/list — are visible on those routes).
+        return (
+            item.children?.some(
+                (child) => pathname === child.href || pathname.startsWith(child.href + "/"),
+            ) ?? false
+        );
     }
 
     let { children, data }: LayoutProps = $props();

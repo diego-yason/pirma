@@ -3,6 +3,13 @@
     import { page } from "$app/state";
     import type { PageProps } from "./$types";
     import SignatureRequest from "./SignatureRequest.svelte";
+    import {
+        envelopeProgress,
+        envelopeStatus,
+        fmtDate,
+        statusLabel,
+        statusStyle,
+    } from "#lib/client/ui/envelopeStatus.js";
 
     let { data }: PageProps = $props();
 
@@ -11,58 +18,6 @@
     const recentCount = $derived(data.recentDocuments.length);
     const viewableCount = $derived(data.viewablePackages.length);
     const userName = $derived(page.data.user?.name?.split(" ")[0] ?? "there");
-
-    const statusLabel: Record<string, string> = {
-        draft: "Draft",
-        finalized: "Awaiting Signatories",
-        executed: "Executed",
-    };
-
-    /** Visual treatment per document/envelope status. */
-    const statusStyle: Record<string, { badge: string; dot: string; bar: string; text: string }> = {
-        draft: {
-            badge: "bg-neutral-200 text-neutral-600 dark:bg-neutral-800 dark:text-neutral-300",
-            dot: "bg-neutral-400",
-            bar: "bg-neutral-400",
-            text: "text-neutral-500 dark:text-neutral-400",
-        },
-        finalized: {
-            badge: "bg-amber-500/15 text-amber-600 dark:text-amber-300",
-            dot: "bg-amber-500 dark:bg-amber-400",
-            bar: "bg-amber-500",
-            text: "text-amber-600 dark:text-amber-300",
-        },
-        executed: {
-            badge: "bg-emerald-500/15 text-emerald-600 dark:text-emerald-300",
-            dot: "bg-emerald-500 dark:bg-emerald-400",
-            bar: "bg-emerald-500",
-            text: "text-emerald-600 dark:text-emerald-300",
-        },
-    };
-
-    type EnvStatus = "draft" | "finalized" | "executed";
-    /** Aggregate a package's documents into one envelope status. */
-    function envelopeStatus(docs: { status: string }[]): EnvStatus {
-        if (docs.some((d) => d.status === "draft")) return "draft";
-        if (docs.every((d) => d.status === "executed")) return "executed";
-        return "finalized";
-    }
-
-    /** Signature completion across the envelope's documents. */
-    function envelopeProgress(docs: { status: string }[]) {
-        const total = docs.length;
-        const executed = docs.filter((d) => d.status === "executed").length;
-        return { executed, total, pct: total ? Math.round((executed / total) * 100) : 0 };
-    }
-
-    function fmtDate(iso?: string | Date | null): string {
-        if (!iso) return "";
-        return new Date(iso).toLocaleDateString("en-SG", {
-            day: "numeric",
-            month: "short",
-            year: "numeric",
-        });
-    }
 </script>
 
 <div class="mx-auto max-w-5xl px-6 py-8 lg:px-10">

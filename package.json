@@ -16,6 +16,7 @@
         "test": "npm run test:unit -- --run && npm run test:e2e",
         "test:e2e": "playwright install && playwright test",
         "test:e2e:dashboard": "playwright test --config=playwright.dashboard.config.ts",
+        "test:e2e:documents": "playwright test --config=playwright.documents.config.ts",
         "db:push": "drizzle-kit push",
         "db:generate": "drizzle-kit generate",
         "db:migrate": "drizzle-kit migrate",
