@@ -40,3 +40,20 @@ You MUST use this tool whenever writing Svelte code before sending it to the use
 
 Generates a Svelte Playground link with the provided code.
 After completing the code, ask the user if they want a playground link. Only call this tool after user confirmation and NEVER if code was written to files in their project.
+
+---
+
+## Database workflow (Drizzle)
+
+- Authoritative schema lives in `src/lib/server/db/schema.ts`; `drizzle/schema.ts` + `drizzle/meta/*` are generated.
+- **Apply schema changes to the dev DB with `npm run db:push -- --force`** — the `-- --force` skips drizzle-kit's interactive prompt in non-TTY shells. The DB is reachable in this env; **`db:migrate` fails here, so use `db:push`**.
+- Generate versioned migration files with `npm run db:generate` (writes `drizzle/000X_*.sql`). Keep them and `drizzle/meta/_journal.json` consistent — don't hand-edit generated files, regenerate instead.
+- `npm run db:studio` opens Drizzle Studio for inspection.
+
+## TypeScript imports — `.d.ts` files
+
+- `.d.ts` type modules imported through the `#lib` **subpath** must include the explicit `.d.ts` extension:
+  - ✅ `import type { PlacedRect } from "#lib/client/types/SignatureBoxTypes.d.ts";`
+  - ❌ `import type { PlacedRect } from "#lib/client/types/SignatureBoxTypes";` — fails to resolve in TS / svelte-check / LSP (`Cannot find module '#lib/client/types/SignatureBoxTypes'`).
+- **Relative** imports of the same `.d.ts` resolve fine WITHOUT the suffix (e.g. `PDFViewer.svelte` uses `../types/SignatureBoxTypes`).
+- These are `import type` only — fully erased at build, so there's no runtime impact; this is purely a resolution requirement.
