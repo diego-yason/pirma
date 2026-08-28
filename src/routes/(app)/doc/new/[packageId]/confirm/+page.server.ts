@@ -274,6 +274,58 @@ export const actions: Actions = {
                 .where(eq(packageRecipients.packageId, params.packageId));
         }
 
+        // ── Self-signatures: make the owner a first-class signer ──
+        // When the owner assigned any field to "me", they must sign those
+        // fields themselves. Without a package_recipients row the owner's
+        // pending signature is invisible to pending_documents and the
+        // "waiting on me" surfaces (dashboard + all documents), so
+        // self-signed documents never show up as pending. Add the owner as
+        // a signer recipient now (idempotent — only when missing).
+        const selfSignDocs = await db
+            .select({ placementFields: documents.placementFields })
+            .from(documents)
+            .innerJoin(documentAssignments, eq(documents.id, documentAssignments.documentId))
+            .where(eq(documentAssignments.packageId, params.packageId));
+
+        const hasMeFields = selfSignDocs.some(
+            (d) =>
+                Array.isArray(d.placementFields) &&
+                (d.placementFields as Array<{ assignedTo?: string }>).some(
+                    (f) => f.assignedTo === "me",
+                ),
+        );
+
+        if (hasMeFields) {
+            const [existingMe] = await db
+                .select({ id: packageRecipients.id })
+                .from(packageRecipients)
+                .where(
+                    and(
+                        eq(packageRecipients.packageId, params.packageId),
+                        eq(packageRecipients.userId, locals.user!.id),
+                    ),
+                )
+                .limit(1);
+
+            if (!existingMe) {
+                await db.insert(packageRecipients).values({
+                    packageId: params.packageId,
+                    userId: locals.user!.id,
+                    name: locals.user!.name,
+                    email: locals.user!.email,
+                    role: "signer",
+                });
+                logger.info(
+                    "confirm",
+                    "Owner added as signer recipient for self-signature",
+                    {
+                        packageId: params.packageId,
+                        userId: locals.user!.id,
+                    },
+                );
+            }
+        }
+
         // ── Finalize documents ──────────────────────────────────────
         // Mark all documents in this package as finalized so they are
         // locked for editing and no longer accessible via /doc/new.
@@ -302,6 +354,7 @@ export const actions: Actions = {
                 id: packageRecipients.id,
                 name: packageRecipients.name,
                 email: packageRecipients.email,
+                userId: packageRecipients.userId,
             })
             .from(packageRecipients)
             .where(
@@ -335,6 +388,15 @@ export const actions: Actions = {
             .where(eq(packages.id, params.packageId));
 
         for (const signer of signers) {
+            // The owner self-signer already owns the document — no invite needed.
+            if (signer.userId === locals.user!.id) {
+                logger.debug("confirm", "Skipping self-invite email for owner signer", {
+                    packageId: params.packageId,
+                    userId: signer.userId,
+                });
+                continue;
+            }
+
             const isGuest = !signer.email || !knownEmails.has(signer.email);
             let signingUrl = signingBase;
 

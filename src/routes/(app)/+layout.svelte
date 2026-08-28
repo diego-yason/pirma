@@ -1,7 +1,8 @@
 <script lang="ts">
-    // @ts-nocheck snippets mm
+    import { onDestroy } from "svelte";
+    import { SvelteMap } from "svelte/reactivity";
+    import { slide } from "svelte/transition";
     import { page } from "$app/state";
-    import { resolve } from "$app/paths";
     import { setupDeviceKeys } from "#lib/client/crypto/setup-device-keys.js";
     import { authClient } from "#lib/client/auth/auth-client.js";
     import type { LayoutProps } from "./$types";
@@ -45,14 +46,12 @@
         },
     ];
 
-    const displayName = $derived(data.user.name || "Guest");
-    const displayInitial = $derived((displayName[0] ?? "?").toUpperCase());
-
     function isActive(item: NavItem): boolean {
         const pathname = page.url.pathname;
         if (pathname === item.href || pathname.startsWith(item.href + "/")) return true;
-        // A group is also active when one of its children is (so the "Documents"
-        // children — e.g. "All Documents" at /doc/list — are visible on those routes).
+        // A group counts as active when it or a child matches the current route —
+        // used for the highlighted state. The group's submenu is revealed by
+        // hover/click (see navGroup), not by the active state.
         return (
             item.children?.some(
                 (child) => pathname === child.href || pathname.startsWith(child.href + "/"),
@@ -60,7 +59,51 @@
         );
     }
 
+    // Sidebar groups with children (e.g. "Documents") are expandable: they open
+    // while hovered, and clicking toggles a pinned-open state. Navigation only
+    // happens via the submenu links, never the group itself.
+    let openGroups = $state<Record<string, boolean>>({});
+    let hoverGroups = $state<Record<string, boolean>>({});
+
+    // Hover-collapse grace period: after the pointer leaves a group, keep its
+    // submenu open briefly so moving between the group and its items doesn't
+    // flicker. Hovering back in (or clicking) cancels the pending close.
+    const HOVER_CLOSE_DELAY_MS = 200;
+    const hoverCloseTimeouts = new SvelteMap<string, ReturnType<typeof setTimeout>>();
+
+    function clearHoverClose(label: string) {
+        const t = hoverCloseTimeouts.get(label);
+        if (t) {
+            clearTimeout(t);
+            hoverCloseTimeouts.delete(label);
+        }
+    }
+
+    function openGroup(label: string) {
+        clearHoverClose(label);
+        hoverGroups[label] = true;
+    }
+
+    function closeGroup(label: string) {
+        clearHoverClose(label);
+        hoverCloseTimeouts.set(
+            label,
+            setTimeout(() => {
+                hoverGroups[label] = false;
+                hoverCloseTimeouts.delete(label);
+            }, HOVER_CLOSE_DELAY_MS),
+        );
+    }
+
+    onDestroy(() => {
+        for (const t of hoverCloseTimeouts.values()) clearTimeout(t);
+        hoverCloseTimeouts.clear();
+    });
+
     let { children, data }: LayoutProps = $props();
+
+    const displayName = $derived(data.user.name || "Guest");
+    const displayInitial = $derived((displayName[0] ?? "?").toUpperCase());
 
     let showKeySetup = $state(false);
     let keySetupForce = $state(false);
@@ -148,7 +191,7 @@
         <div
             class="flex h-16 shrink-0 items-center border-b border-neutral-200 px-5 dark:border-neutral-800"
         >
-            <a href={resolve("/")} class="inline-flex items-center gap-2.5">
+            <a href="/" class="inline-flex items-center gap-2.5">
                 <span
                     class="grid h-9 w-9 place-items-center rounded-lg bg-linear-to-br from-secondary-500 to-primary-700 text-base font-black text-white shadow-md shadow-primary-900/20"
                     aria-hidden="true"
@@ -207,7 +250,7 @@
                 {#if data.isAnonymous}
                     <a
                         class="flex items-center gap-2 rounded-lg bg-amber-600 px-3 py-2.5 text-sm font-medium text-white transition hover:bg-amber-700"
-                        href={resolve("register")}
+                        href="/register"
                     >
                         <svg
                             class="size-4 shrink-0"
@@ -226,7 +269,7 @@
                     </a>
                 {:else}
                     <a
-                        href={resolve("logout")}
+                        href="/logout"
                         class="flex items-center gap-2 rounded-lg px-3 py-2 text-sm font-medium text-neutral-500 transition hover:bg-neutral-100 hover:text-neutral-900 dark:text-neutral-400 dark:hover:bg-neutral-800 dark:hover:text-neutral-100"
                     >
                         <svg
@@ -248,13 +291,13 @@
 
                 <div class="flex flex-col gap-1 pb-2">
                     <a
-                        href={resolve("settings")}
+                        href="/settings"
                         class="rounded-lg px-3 py-1.5 text-xs font-medium text-neutral-500 transition hover:bg-neutral-100 hover:text-neutral-700 dark:text-neutral-500 dark:hover:bg-neutral-800 dark:hover:text-neutral-200"
                     >
                         Security
                     </a>
                     <a
-                        href={resolve("settings")}
+                        href="/settings"
                         class="rounded-lg px-3 py-1.5 text-xs font-medium text-neutral-500 transition hover:bg-neutral-100 hover:text-neutral-700 dark:text-neutral-500 dark:hover:bg-neutral-800 dark:hover:text-neutral-200"
                     >
                         Support
@@ -270,30 +313,73 @@
 
 {#snippet navGroup(item: NavItem)}
     {@const active = isActive(item)}
-    <div class="flex flex-col">
-        <a
-            class="flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition
-                {active
-                ? 'bg-linear-to-r from-secondary-600 to-primary-700 text-white shadow-sm'
-                : 'text-neutral-600 hover:bg-neutral-100 hover:text-neutral-900 dark:text-neutral-300 dark:hover:bg-neutral-800 dark:hover:text-white'}"
-            href={resolve(item.href)}
-        >
-            {#if item.icon}
+    {@const hasChildren = !!item.children?.length}
+    {@const isOpen = hasChildren && (!!openGroups[item.label] || !!hoverGroups[item.label])}
+    {@const linkClass = `flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition ${active ? "bg-linear-to-r from-secondary-600 to-primary-700 text-white shadow-sm" : "text-neutral-600 hover:bg-neutral-100 hover:text-neutral-900 dark:text-neutral-300 dark:hover:bg-neutral-800 dark:hover:text-white"}`}
+    <div
+        class="flex flex-col"
+        role="group"
+        onmouseenter={hasChildren ? () => openGroup(item.label) : undefined}
+        onmouseleave={hasChildren ? () => closeGroup(item.label) : undefined}
+    >
+        {#if hasChildren}
+            <!-- Expandable group: hover/click reveals the submenu; the group
+                 itself is a toggle, not a link — navigate via the submenu. -->
+            <button
+                type="button"
+                class="w-full cursor-pointer {linkClass}"
+                aria-expanded={isOpen}
+                aria-haspopup="true"
+                onclick={() => {
+                    clearHoverClose(item.label);
+                    hoverGroups[item.label] = false;
+                    openGroups[item.label] = !openGroups[item.label];
+                }}
+            >
+                {#if item.icon}
+                    <svg
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        stroke-width="2"
+                        class="size-4 shrink-0"
+                    >
+                        <path stroke-linecap="round" stroke-linejoin="round" d={item.icon}></path>
+                    </svg>
+                {/if}
+                <span class="flex-1 text-left">{item.label}</span>
                 <svg
                     viewBox="0 0 24 24"
                     fill="none"
                     stroke="currentColor"
                     stroke-width="2"
-                    class="size-4 shrink-0"
+                    class="size-4 shrink-0 transition-transform duration-200 {isOpen
+                        ? 'rotate-180'
+                        : ''}"
                 >
-                    <path stroke-linecap="round" stroke-linejoin="round" d={item.icon}></path>
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M19 9l-7 7-7-7"></path>
                 </svg>
-            {/if}
-            {item.label}
-        </a>
-        {#if item.children && active}
+            </button>
+        {:else}
+            <a class={linkClass} href={item.href}>
+                {#if item.icon}
+                    <svg
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        stroke-width="2"
+                        class="size-4 shrink-0"
+                    >
+                        <path stroke-linecap="round" stroke-linejoin="round" d={item.icon}></path>
+                    </svg>
+                {/if}
+                {item.label}
+            </a>
+        {/if}
+        {#if hasChildren && isOpen}
             <div
                 class="mt-1 ml-4 flex flex-col gap-1 border-l border-neutral-200 pl-3 dark:border-neutral-700"
+                transition:slide={{ duration: 180 }}
             >
                 {#each item.children as child (child.label)}
                     {@const childActive = isActive(child)}
@@ -302,7 +388,7 @@
                             {childActive
                             ? 'bg-secondary-500/20 text-secondary-700 dark:text-secondary-300'
                             : 'text-neutral-500 hover:bg-neutral-100 hover:text-neutral-900 dark:text-neutral-400 dark:hover:bg-neutral-800 dark:hover:text-white'}"
-                        href={resolve(child.href)}
+                        href={child.href}
                     >
                         {child.label}
                     </a>

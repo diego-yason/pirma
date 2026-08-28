@@ -77,9 +77,12 @@ test.describe("Dashboard", () => {
     test("shows the app sidebar navigation", async ({ page }) => {
         await page.goto("/dashboard");
 
-        for (const label of ["Dashboard", "Documents", "Settings", "Log out"]) {
+        // "Documents" is a group toggle (a button, not a link) that reveals its
+        // submenu on hover/click; the remaining items are plain links.
+        for (const label of ["Dashboard", "Settings", "Log out"]) {
             await expect(page.getByRole("link", { name: label })).toBeVisible();
         }
+        await expect(page.getByRole("button", { name: "Documents", exact: true })).toBeVisible();
     });
 
     test("theme toggle switches between light and dark", async ({ page }) => {

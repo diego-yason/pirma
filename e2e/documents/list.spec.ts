@@ -11,15 +11,18 @@ test.describe("All Documents", () => {
     test("is reachable from the sidebar nav", async ({ page }) => {
         await page.goto("/doc/list");
 
-        // "All Documents" is a child of the "Documents" nav group, which only
-        // renders when that group is active (i.e. on a /doc route).
-        const navLink = page.getByRole("link", { name: "All Documents" });
-        await expect(navLink).toBeVisible();
-        await expect(navLink).toHaveAttribute("href", "/doc/list");
+        // "Documents" is a collapsible nav group: the submenu is hidden until
+        // the group is hovered or clicked, and navigation happens only via the
+        // submenu links (the group itself is a toggle, not a link).
+        const documents = page.getByRole("button", { name: "Documents", exact: true });
+        await expect(documents).toBeVisible();
 
-        // The "Documents" group itself links to the create flow.
-        const documents = page.getByRole("link", { name: "Documents", exact: true });
-        await expect(documents).toHaveAttribute("href", "/doc/new");
+        const allDocuments = page.getByRole("link", { name: "All Documents" });
+        await expect(allDocuments).not.toBeVisible();
+
+        await documents.click();
+        await expect(allDocuments).toBeVisible();
+        await expect(allDocuments).toHaveAttribute("href", "/doc/list");
     });
 
     test("renders the page header, segments and status chips", async ({ page }) => {
