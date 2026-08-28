@@ -60,6 +60,9 @@ export const documents = pgTable(
         detailedViewAccess: viewAccessEnum("detailed_view_access").notNull().default("restricted"),
         hash: text("hash").notNull(),
         status: documentStatusEnum("status").notNull().default("draft"),
+        // Template source documents are never signed/finalized — they're cloned
+        // into normal drafts on instantiation (see templates-page.md).
+        isTemplate: boolean("is_template").notNull().default(false),
         pageCount: integer("page_count"),
         fileSize: bigint("file_size", { mode: "number" }),
         storagePath: text("storage_path"),
@@ -73,6 +76,35 @@ export const documents = pgTable(
     (table) => [
         index("documents_owner_idx").on(table.owner),
         index("documents_status_idx").on(table.status),
+    ],
+).enableRLS();
+
+// User-owned document templates (per-user; v1 clone-only — see templates-page.md).
+// A template is backed by a `documents` row flagged isTemplate=true and a file in
+// the `templates` storage bucket; instantiating it clones the PDF + placement
+// fields into a new package (bytes are copied to the `drafts` bucket).
+export const templates = pgTable(
+    "templates",
+    {
+        id: uuid("id").primaryKey().defaultRandom(),
+        userId: text("user_id")
+            .notNull()
+            .references(() => user.id),
+        documentId: uuid("document_id")
+            .notNull()
+            .references(() => documents.id),
+        name: text("name").notNull(),
+        createdAt: timestamp("created_at").notNull().defaultNow(),
+        updatedAt: timestamp("updated_at").notNull().defaultNow(),
+        lastUsedAt: timestamp("last_used_at"),
+        useCount: integer("use_count").notNull().default(0),
+        // Named signatory placeholders (e.g. "Person 1") that become default
+        // signer recipients when the template is instantiated.
+        signatories: jsonb("signatories").notNull().default([]),
+    },
+    (table) => [
+        index("templates_user_id_idx").on(table.userId),
+        unique("templates_document_id_unique").on(table.documentId),
     ],
 ).enableRLS();
 

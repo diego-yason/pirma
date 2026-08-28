@@ -18,7 +18,7 @@ export const GET: RequestHandler = async ({ locals, url }) => {
 
     // Optional status filter – leverages documents_status_idx
     const statusFilter = url.searchParams.get("status");
-    const conditions = [eq(documents.owner, locals.user.id)];
+    const conditions = [eq(documents.owner, locals.user.id), eq(documents.isTemplate, false)];
 
     if (statusFilter) {
         // Validate against enum values

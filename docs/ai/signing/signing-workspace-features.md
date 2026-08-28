@@ -35,7 +35,13 @@ dead button on `login/+page.svelte`).
 
 ## 2. Document templates
 
-**Purpose:** the "Use Template" / "Select Template" panel on `doc/new/+page.svelte` (and the
+> **RESOLVED 2026-08-28 — full spec at `docs/ai/signing/templates-page.md`.** Decisions:
+> per-user templates, v1 clone-only (no merge fields yet), dedicated `/templates` page
+> (nav "Templates" → `/templates`), source PDFs in a separate `templates` bucket (copied to
+> `drafts` on instantiation), creation from the Templates page + `/doc/new` step 1 + step 2.
+> The draft below is retained for history; Q5.3 is now answered (per-user, v1 first).
+
+**Purpose (historical):** the "Use Template" / "Select Template" panel on `doc/new/+page.svelte` (and the
 nav "Templates" → `/`) are UI stubs. Two scopes:
 
 - **v1 (recommended first): "Start from a saved document"** — mark any uploaded document as a
@@ -50,8 +56,8 @@ nav "Templates" → `/`) are UI stubs. Two scopes:
 - UI: on `doc/new`, "Templates" lists owned templates; selecting clones the document
   (`documents` row + storage copy or reuse same storagePath) into the package creation flow.
 
-**Open (Q5.3):** confirm v1-only first vs. v2 merge fields; whether templates are per-user or
-shared (orgs later).
+**Open (Q5.3):** ~~confirm v1-only first vs. v2 merge fields; whether templates are per-user or
+shared (orgs later).~~ **Answered 2026-08-28:** v1 clone-only first, per-user templates (see `templates-page.md`).
 
 ---
 
@@ -125,7 +131,7 @@ default.
 
 ## Open decisions summary
 
-1. Templates: v1 clone-only vs. v2 merge fields (Q5.3).
+1. Templates: ~~v1 clone-only vs. v2 merge fields (Q5.3)~~ — **resolved 2026-08-28**: v1 clone-only, per-user (see `templates-page.md`).
 2. Contacts: dedupe + org-sync later.
 3. Viewers: per-package only; `/sign` explicitly blocks viewers.
 4. Reject: per-signer rejection (recommended) vs. package-level void; reason via `rejections`

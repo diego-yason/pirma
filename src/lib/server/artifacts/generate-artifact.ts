@@ -5,7 +5,7 @@ import { documents, signatures, userSignatures } from "#lib/server/db/schema.js"
 import { supabaseAdmin } from "#lib/server/storage/supabase.js";
 import { logger } from "#lib/server/logger.js";
 import { flattenPdf, type FlattenRender } from "./flatten-pdf.js";
-import type { PlacedRect, FieldValue } from "#lib/client/types/SignatureBoxTypes";
+import type { PlacedRect, FieldValue, FieldKind } from "#lib/client/types/SignatureBoxTypes.d.ts";
 
 export interface ArtifactResult {
     storagePath: string;
@@ -120,7 +120,7 @@ export async function generateArtifactForDocument(documentId: string): Promise<A
             continue;
         }
 
-        const entry = (row.fieldValues ?? {})[f.id] as FieldValue | undefined;
+        const entry = (row.fieldValues as Record<string, FieldValue> | null | undefined)?.[f.id];
         if (!entry) continue;
 
         if (f.kind === "radio") {
@@ -133,7 +133,7 @@ export async function generateArtifactForDocument(documentId: string): Promise<A
             continue;
         }
         // text / phone / choices
-        renders.push({ ...base, kind: f.kind, value: entry.value });
+        renders.push({ ...base, kind: f.kind as FieldKind, value: entry.value });
     }
 
     const flattened = await flattenPdf(new Uint8Array(await pdfData.arrayBuffer()), renders);

@@ -136,6 +136,7 @@ docs/ai/
 | `field-system.md` | The **implemented declarative field architecture** + how to add a new field type (registry-driven). |
 | `signing-ux.md` | **Signing UX**: guided ceremony (field-by-field), mobile + accessibility (WCAG). |
 | `signing-workspace-features.md` | Workspace features: **templates, contacts, password reset, reject flow, viewers enforcement**. |
+| `templates-page.md` | **Templates page** (`/templates`): per-user, v1 clone-only, `templates` bucket — spec + implementation (2026-08-28). |
 | `document-package-management.md` | **Package lifecycle**: re-send, void/cancel, reminders & deadlines, download/export, trash/archive/retention, search. |
 | `email-notifications.md` | The transactional **email backbone** (7 templates; signing-URL/token rules; reminders scheduler). |
 

@@ -180,6 +180,24 @@
                     >
                         Clear search
                     </button>
+                {:else if data.segment === "shared"}
+                    <p class="text-3xl">📥</p>
+                    <p class="mt-2 text-sm font-medium text-neutral-700 dark:text-neutral-300">
+                        Nothing shared with you yet
+                    </p>
+                    <p class="mt-1 text-sm text-neutral-600 dark:text-neutral-500">
+                        When someone adds you as a recipient or viewer on a package, it will
+                        appear here.
+                    </p>
+                    {#if hasFilters}
+                        <button
+                            type="button"
+                            onclick={clearFilters}
+                            class="mt-4 text-sm font-semibold text-secondary-600 transition hover:text-secondary-500 dark:text-secondary-400 dark:hover:text-secondary-300"
+                        >
+                            Clear filters
+                        </button>
+                    {/if}
                 {:else if data.totalDocuments === 0}
                     <p class="text-3xl">📄</p>
                     <p class="mt-2 text-sm font-medium text-neutral-700 dark:text-neutral-300">

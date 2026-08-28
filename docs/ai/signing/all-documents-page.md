@@ -92,6 +92,8 @@ Clicking the row (or the name) opens `doc/[pageId]`.
 
 ### 3.6 Empty states
 - No documents at all → "No documents yet" + **Upload a document** CTA (`/doc/new`).
+- **Shared with me** empty → "Nothing shared with you yet" + explanation ("when someone adds
+  you as a recipient or viewer, it appears here"); shows **Clear filters** when filters active.
 - Segment/chip yields nothing → "Nothing here" + **Clear filters**.
 - Search yields nothing → "No matches for "<query>"" + Clear search.
 

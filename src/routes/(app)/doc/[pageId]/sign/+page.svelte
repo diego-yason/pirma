@@ -1,6 +1,6 @@
 <script lang="ts">
     import type { PageProps } from "./$types";
-    import type { PlacedRect } from "#lib/client/types/SignatureBoxTypes";
+    import type { PlacedRect } from "#lib/client/types/SignatureBoxTypes.d.ts";
     import PDFViewer from "#lib/client/ui/PDFViewer.svelte";
     import SignatureCreator from "#lib/client/ui/SignatureCreator.svelte";
     // import { registerPublicKey } from "#lib/client/archive/crypto.js"; // archived — superseded by SW key system

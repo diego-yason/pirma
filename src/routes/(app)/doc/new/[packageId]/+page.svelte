@@ -1,12 +1,13 @@
 <script lang="ts">
     import { getContext } from "svelte";
     import type { PageProps } from "./$types";
-    import type { PlacedRect, RecipientInfo, FieldKind } from "#lib/client/types/SignatureBoxTypes";
+    import type { PlacedRect, RecipientInfo, FieldKind } from "#lib/client/types/SignatureBoxTypes.d.ts";
     import { FIELD_TOOLS } from "#lib/client/types/field-tools.js";
     import { PUBLIC_MAX_RECIPIENTS } from "$app/env/public";
     import PDFViewer from "#lib/client/ui/PDFViewer.svelte";
     import DocumentSelector from "#lib/client/ui/DocumentSelector.svelte";
     import { resolve } from "$app/paths";
+    import { deserialize } from "$app/forms";
 
     const MAX_RECIPIENTS = Number(PUBLIC_MAX_RECIPIENTS) || 100;
 
@@ -94,6 +95,8 @@
     let saving = $state(false);
     let pendingSync = $state(false);
     let assignedTo = $state("");
+    let templateSavedId = $state<string | null>(null);
+    let templateError = $state("");
     let recipientsContainer = $state<HTMLDivElement>();
 
     function triggerSync() {
@@ -181,6 +184,35 @@
             }
         }
     }
+    async function saveCurrentAsTemplate() {
+        const doc = documents[selectedDocIndex];
+        if (!doc?.id) return;
+        templateError = "";
+        try {
+            const res = await fetch(`/doc/new/${data.packageId}?/saveTemplate`, {
+                method: "POST",
+                headers: { "x-sveltekit-action": "true" },
+                body: new URLSearchParams({
+                    documentId: doc.id,
+                    name: doc.title.replace(/\.(pdf|jpe?g|png)$/i, ""),
+                }),
+            });
+            const result = deserialize(await res.text());
+            if (result.type === "success") {
+                templateSavedId = doc.id;
+                setTimeout(() => (templateSavedId = null), 2500);
+            } else {
+                templateError =
+                    result.type === "failure"
+                        ? (result.data as { error?: string } | undefined)?.error ??
+                          "Could not save as template."
+                        : "Could not save as template.";
+            }
+        } catch (err) {
+            templateError = err instanceof Error ? err.message : "Could not save as template.";
+        }
+    }
+
     let recipientInfos = $derived<RecipientInfo[]>(
         recipients.map((r) => ({ id: r.id, name: r.name.trim(), personNum: r.personNum })),
     );
@@ -458,6 +490,20 @@
                     </p>
                 {/if}
 
+                <button
+                    type="button"
+                    onclick={saveCurrentAsTemplate}
+                    class="mt-4 flex w-full items-center justify-center gap-2 rounded-lg border border-neutral-300 px-4 py-2.5 text-center text-sm font-semibold text-neutral-700 transition hover:bg-neutral-50 dark:border-neutral-700 dark:text-neutral-300 dark:hover:bg-neutral-800"
+                >
+                    {templateSavedId === documents[selectedDocIndex]?.id
+                        ? "Saved as template!"
+                        : "Save as template"}
+                </button>
+                {#if templateError}
+                    <p class="mt-2 text-center text-xs text-red-600 dark:text-red-400">
+                        {templateError}
+                    </p>
+                {/if}
                 <a
                     href={resolve(`doc/new/${data.packageId}/confirm`)}
                     onclick={(e) => {

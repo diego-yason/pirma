@@ -40,7 +40,7 @@ import type {
     FieldValues,
     FieldValue,
     FieldKind,
-} from "#lib/client/types/SignatureBoxTypes";
+} from "#lib/client/types/SignatureBoxTypes.d.ts";
 
 // Value fields accept submitted data at signing time (signature fields are
 // signed instead). Their values are stored and bound into the signed payload.

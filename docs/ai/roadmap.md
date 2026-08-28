@@ -200,7 +200,7 @@ These exist as stubs/TODOs and are **not** in any `docs/ai` file other than this
 | **Signer email invitations & notifications** | � | `doc/new/[packageId]/confirm/+page.server.ts` | Invite email sent (tokenized URL for guests, plain sign link for registered users). Email module + `email_events` built. In-app/activity feed still pending. Design: `docs/ai/signing/email-notifications.md` |
 | Owner notifications on sign / reject | ✅ | `sign/+page.server.ts` `finalize` / `reject` | Owner emailed on sign and on reject (with reason). No in-app notifications (separate P3 item). Design: `docs/ai/signing/email-notifications.md` |
 | **Password reset** | ✅ | `/forgot-password` + `/reset-password` routes | Better Auth `sendResetPassword` hook + `requestPasswordReset`/`resetPassword` wired; login "Forgot password?" links to the flow. |
-| **Document templates** | 🔲 | `doc/new/+page.svelte` + nav "Templates" → `/` | UI stub, no handler. Design: `docs/ai/signing/signing-workspace-features.md` |
+| **Document templates** | ✅ | `/templates` page | Implemented 2026-08-28 per `docs/ai/signing/templates-page.md` (per-user, v1 clone, `templates` bucket). |
 | **Contacts** | 🔲 | nav "Contacts" → `/` | Placeholder only. Design: `docs/ai/signing/signing-workspace-features.md` |
 | **Package viewers permission enforcement** | ✅ | `doc/[pageId]/+page.server.ts` + `view/+page.server.ts` now check `package_viewers` (2026-08-16) |
 | **Reject flow completion** | � | `sign/+page.server.ts` `reject` action | Signatory verified, recipient marked (`package_recipients.rejectedAt`/`rejectionReason`), existing signature rows → `rejected`, owner notified. Client confirmation dialog still TODO. Design: `docs/ai/signing/signing-workspace-features.md` |

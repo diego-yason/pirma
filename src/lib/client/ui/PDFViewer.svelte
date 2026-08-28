@@ -39,6 +39,7 @@
         recipients = [] as RecipientInfo[],
         mode = "sign" as Mode,
         activeTool = null as Tool,
+        allowMe = true,
         signatureUrl,
         fieldSignatureUrls,
         ownFieldIds,
@@ -58,6 +59,7 @@
         recipients?: RecipientInfo[];
         mode?: Mode;
         activeTool?: Tool;
+        allowMe?: boolean;
         signatureUrl?: string;
         fieldSignatureUrls?: Record<string, string>;
         ownFieldIds?: Set<string>;
@@ -1105,13 +1107,15 @@
             >
                 <span class="text-neutral-400 italic">Unassigned</span>
             </button>
-            <button
-                type="button"
-                class="w-full shrink-0 rounded px-2 py-1 text-left text-sm transition hover:bg-neutral-100 dark:hover:bg-neutral-800"
-                onclick={() => handleReassign(contextMenu!.el.id, "me")}
-            >
-                Me
-            </button>
+            {#if allowMe}
+                <button
+                    type="button"
+                    class="w-full shrink-0 rounded px-2 py-1 text-left text-sm transition hover:bg-neutral-100 dark:hover:bg-neutral-800"
+                    onclick={() => handleReassign(contextMenu!.el.id, "me")}
+                >
+                    Me
+                </button>
+            {/if}
             {#each recipients as r (r.id)}
                 <button
                     type="button"

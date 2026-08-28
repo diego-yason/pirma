@@ -31,7 +31,7 @@
         },
         {
             label: "Templates",
-            href: "/",
+            href: "/templates",
             icon: "M14 3v5h5M9 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-9l-5-5H9Z",
         },
         {

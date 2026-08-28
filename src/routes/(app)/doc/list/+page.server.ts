@@ -309,6 +309,7 @@ export const load: PageServerLoad = async ({ locals, url }) => {
     const draftSearchCond: SQL | undefined = q ? ilike(documents.title, `%${q}%`) : undefined;
     const draftWhere = and(
         eq(documents.owner, me),
+        eq(documents.isTemplate, false),
         isNull(documentAssignments.id),
         draftStatusCond,
         draftSearchCond,

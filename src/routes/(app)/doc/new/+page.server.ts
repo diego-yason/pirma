@@ -129,6 +129,40 @@ export const actions: Actions = {
         }
     },
 
+    saveTemplate: async ({ request, locals }) => {
+        if (!locals.user) {
+            logger.warn("saveTemplate", "Rejected: not authenticated");
+            return fail(401, { error: "You must be signed in" });
+        }
+
+        const formData = await request.formData();
+        const docId = (formData.get("docId") as string | null)?.trim();
+        const name = (formData.get("name") as string | null)?.trim() || "Untitled template";
+
+        if (!docId) {
+            logger.warn("saveTemplate", "Rejected: missing docId");
+            return fail(400, { error: "Document id is required" });
+        }
+
+        try {
+            const { templateId } = await createTemplateFromDocument({
+                userId: locals.user.id,
+                name,
+                sourceDocumentId: docId,
+            });
+            logger.info("saveTemplate", "Template created from uploaded document", {
+                documentId: docId,
+                templateId,
+            });
+            return { success: true, templateId };
+        } catch (err) {
+            logger.error("saveTemplate", "Failed to save template", err);
+            return fail(500, {
+                error: err instanceof Error ? err.message : "Failed to save template",
+            });
+        }
+    },
+
     removeFile: async ({ request, locals }) => {
         if (!locals.user) {
             logger.warn("removeFile", "Rejected: not authenticated");

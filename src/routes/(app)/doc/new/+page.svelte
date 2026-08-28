@@ -21,6 +21,8 @@
     let isDragOver = $state(false);
     let showRecentPopup = $state(false);
     let prefetchRecent = $state(false);
+    let templateSavedId = $state<string | null>(null);
+    let templateError = $state("");
 
     $inspect(files);
 
@@ -179,6 +181,34 @@
         files = files.filter((x) => x.id !== id);
     }
 
+    async function saveAsTemplate(f: UploadedFile) {
+        if (!f.id) return;
+        templateError = "";
+        try {
+            const res = await fetch("/doc/new?/saveTemplate", {
+                method: "POST",
+                headers: { "x-sveltekit-action": "true" },
+                body: new URLSearchParams({
+                    docId: f.id,
+                    name: f.name.replace(/\.(pdf|jpe?g|png)$/i, ""),
+                }),
+            });
+            const result = deserialize(await res.text());
+            if (result.type === "success") {
+                templateSavedId = f.id;
+                setTimeout(() => (templateSavedId = null), 2500);
+            } else {
+                templateError =
+                    result.type === "failure"
+                        ? (result.data as { error?: string } | undefined)?.error ??
+                          "Could not save as template."
+                        : "Could not save as template.";
+            }
+        } catch (err) {
+            templateError = err instanceof Error ? err.message : "Could not save as template.";
+        }
+    }
+
     function addRecentDoc(doc: {
         id: string;
         title: string;
@@ -296,12 +326,12 @@
         <p class="mt-1 mb-4 text-sm text-neutral-500 dark:text-neutral-400">
             Standardized contracts
         </p>
-        <button
-            type="button"
-            class="rounded-lg border border-neutral-300 bg-white px-5 py-2.5 text-sm font-medium text-neutral-700 transition hover:bg-neutral-50 dark:border-neutral-700 dark:bg-neutral-900 dark:text-neutral-200 dark:hover:bg-neutral-800"
+        <a
+            href="/templates"
+            class="inline-block rounded-lg border border-neutral-300 bg-white px-5 py-2.5 text-sm font-medium text-neutral-700 transition hover:bg-neutral-50 dark:border-neutral-700 dark:bg-neutral-900 dark:text-neutral-200 dark:hover:bg-neutral-800"
         >
             Select Template
-        </button>
+        </a>
     </div>
 </div>
 
@@ -321,6 +351,13 @@
             </span>
         {/if}
     </div>
+    {#if templateError}
+        <p
+            class="mb-3 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-700 dark:border-red-900 dark:bg-red-950/40 dark:text-red-400"
+        >
+            {templateError}
+        </p>
+    {/if}
     {#if files.length > 0}
         <div class="flex flex-col gap-2">
             {#each files as f (f.id)}
@@ -366,13 +403,24 @@
                             {/if}
                         </div>
                     </div>
-                    <button
-                        type="button"
-                        class="shrink-0 rounded-lg px-3 py-1 text-xs font-medium text-red-600 transition hover:bg-red-50 dark:text-red-400 dark:hover:bg-red-950"
-                        onclick={() => removeFile(f.id)}
-                    >
-                        Remove
-                    </button>
+                    <div class="flex shrink-0 items-center gap-1.5">
+                        {#if f.uploaded && f.id}
+                            <button
+                                type="button"
+                                class="rounded-lg px-3 py-1 text-xs font-medium text-secondary-600 transition hover:bg-secondary-500/10 dark:text-secondary-400 dark:hover:bg-secondary-500/15"
+                                onclick={() => saveAsTemplate(f)}
+                            >
+                                {templateSavedId === f.id ? "Saved!" : "Save as template"}
+                            </button>
+                        {/if}
+                        <button
+                            type="button"
+                            class="rounded-lg px-3 py-1 text-xs font-medium text-red-600 transition hover:bg-red-50 dark:text-red-400 dark:hover:bg-red-950"
+                            onclick={() => removeFile(f.id)}
+                        >
+                            Remove
+                        </button>
+                    </div>
                 </div>
             {/each}
         </div>

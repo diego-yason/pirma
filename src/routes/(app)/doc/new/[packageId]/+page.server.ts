@@ -1,5 +1,5 @@
 import type { PageServerLoad, Actions } from "./$types";
-import type { PlacedRect } from "#lib/client/types/SignatureBoxTypes";
+import type { PlacedRect } from "#lib/client/types/SignatureBoxTypes.d.ts";
 import { redirect, fail } from "@sveltejs/kit";
 import { db } from "#lib/server/db/index.js";
 import { packageRecipients, documents, documentAssignments } from "#lib/server/db/schema.js";
@@ -10,6 +10,7 @@ import { PUBLIC_MAX_RECIPIENTS } from "$app/env/public";
 
 import { supabaseAdmin } from "#lib/server/storage/supabase.js";
 import { getSignedUrl, setSignedUrl } from "#lib/server/storage/url-cache.js";
+import { createTemplateFromDocument } from "#lib/server/templates.js";
 
 const MAX_RECIPIENTS = Number(PUBLIC_MAX_RECIPIENTS) || 100;
 
@@ -231,5 +232,44 @@ export const actions: Actions = {
         });
 
         return { success: true };
+    },
+
+    saveTemplate: async ({ request, params, locals }) => {
+        if (!locals.user) {
+            return fail(401, { error: "You must be signed in" });
+        }
+
+        // Only the package owner can save a template from this package's docs.
+        const pkg = await requirePackageOwnership(params.packageId, locals.user.id);
+        if (!pkg) {
+            return fail(403, { error: "You do not own this package" });
+        }
+
+        const formData = await request.formData();
+        const documentId = (formData.get("documentId") as string | null)?.trim();
+        const name = (formData.get("name") as string | null)?.trim() || "Untitled template";
+
+        if (!documentId) {
+            return fail(400, { error: "Document id is required" });
+        }
+
+        try {
+            const { templateId } = await createTemplateFromDocument({
+                userId: locals.user.id,
+                name,
+                sourceDocumentId: documentId,
+            });
+            logger.info("saveTemplate", "Template created from package document", {
+                packageId: params.packageId,
+                documentId,
+                templateId,
+            });
+            return { success: true, templateId };
+        } catch (err) {
+            logger.error("saveTemplate", "Failed to save template", err);
+            return fail(500, {
+                error: err instanceof Error ? err.message : "Failed to save template",
+            });
+        }
     },
 };
